@@ -1,0 +1,24 @@
+server:
+  port: 8083
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 200MB
+  datasource:
+    url: jdbc:mysql://dbcompany.cn48sgciaax1.us-east-2.rds.amazonaws.com:3306/dbcompany?useSSL=false&serverTimezone=UTC
+    username: desarrollador
+    password: Juliana1987****
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/DB_Facturas
+      database: DB_Facturas
