@@ -7,10 +7,15 @@ import com.negociadororq.domain.model.*;
 import com.negociadororq.infrastructure.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -29,8 +34,7 @@ public class NegociacionServiceImpl implements NegociacionService {
     private final EmpresaQuotaRepository empresaQuotaRepository;
     private final FondeadorQuotaRepository fondeadorQuotaRepository;
     private final AprobacionNegociacionRepository aprobacionNegociacionRepository;
-
-
+    private final MongoTemplate mongoTemplate;
 
 
     /**
@@ -43,6 +47,9 @@ public class NegociacionServiceImpl implements NegociacionService {
     @Override
     @Transactional
     public NegociacionResponseDto crearNegociacion(NegociacionRequestDto request) {
+
+
+
         List<String> errores = new ArrayList<>();
         List<FacturaNegociada> facturasAceptadas = new ArrayList<>();
         List<String> facturasRechazadas = new ArrayList<>();
@@ -243,17 +250,26 @@ public class NegociacionServiceImpl implements NegociacionService {
                 for (FondeadorAsignacion fon : finalFondeadores) {
                     actoresActualizados.add(new ActorFactura(fon.getRutFondeador(), "FONDEADOR"));
                 }
-                factura.setActores(actoresActualizados);
+
+                //
+                Query query = Query.query(
+                        Criteria.where("_id").is(factura.getId())
+                );
+
+                Update update = new Update()
+                        .set("estadoNegociacion", "NEGOCIADA")
+                        .set("fechaNegociacionFactura", LocalDateTime.now())
+                        .set("actores", actoresActualizados);
+
 
                 if (request.getTipoOperacion() != null) {
                     switch (request.getTipoOperacion().getTipo().toUpperCase()) {
-                        case "FACTORING" -> factura.setEstadoFirma("SIN_CESION");
-                        case "CONFIRMING" -> factura.setEstadoFirma("SIN_DESCUENTO");
+                        case "FACTORING" ->  update.set("estadoFirma", "SIN_CESION");
+                        case "CONFIRMING" -> update.set("estadoFirma", "SIN_DESCUENTO");
                     }
                 }
 
-                factura.setEstadoNegociacion("NEGOCIADA");
-                facturaRepository.save(factura);
+                mongoTemplate.updateFirst(query, update, Factura.class);
 
                 // construir DTO aceptado
                 reqFact.setFondeadores(finalFondeadores);
@@ -367,7 +383,7 @@ public class NegociacionServiceImpl implements NegociacionService {
             }
         }
 
-        // 🧮 Evaluar resultados generales solo si es aprobación total
+        // Evaluar resultados generales solo si es aprobación total
         if (esAprobacionTotal) {
             boolean fondeadorAprobado = actorAprobo("FONDEADOR", negociacion);
             boolean pagadorAprobado = actorAprobo("PAGADOR", negociacion);
@@ -408,13 +424,13 @@ public class NegociacionServiceImpl implements NegociacionService {
                 default -> throw new IllegalArgumentException("Tipo de operación desconocido: " + tipoOperacion);
             }
         } else {
-            // 🔄 Si es aprobación parcial → mantener estado global pendiente
+            // Si es aprobación parcial → mantener estado global pendiente
             negociacion.setEstado("PENDIENTE");
         }
 
         negociacion.setFechaUltimaActualizacion(LocalDateTime.now());
         negociacionRepository.save(negociacion);
-        log.info("✅ Aprobaciones procesadas correctamente para negociación {}", idNegociacion);
+        log.info("Aprobaciones procesadas correctamente para negociación {}", idNegociacion);
     }
 
 
