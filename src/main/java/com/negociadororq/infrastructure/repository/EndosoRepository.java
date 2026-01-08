@@ -9,8 +9,15 @@ import java.util.List;
 @Repository
 public interface EndosoRepository extends MongoRepository<Endoso, String> {
 
-    List<Endoso> findByNegociacionIdIdAndFacturaId(String negociacionId, String facturaId);
+    // 🔹 Endoso de UNA factura dentro de una negociación
+    Optional<Endoso> findByNegociacionIdAndFacturaId(
+            String negociacionId,
+            String facturaId
+    );
 
-    Optional<Endoso> findByNumeroFactura(String numeroFactura);
+    // 🔹 Todos los endosos de una negociación
+    List<Endoso> findByNegociacionId(String negociacionId);
 
+    // 🔹 Todos los endosos de una factura (histórico / auditoría)
+    List<Endoso> findByFacturaId(String facturaId);
 }
