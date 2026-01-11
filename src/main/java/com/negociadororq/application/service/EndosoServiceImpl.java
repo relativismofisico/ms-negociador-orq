@@ -3,6 +3,7 @@ package com.negociadororq.application.service;
 import com.negociadororq.application.controller.dto.EndosoRequestDto;
 import com.negociadororq.application.controller.dto.EndosoResponseDto;
 import com.negociadororq.domain.model.Endoso;
+import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.enums.EstadoEndoso;
@@ -14,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
 import java.util.List;
 
 
@@ -25,52 +28,105 @@ public class EndosoServiceImpl implements EndosoService {
     private final NegociacionRepository negociacionRepository;
     private final EndosoRepository endosoRepository;
     private final FacturaRepository facturaRepository;
+    private final TemplateRenderService templateRenderService;
+
 
     @Override
     @Transactional
     public EndosoResponseDto registrarEndoso(EndosoRequestDto request) {
+
         Negociacion negociacion = negociacionRepository.findById(request.getIdNegociacion())
                 .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
 
-        // Buscar facturas del proveedor dentro de la negociación
-        List<FacturaNegociada> facturasProveedor = negociacion.getFacturas().stream()
-                .filter(f -> f.getRutProveedor().equals(request.getRutProveedor()))
-                .toList();
-
-        if (facturasProveedor.isEmpty()) {
-            throw new RuntimeException("El proveedor no tiene facturas asociadas en esta negociación");
+        if (request.getNumerosFactura() == null || request.getNumerosFactura().isEmpty()) {
+            throw new RuntimeException("Debe indicar al menos una factura");
         }
 
-        for (FacturaNegociada factura : facturasProveedor) {
+        List<String> creadas = new ArrayList<>();
+        List<String> rechazadas = new ArrayList<>();
+
+
+        String htmlPreview = null;
+
+        for (String numeroFactura : request.getNumerosFactura()) {
+
+            FacturaNegociada fn = negociacion.getFacturas().stream()
+                    .filter(f ->
+                            f.getNumeroFactura().equals(numeroFactura) &&
+                                    f.getRutProveedor().equals(request.getRutProveedor())
+                    )
+                    .findFirst()
+                    .orElse(null);
+
+            if (fn == null) {
+                rechazadas.add(numeroFactura + " (no pertenece al proveedor)");
+                continue;
+            }
+
+            // 🔹 Obtener la factura REAL desde Mongo
+            Factura factura = facturaRepository.findByNumeroFactura(numeroFactura)
+                    .orElse(null);
+
+            if (factura == null) {
+                rechazadas.add(numeroFactura + " (factura no existe en BD)");
+                continue;
+            }
+
+            // 🔹 Evitar doble endoso
+            boolean yaEndosada = endosoRepository
+                    .existsByNegociacionIdAndFacturaId(
+                            request.getIdNegociacion(),
+                            factura.getId()
+                    );
+
+            if (yaEndosada) {
+                rechazadas.add(numeroFactura + " (ya tiene endoso)");
+                continue;
+            }
+
             Endoso endoso = Endoso.builder()
                     .negociacionId(request.getIdNegociacion())
-                    //.numeroFactura(factura.getNumeroFactura())
+                    .facturaId(factura.getId()) // ✅ CORRECTO
                     .rutProveedor(request.getRutProveedor())
-                    .rutFondeador(factura.getFondeadores().get(0).getRutFondeador()) // primer fondeador
-                    .estado(request.isEndosado() ? EstadoEndoso.ACEPTADO : EstadoEndoso.RECHAZADO)
+                    .rutPagador(fn.getRutPagador())
+                    .rutFondeador(fn.getFondeadores().get(0).getRutFondeador())
+                    .estado(EstadoEndoso.PENDIENTE)
                     .fechaCreacion(LocalDateTime.now())
                     .fechaActualizacion(LocalDateTime.now())
                     .build();
 
             endosoRepository.save(endoso);
+            creadas.add(numeroFactura);
 
-            // actualizar estadoFirma de la factura si se endosa
-            if (request.isEndosado()) {
-                facturaRepository.findByNumeroFactura(factura.getNumeroFactura())
-                        .ifPresent(f -> {
-                            f.setEstadoFirma("ENDOSADA");
-                            facturaRepository.save(f);
-                        });
+            if (htmlPreview == null) {
+                htmlPreview = templateRenderService.renderEndosoTemplate(
+                        request.getRutProveedor(),
+                        fn.getRutPagador(),
+                        fn.getFondeadores().get(0).getRutFondeador(),
+                        factura.getFechaEsperadaPagoPagador(),
+                        LocalDateTime.now()
+                );
             }
+
         }
 
-        String estado = request.isEndosado() ? "ENDOSADA" : "RECHAZADA";
+
+
+        String estadoGlobal =
+                creadas.isEmpty() ? "RECHAZADO"
+                        : rechazadas.isEmpty() ? "PENDIENTE"
+                        : "PARCIAL";
 
         return EndosoResponseDto.builder()
                 .idNegociacion(request.getIdNegociacion())
-                .estadoEndoso(estado)
+                .estadoEndoso(estadoGlobal)
+                .facturasEndosadas(creadas)
+                .facturasRechazadas(rechazadas)
+                .plantillaHtml(htmlPreview)
                 .build();
     }
+
+
 
     @Override
     public EndosoResponseDto aprobarEndoso(String idEndoso, String rol, boolean aprobado) {

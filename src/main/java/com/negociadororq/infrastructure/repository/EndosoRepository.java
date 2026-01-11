@@ -20,4 +20,10 @@ public interface EndosoRepository extends MongoRepository<Endoso, String> {
 
     // 🔹 Todos los endosos de una factura (histórico / auditoría)
     List<Endoso> findByFacturaId(String facturaId);
+
+
+    boolean existsByNegociacionIdAndFacturaId(
+            String negociacionId,
+            String facturaId
+    );
 }

@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -12,5 +14,10 @@ import lombok.NoArgsConstructor;
 public class EndosoRequestDto {
     private String idNegociacion;
     private String rutProveedor;    // quien endosa
-    private boolean endosado;       // true = realizó endoso
+
+    /**
+     * Lista de facturas a endosar.
+     * Si viene vacía o null → error
+     */
+    private List<String> numerosFactura;
 }
