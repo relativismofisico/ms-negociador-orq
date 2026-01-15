@@ -2,7 +2,7 @@ package com.negociadororq.application.controller;
 
 import com.negociadororq.application.controller.dto.EndosoRequestDto;
 import com.negociadororq.application.controller.dto.EndosoResponseDto;
-import com.negociadororq.application.service.EndosoService;
+import com.negociadororq.application.service.EndosoDescuentoService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/negociaciones")
 @RequiredArgsConstructor
-public class EndosoController {
+public class CrearEndosoDescuentoController {
 
-    private final EndosoService endosoService;
+    private final EndosoDescuentoService endosoDescuentoService;
 
     /**
      * Permite realizar el endoso de una o varias facturas que estan disponibles en una negociacion
@@ -34,7 +34,7 @@ public class EndosoController {
             @RequestBody EndosoRequestDto request) {
 
         request.setIdNegociacion(idNegociacion);
-        EndosoResponseDto response = endosoService.registrarEndoso(request);
+        EndosoResponseDto response = endosoDescuentoService.registrarEndoso(request);
         return ResponseEntity.ok(response);
     }
 }

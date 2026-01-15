@@ -1,8 +1,8 @@
 package com.negociadororq.enums;
 
 public enum EstadoEndoso {
-    PENDIENTE,
-    EN_REVISION,
-    ACEPTADO,
-    RECHAZADO
+    PENDIENTE, //Al menos falta uno por aprobar
+    EN_REVISION, //Faltan todos los actores por aprobar
+    ACEPTADO, //Todos los actores han aceptado la negociacion
+    RECHAZADO //Al menos uno rechazo la negociacion
 }

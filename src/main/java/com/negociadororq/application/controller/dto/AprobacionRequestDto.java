@@ -10,6 +10,7 @@ import java.util.List;
 @AllArgsConstructor
 public class AprobacionRequestDto {
     private String idNegociacion;   // id de la negociación en mongo
+    private String rutActor;
     private String rutEmpresa;      // quien aprueba (pagador, fondeador, proveedor)
     private List<AprobacionFacturaRequestDto> facturas; // facturas con su decisión// true = aprueba, false = rechaza
     private String observacion;     // opcional

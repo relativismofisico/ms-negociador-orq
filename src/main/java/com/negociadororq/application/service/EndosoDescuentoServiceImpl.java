@@ -7,7 +7,9 @@ import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.enums.EstadoEndoso;
+import com.negociadororq.enums.EstadoFirma;
 import com.negociadororq.infrastructure.repository.EndosoRepository;
+import com.negociadororq.infrastructure.repository.FacturaPatchRepository;
 import com.negociadororq.infrastructure.repository.FacturaRepository;
 import com.negociadororq.infrastructure.repository.NegociacionRepository;
 import java.time.LocalDateTime;
@@ -23,12 +25,14 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class EndosoServiceImpl implements EndosoService {
+public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
     private final NegociacionRepository negociacionRepository;
     private final EndosoRepository endosoRepository;
     private final FacturaRepository facturaRepository;
     private final TemplateRenderService templateRenderService;
+    private final FacturaPatchRepository facturaPatchRepository;
+
 
 
     @Override
@@ -73,30 +77,35 @@ public class EndosoServiceImpl implements EndosoService {
             }
 
             // 🔹 Evitar doble endoso
-            boolean yaEndosada = endosoRepository
-                    .existsByNegociacionIdAndFacturaId(
+            boolean yaEndosada = endosoRepository.existsByNegociacionIdAndNumeroFactura(
                             request.getIdNegociacion(),
-                            factura.getId()
-                    );
+                            factura.getNumeroFactura());
 
             if (yaEndosada) {
                 rechazadas.add(numeroFactura + " (ya tiene endoso)");
                 continue;
             }
 
+
             Endoso endoso = Endoso.builder()
                     .negociacionId(request.getIdNegociacion())
-                    .facturaId(factura.getId()) // ✅ CORRECTO
+                    .numeroFactura(factura.getNumeroFactura()) // ✅ CORRECTO
                     .rutProveedor(request.getRutProveedor())
                     .rutPagador(fn.getRutPagador())
                     .rutFondeador(fn.getFondeadores().get(0).getRutFondeador())
-                    .estado(EstadoEndoso.PENDIENTE)
+                    .estado(EstadoEndoso.EN_REVISION)
                     .fechaCreacion(LocalDateTime.now())
                     .fechaActualizacion(LocalDateTime.now())
                     .build();
 
+
             endosoRepository.save(endoso);
             creadas.add(numeroFactura);
+
+            facturaPatchRepository.actualizarEstadoPorId(
+                    factura.getId(),
+                    EstadoFirma.EN_REVISION
+            );
 
             if (htmlPreview == null) {
                 htmlPreview = templateRenderService.renderEndosoTemplate(
@@ -109,8 +118,6 @@ public class EndosoServiceImpl implements EndosoService {
             }
 
         }
-
-
 
         String estadoGlobal =
                 creadas.isEmpty() ? "RECHAZADO"
@@ -125,13 +132,5 @@ public class EndosoServiceImpl implements EndosoService {
                 .plantillaHtml(htmlPreview)
                 .build();
     }
-
-
-
-    @Override
-    public EndosoResponseDto aprobarEndoso(String idEndoso, String rol, boolean aprobado) {
-        return null;
-    }
-
 
 }

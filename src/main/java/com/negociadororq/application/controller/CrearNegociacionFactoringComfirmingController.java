@@ -2,7 +2,7 @@ package com.negociadororq.application.controller;
 
 import com.negociadororq.application.controller.dto.NegociacionRequestDto;
 import com.negociadororq.application.controller.dto.NegociacionResponseDto;
-import com.negociadororq.application.service.NegociacionService;
+import com.negociadororq.application.service.NegociacionFactoringComfirmingService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/negociar")
 @RequiredArgsConstructor
-public class    NegociacionController {
+public class CrearNegociacionFactoringComfirmingController {
 
-    private final NegociacionService negociacionService;
+    private final NegociacionFactoringComfirmingService negociacionFactoringComfirmingService;
 
 
     /**
@@ -32,7 +32,7 @@ public class    NegociacionController {
     public ResponseEntity<NegociacionResponseDto> crearNegociacion(
             @RequestBody NegociacionRequestDto request) {
 
-        NegociacionResponseDto response = negociacionService.crearNegociacion(request);
+        NegociacionResponseDto response = negociacionFactoringComfirmingService.crearNegociacion(request);
         return ResponseEntity.ok(response);
     }
 }

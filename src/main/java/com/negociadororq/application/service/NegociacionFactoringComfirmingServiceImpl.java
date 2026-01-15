@@ -4,10 +4,11 @@ import com.negociadororq.application.controller.dto.AprobacionFacturaRequestDto;
 import com.negociadororq.application.controller.dto.NegociacionRequestDto;
 import com.negociadororq.application.controller.dto.NegociacionResponseDto;
 import com.negociadororq.domain.model.*;
+import com.negociadororq.enums.EstadoFirma;
+import com.negociadororq.enums.EstadoNegociacion;
 import com.negociadororq.infrastructure.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class NegociacionServiceImpl implements NegociacionService {
+public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFactoringComfirmingService {
 
     private final FacturaRepository facturaRepository;
     private final NegociacionRepository negociacionRepository;
@@ -34,7 +34,8 @@ public class NegociacionServiceImpl implements NegociacionService {
     private final EmpresaQuotaRepository empresaQuotaRepository;
     private final FondeadorQuotaRepository fondeadorQuotaRepository;
     private final AprobacionNegociacionRepository aprobacionNegociacionRepository;
-    private final MongoTemplate mongoTemplate;
+    private final FacturaPatchRepository facturaPatchRepository;
+
 
 
     /**
@@ -280,18 +281,10 @@ public class NegociacionServiceImpl implements NegociacionService {
                     for (FondeadorAsignacion fon : finalFondeadores) {
                         actoresActualizados.add(new ActorFactura(fon.getRutFondeador(), "FONDEADOR"));
                     }
-                    factura.setActores(actoresActualizados);
 
-                    if (request.getTipoOperacion() != null) {
-                        switch (request.getTipoOperacion().getTipo().toUpperCase()) {
-                            case "FACTORING" -> factura.setEstadoFirma("SIN_CESION");
-                            case "CONFIRMING" -> factura.setEstadoFirma("SIN_DESCUENTO");
-                        }
-                    }
+                    EstadoFirma estadoFirma = calcularEstadoFirma(request.getTipoOperacion().getTipo());
 
-                    factura.setEstadoNegociacion("NEGOCIADA");
-                    facturaRepository.save(factura);
-
+                    facturaPatchRepository.marcarComoNegociada(factura.getId(), estadoFirma, actoresActualizados);
                     // construir DTO aceptado
                     reqFact.setFondeadores(finalFondeadores);
                     reqFact.setRutProveedor(factura.getRutProveedor());
@@ -332,9 +325,9 @@ public class NegociacionServiceImpl implements NegociacionService {
         negociacion.setTotalNegociado(totalAceptado);
 
         String estado;
-        if (facturasAceptadas.isEmpty()) estado = "RECHAZADA";
-        else if (!facturasRechazadas.isEmpty()) estado = "PARCIAL";
-        else estado = "COMPLETADA";
+        if (facturasAceptadas.isEmpty()) estado = EstadoNegociacion.RECHAZADA.name();
+        else if (!facturasRechazadas.isEmpty()) estado = EstadoNegociacion.PENDIENTE.name();
+        else estado =EstadoNegociacion.PENDIENTE.name();
 
         negociacion.setEstado(estado);
         List<String> allErrores = new ArrayList<>(errores);
@@ -362,8 +355,20 @@ public class NegociacionServiceImpl implements NegociacionService {
     }
 
     @Override
-    @Transactional
     public void aprobarFactura(String idNegociacion, String rutEmpresa, List<AprobacionFacturaRequestDto> facturasDto) {
+
+    }
+
+    /*@Override
+    @Transactional
+    public void aprobarFactura(String idNegociacion, String rutEmpresa,
+                               List<AprobacionFacturaRequestDto> facturasDto) {
+
+
+        Update updateFactura = new Update();
+        Update updateEndoso = new Update();
+        Update updateNegociacion = new Update();
+
         Negociacion negociacion = negociacionRepository.findById(idNegociacion)
                 .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
 
@@ -372,92 +377,91 @@ public class NegociacionServiceImpl implements NegociacionService {
             throw new IllegalArgumentException("La empresa con RUT " + rutEmpresa + " no participa en esta negociación");
         }
 
-        boolean esAprobacionTotal = facturasDto.size() == negociacion.getFacturas().size();
-        log.info("📄 Modo de aprobación: {}", esAprobacionTotal ? "TOTAL" : "PARCIAL");
-
-        // 🔹 Procesar aprobaciones factura a factura
+        // 1️⃣ Registrar aprobaciones individuales
         for (AprobacionFacturaRequestDto fa : facturasDto) {
+
             negociacion.getFacturas().stream()
                     .filter(f -> f.getNumeroFactura().equals(fa.getNumeroFactura()))
                     .findFirst()
-                    .ifPresent(f -> f.getAprobaciones().add(new AprobacionActorDto(
-                            rutEmpresa,
-                            fa.isAprobado(),
-                            fa.getObservacion(),
-                            LocalDateTime.now()
-                    )));
+                    .ifPresent(f -> {
+                        f.getAprobaciones().add(new AprobacionActorDto(
+                                rutEmpresa,
+                                fa.isAprobado(),
+                                fa.getObservacion(),
+                                LocalDateTime.now()
+                        ));
+                    });
 
-            // 💾 Registrar la aprobación en Mongo (colección aprobaciones_negociacion)
-            AprobacionNegociacion aprobacion = AprobacionNegociacion.builder()
-                    .negociacionId(idNegociacion)
-                    .rutEmpresa(rutEmpresa)
-                    .rol(rolActor)
-                    .aprobado(fa.isAprobado())
-                    .fecha(LocalDateTime.now())
-                    .build();
-
-            aprobacionNegociacionRepository.save(aprobacion);
-
-            // ⚙️ Si es aprobación parcial → actualizar solo las facturas incluidas
-            if (!esAprobacionTotal) {
-                facturaService.actualizarEstadoFirma(
-                        fa.getNumeroFactura(),
-                        fa.isAprobado() ? "APROBADA_PARCIAL" : "RECHAZADA"
-                );
-            }
+            aprobacionNegociacionRepository.save(
+                    AprobacionNegociacion.builder()
+                            .negociacionId(idNegociacion)
+                            .rutEmpresa(rutEmpresa)
+                            .rol(rolActor)
+                            .aprobado(fa.isAprobado())
+                            .fecha(LocalDateTime.now())
+                            .build()
+            );
         }
 
-        // Evaluar resultados generales solo si es aprobación total
-        if (esAprobacionTotal) {
-            boolean fondeadorAprobado = actorAprobo("FONDEADOR", negociacion);
-            boolean pagadorAprobado = actorAprobo("PAGADOR", negociacion);
-            boolean proveedorAprobado = actorAprobo("PROVEEDOR", negociacion);
-            boolean hayRechazos = algunoRechazo(negociacion);
+        // 2️⃣ Recalcular estado de CADA factura
+        int aprobadas = 0;
+        int rechazadas = 0;
+        int pendientes = 0;
 
-            String tipoOperacion = negociacion.getTipoOperacion().getTipo();
+        for (FacturaNegociada f : negociacion.getFacturas()) {
 
-            switch (tipoOperacion) {
-                case "CONFIRMING" -> {
-                    if (hayRechazos) {
-                        negociacion.setEstado("RECHAZADA");
-                        negociacion.getFacturas().forEach(f ->
-                                facturaService.actualizarEstadoFirma(f.getNumeroFactura(), "RECHAZADA"));
-                    } else if (fondeadorAprobado && proveedorAprobado) {
-                        negociacion.setEstado("APROBADA");
-                        negociacion.getFacturas().forEach(f ->
-                                facturaService.actualizarEstadoFirma(f.getNumeroFactura(), "CESION"));
-                    } else {
-                        negociacion.setEstado("PENDIENTE");
-                    }
-                }
+            Query queryFactura = Query.query(
+                    Criteria.where("numeroFactura").is(f.getNumeroFactura())
+            );
 
-                case "FACTORING" -> {
-                    if (hayRechazos) {
-                        negociacion.setEstado("RECHAZADA");
-                        negociacion.getFacturas().forEach(f ->
-                                facturaService.actualizarEstadoFirma(f.getNumeroFactura(), "RECHAZADA"));
-                    } else if (fondeadorAprobado && pagadorAprobado) {
-                        negociacion.setEstado("APROBADA");
-                        negociacion.getFacturas().forEach(f ->
-                                facturaService.actualizarEstadoFirma(f.getNumeroFactura(), "PENDIENTE_POR_ENDOSO"));
-                    } else {
-                        negociacion.setEstado("PENDIENTE");
-                    }
-                }
+            Query queryEndoso = Query.query(
+                    Criteria.where("negociacionId").is(negociacion.getId())
+            );
 
-                default -> throw new IllegalArgumentException("Tipo de operación desconocido: " + tipoOperacion);
+
+            boolean tieneRechazo = f.getAprobaciones().stream().anyMatch(a -> !a.isAprobado());
+            boolean tieneAprobacion = f.getAprobaciones().stream().anyMatch(AprobacionActorDto::isAprobado);
+
+            if (tieneRechazo) {
+                rechazadas++;
+                updateFactura.set("estadoFirma",EstadoFirma.RECHAZADA.name());
+                updateFactura.set("estadoNegociacion",EstadoFactura.RECHAZADA.name());
+                updateEndoso.set("estado", EstadoEndoso.RECHAZADO.name());
+            } else if (tieneAprobacion) {
+                aprobadas++;
+                evaluarEstadosFactura(f, negociacion.getTipoOperacion().getTipo());
+
+            } else {
+                pendientes++;
+                updateFactura.set("estadoFirma",EstadoFirma.EN_APROBACION.name());
+                updateEndoso.set("estado", EstadoEndoso.PENDIENTE.name());
+
+
             }
+
+        }
+
+        Query queryNegociacion = Query.query(
+                Criteria.where("negociacionId").is(negociacion.getId())
+        );
+
+        // 3️⃣ Decidir estado global de la negociación
+        if (aprobadas > 0 && rechazadas == 0 && pendientes == 0) {
+            updateNegociacion.set("estado",EstadoNegociacion.APROBADA.name());
+        } else if (rechazadas > 0 && aprobadas == 0) {
+            updateNegociacion.set("estado",EstadoNegociacion.RECHAZADA.name());
         } else {
-            // Si es aprobación parcial → mantener estado global pendiente
-            negociacion.setEstado("PENDIENTE");
+            updateNegociacion.set("estado",EstadoNegociacion.PENDIENTE.name());
         }
 
-        negociacion.setFechaUltimaActualizacion(LocalDateTime.now());
+        updateNegociacion.set("fechaUltimaActualizacion",LocalDateTime.now());
         negociacionRepository.save(negociacion);
-        log.info("Aprobaciones procesadas correctamente para negociación {}", idNegociacion);
+        mongoTemplate.updateFirst(queryNegociacion, updateNegociacion, Negociacion.class);
+
+        log.info("Negociación {} procesada. Aprobadas: {}, Rechazadas: {}, Pendientes: {}",
+                idNegociacion, aprobadas, rechazadas, pendientes);
     }
-
-
+*/
 
     private String determinarRolActor(String rutEmpresa, Negociacion negociacion) {
         // Cache para evitar múltiples llamadas a Mongo
@@ -502,6 +506,86 @@ public class NegociacionServiceImpl implements NegociacionService {
         return negociacion.getFacturas().stream()
                 .flatMap(f -> f.getAprobaciones().stream())
                 .anyMatch(a -> !a.isAprobado());
+    }
+
+    private void evaluarEstadosFactura(FacturaNegociada factura, String tipoOperacion) {
+
+        Update updateFactura = new Update();
+        Update updateEndoso = new Update();
+
+        Query queryFactura = Query.query(
+                Criteria.where("numeroFactura").is(factura.getNumeroFactura())
+        );
+
+
+        Set<String> actoresRequeridos = tipoOperacion.equals("FACTORING")
+                ? Set.of("PAGADOR", "FONDEADOR")
+                : Set.of("PROVEEDOR", "FONDEADOR");
+
+        Map<String, Boolean> respuestas = factura.getAprobaciones().stream()
+                .collect(Collectors.toMap(
+                        AprobacionActorDto::getRutActor,
+                        AprobacionActorDto::isAprobado,
+                        (a, b) -> a // si hay duplicado, toma el primero
+                ));
+
+        boolean algunoRechazo = actoresRequeridos.stream()
+                .anyMatch(r -> respuestas.containsKey(r) && !respuestas.get(r));
+
+        long aprobacionesValidas = actoresRequeridos.stream()
+                .filter(r -> Boolean.TRUE.equals(respuestas.get(r)))
+                .count();
+
+        // 🔹 ESTADO FIRMA
+        String estadoFirma;
+        if (algunoRechazo) {
+            estadoFirma = "RECHAZADA";
+        } else if (aprobacionesValidas == actoresRequeridos.size()) {
+            estadoFirma = tipoOperacion.equals("FACTORING")
+                    ? "CESION"
+                    : "DESCUENTO";
+        } else if (aprobacionesValidas > 0) {
+            estadoFirma = "EN_APROBACION";
+        } else {
+            estadoFirma = "PENDIENTE";
+        }
+
+        // 🔹 ESTADO ENDOSO
+        String estadoEndoso;
+        if (algunoRechazo) {
+            estadoEndoso = "RECHAZADO";
+        } else if (aprobacionesValidas == actoresRequeridos.size()) {
+            estadoEndoso = "ACEPTADO";
+        } else {
+            estadoEndoso = "PENDIENTE";
+        }
+
+       /* // 🔹 Actualizar sin modificar colección
+        updateFactura.set("estadoFirma",estadoFirma);
+        facturaService.actualizarEstadoEndoso(factura.getNumeroFactura(), estadoEndoso);
+    */}
+
+    private EstadoFirma calcularEstadoFirma(String tipoOperacion) {
+        if (tipoOperacion == null) return EstadoFirma.SIN_CESION;
+
+        return switch (tipoOperacion.toUpperCase()) {
+            case "FACTORING" -> EstadoFirma.SIN_CESION;
+            case "CONFIRMING" -> EstadoFirma.SIN_DESCUENTO;
+            default -> EstadoFirma.SIN_CESION;
+        };
+    }
+
+    private List<ActorFactura> construirActores(Factura factura, List<FondeadorAsignacion> fondeadores) {
+        List<ActorFactura> actores = Optional.ofNullable(factura.getActores())
+                .orElse(new ArrayList<>())
+                .stream()
+                .filter(a -> !"FONDEADOR".equalsIgnoreCase(a.getRolEmpresaFactura()))
+                .collect(Collectors.toList());
+
+        for (FondeadorAsignacion fon : fondeadores) {
+            actores.add(new ActorFactura(fon.getRutFondeador(), "FONDEADOR"));
+        }
+        return actores;
     }
 
 
