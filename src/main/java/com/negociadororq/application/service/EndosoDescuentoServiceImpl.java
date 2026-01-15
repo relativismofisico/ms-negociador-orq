@@ -54,16 +54,27 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
         for (String numeroFactura : request.getNumerosFactura()) {
 
+            String tipoOperacion = negociacion.getTipoOperacion().getTipo();
+
+
             FacturaNegociada fn = negociacion.getFacturas().stream()
                     .filter(f ->
                             f.getNumeroFactura().equals(numeroFactura) &&
-                                    f.getRutProveedor().equals(request.getRutProveedor())
+                                    esFacturaValidaParaOperacion(
+                                            f,
+                                            request.getRutProveedor(), // ⚠️ nombre del campo, pero representa el solicitante
+                                            tipoOperacion
+                                    )
                     )
                     .findFirst()
                     .orElse(null);
 
             if (fn == null) {
-                rechazadas.add(numeroFactura + " (no pertenece al proveedor)");
+                String actor = "FACTORING".equalsIgnoreCase(tipoOperacion)
+                        ? "proveedor"
+                        : "pagador";
+
+                rechazadas.add(numeroFactura + " (no pertenece al " + actor + ")");
                 continue;
             }
 
@@ -131,6 +142,24 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                 .facturasRechazadas(rechazadas)
                 .plantillaHtml(htmlPreview)
                 .build();
+    }
+
+
+    private boolean esFacturaValidaParaOperacion(
+            FacturaNegociada factura,
+            String rutSolicitante,
+            String tipoOperacion
+    ) {
+
+        if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
+            return factura.getRutProveedor().equals(rutSolicitante);
+        }
+
+        if ("COMFIRMING".equalsIgnoreCase(tipoOperacion)) {
+            return factura.getRutPagador().equals(rutSolicitante);
+        }
+
+        return false;
     }
 
 }
