@@ -5,5 +5,7 @@ public enum EstadoNegociacion {
     APROBADA,    // pagador + fondeador aceptaron
     RECHAZADA,   // alguien rechazó
     ENDOSADA,    // proveedor endosó y fue aceptado
-    LIQUIDADA    // enviada a ms-liquidador-neg
+    LIQUIDADA,   // enviada a ms-liquidador-ne
+    EN_APROBACION,
+    PARCIAL
 }

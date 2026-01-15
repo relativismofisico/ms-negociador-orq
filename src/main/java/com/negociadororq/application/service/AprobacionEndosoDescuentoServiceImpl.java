@@ -6,9 +6,7 @@ import com.negociadororq.application.controller.dto.AprobacionResponseDto;
 import com.negociadororq.domain.model.AprobacionActorDto;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
-import com.negociadororq.enums.EstadoEndoso;
-import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.enums.RolActor;
+import com.negociadororq.enums.*;
 import com.negociadororq.infrastructure.repository.EndosoPatchRepository;
 import com.negociadororq.infrastructure.repository.FacturaPatchRepository;
 import com.negociadororq.infrastructure.repository.NegociacionRepository;
@@ -71,8 +69,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         }
 
         //Actualizamos los campos de la negociacion
-        String estadoGlobal = calcularEstadoNegociacion(negociacion);
-        negociacion.setEstado(estadoGlobal);
+        EstadoNegociacion  estadoGlobal = calcularEstadoNegociacion(negociacion);
+        negociacion.setEstado(estadoGlobal.name());
         negociacion.setFechaUltimaActualizacion(LocalDateTime.now());
         negociacionRepository.save(negociacion);
 
@@ -133,15 +131,36 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     }
 
 
-    private String calcularEstadoNegociacion(Negociacion negociacion) {
-        if (negociacion.getFacturas().stream().anyMatch(f -> EstadoFirma.RECHAZADA.name().equals(f.getEstadoFirma()))) {
-            return EstadoFirma.RECHAZADA.name();
+    private EstadoNegociacion calcularEstadoNegociacion(Negociacion negociacion) {
+        List<FacturaNegociada> facturas = negociacion.getFacturas();
+
+        boolean hayPendientes = facturas.stream().anyMatch(f ->
+                EstadoFirma.EN_APROBACION.name().equals(f.getEstadoFirma()) ||
+                        EstadoFirma.EN_REVISION.name().equals(f.getEstadoFirma())
+        );
+
+        boolean hayAprobadas = facturas.stream().anyMatch(f ->
+                EstadoFirma.CESION.name().equals(f.getEstadoFirma()) ||
+                        EstadoFirma.DESCUENTO.name().equals(f.getEstadoFirma())
+        );
+
+        boolean hayRechazadas = facturas.stream().anyMatch(f ->
+                EstadoFirma.RECHAZADA.name().equals(f.getEstadoFirma())
+        );
+
+        if (hayPendientes) {
+            return EstadoNegociacion.EN_APROBACION;
         }
-        if (negociacion.getFacturas().stream().allMatch(f -> EstadoFirma.CESION.name().equals(f.getEstadoFirma())
-                || EstadoFirma.DESCUENTO.name().equals(f.getEstadoFirma()))) {
-            return EstadoFirma.APROBACION.name();
+
+        if (hayAprobadas && hayRechazadas) {
+            return EstadoNegociacion.PARCIAL;
         }
-        return EstadoFirma.EN_APROBACION.name();
+
+        if (hayAprobadas) {
+            return EstadoNegociacion.APROBADA;
+        }
+
+        return EstadoNegociacion.EN_APROBACION;
     }
 
     private Set<RolActor> obtenerActoresRequeridos(String tipoOperacion) {
