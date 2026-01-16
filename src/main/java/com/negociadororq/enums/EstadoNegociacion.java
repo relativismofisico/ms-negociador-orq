@@ -6,6 +6,6 @@ public enum EstadoNegociacion {
     RECHAZADA,   // alguien rechazó
     ENDOSADA,    // proveedor endosó y fue aceptado
     LIQUIDADA,   // enviada a ms-liquidador-ne
-    EN_APROBACION,
+    EN_APROBACION, //Faltan Actores por aprobar
     PARCIAL
 }

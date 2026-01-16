@@ -1,283 +1,136 @@
 {
-	"info": {
-		"_postman_id": "944edb59-9c57-4e57-ad34-f7e3a58d2f62",
-		"name": "ms-cargaFacturas-neg",
-		"description": "Colección para probar el microservicio ms-cargaFacturas-neg que permite cargar facturas XML y PDF.",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "28222766",
-		"_collection_link": "https://facturas-8785.postman.co/workspace/Facturas~0f056199-548d-4012-9603-37b9d8a4b5e1/collection/28222766-944edb59-9c57-4e57-ad34-f7e3a58d2f62?action=share&source=collection_link&creator=28222766"
-	},
-	"item": [
-		{
-			"name": "cargarFacturas",
-			"item": [
-				{
-					"name": "Subir múltiples archivos",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "formdata",
-							"formdata": [
-								{
-									"key": "archivos",
-									"type": "file",
-									"src": [
-										"/Users/jredondo/Documents/Facturas/ad09002661020002500001168/ad09002661020002500001168.pdf",
-										"/Users/jredondo/Documents/Facturas/ad09002661020002500001168/ad09002661020002500001168.xml"
-									]
-								},
-								{
-									"key": "usuario",
-									"value": "master",
-									"type": "text"
-								},
-								{
-									"key": "archivos",
-									"type": "file",
-									"src": [
-										"/Users/jredondo/Documents/Facturas/ad09002661020002500001275/ad09002661020002500001275.pdf",
-										"/Users/jredondo/Documents/Facturas/ad09002661020002500001275/ad09002661020002500001275.xml"
-									]
-								}
-							]
-						},
-						"url": {
-							"raw": "http://localhost:8081/carga/factura",
-							"protocol": "http",
-							"host": [
-								"localhost"
-							],
-							"port": "8081",
-							"path": [
-								"carga",
-								"factura"
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Configuracion Ftp",
-			"item": [
-				{
-					"name": "Create FTP Config (PASSWORD)",
-					"request": {
-						"auth": {
-							"type": "basic",
-							"basic": [
-								{
-									"key": "username",
-									"value": "admin",
-									"type": "string"
-								},
-								{
-									"key": "password",
-									"value": "admin123",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"empresa\": \"0000000\",\n  \"host\": \"186.121.102.78\",\n  \"puertoFtp\": 21,\n  \"usuarioFtp\": \"pruebaftp\",\n  \"contrasenaFtp\": \"Juliana1987*\",\n  \"remoteDir\": \"ftp://186.121.102.78\",\n  \"rutaProcesados\": \"/procesados\",\n  \"rutaErrores\": \"/errores\",\n  \"tipoDeAutenticacion\": \"PASSWORD\"\n}"
-						},
-						"url": {
-							"raw": "http://localhost:8081/ftp-configuracion/crear",
-							"protocol": "http",
-							"host": [
-								"localhost"
-							],
-							"port": "8081",
-							"path": [
-								"ftp-configuracion",
-								"crear"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Create FTP Config (PRIVATE_KEY)",
-					"request": {
-						"auth": {
-							"type": "basic",
-							"basic": [
-								{
-									"key": "username",
-									"value": "admin",
-									"type": "string"
-								},
-								{
-									"key": "password",
-									"value": "admin123",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"userId\": \"empresaB\",\n  \"host\": \"sftp.empresaB.com\",\n  \"port\": 22,\n  \"username\": \"userB\",\n  \"privateKeyPath\": \"/opt/keys/empresaB_id_rsa\",\n  \"passphrase\": \"opcional\",\n  \"remoteDir\": \"/entrada\",\n  \"processedDir\": \"/procesados\",\n  \"errorDir\": \"/errores\",\n  \"authType\": \"PRIVATE_KEY\"\n}"
-						},
-						"url": {
-							"raw": "http://localhost:8080/ftp-configs",
-							"protocol": "http",
-							"host": [
-								"localhost"
-							],
-							"port": "8080",
-							"path": [
-								"ftp-configs"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Get All FTP Configs",
-					"request": {
-						"auth": {
-							"type": "basic",
-							"basic": [
-								{
-									"key": "username",
-									"value": "admin",
-									"type": "string"
-								},
-								{
-									"key": "password",
-									"value": "admin123",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "http://localhost:8081/ftp-configuracion/obtener-todos",
-							"protocol": "http",
-							"host": [
-								"localhost"
-							],
-							"port": "8081",
-							"path": [
-								"ftp-configuracion",
-								"obtener-todos"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Get FTP Config by ID",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "http://localhost:8081/ftp-configuracion/buscar/0000000",
-							"protocol": "http",
-							"host": [
-								"localhost"
-							],
-							"port": "8081",
-							"path": [
-								"ftp-configuracion",
-								"buscar",
-								"0000000"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Delete FTP Config",
-					"request": {
-						"auth": {
-							"type": "basic",
-							"basic": [
-								{
-									"key": "username",
-									"value": "admin",
-									"type": "string"
-								},
-								{
-									"key": "password",
-									"value": "admin123",
-									"type": "string"
-								}
-							]
-						},
-						"method": "DELETE",
-						"header": [],
-						"url": {
-							"raw": "http://localhost:8081/ftp-configuracion/eliminar/0000000",
-							"protocol": "http",
-							"host": [
-								"localhost"
-							],
-							"port": "8081",
-							"path": [
-								"ftp-configuracion",
-								"eliminar",
-								"0000000"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Update FTP Config",
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"empresa\": \"0000000\",\n  \"host\": \"186.121.102.78\",\n  \"puertoFtp\": 22,\n  \"usuarioFtp\": \"pruebaftp\",\n  \"contrasenaFtp\": \"Juliana1987*\",\n  \"remoteDir\": \"ftp://186.121.102.78\",\n  \"rutaProcesados\": \"/procesados\",\n  \"rutaErrores\": \"/errores\",\n  \"tipoDeAutenticacion\": \"PASSWORD\"\n}"
-						},
-						"url": {
-							"raw": "http://localhost:8081/ftp-configuracion/actualizar/0000000",
-							"protocol": "http",
-							"host": [
-								"localhost"
-							],
-							"port": "8081",
-							"path": [
-								"ftp-configuracion",
-								"actualizar",
-								"0000000"
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		}
-	]
+  "info": {
+    "_postman_id": "1f63b724-6cb1-46b5-88b8-8733278cb265",
+    "name": "ms-negociardor-orq",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "28222766",
+    "_collection_link": "https://go.postman.co/collection/28222766-1f63b724-6cb1-46b5-88b8-8733278cb265?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Aprobar Factura en Negociación",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idNegociacion\": \"69696d29ff855f01c461a98c\",\n  \"rutEmpresa\": \"900978051\",\n  \"rolActor\": \"FONDEADOR\",\n  \"facturas\": [\n    {\n      \"numeroFactura\": \"FECI3958\",\n      \"aprobado\": true\n    }\n  ],\n  \"observacion\": \"FondePagador ador aprueba factroing de la factura \"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8083/negociaciones/aprobacion",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8083",
+          "path": [
+            "negociaciones",
+            "aprobacion"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Aprobar Todas las Facturas",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idNegociacion\": \"68ddccfc4e5ab011da2cb19a\",\n  \"rutEmpresa\": \"900978051\",\n  \"facturas\": [\n    {\n      \"numeroFactura\": \"FECI3644\",\n      \"aprobado\": true\n    },\n    {\n      \"numeroFactura\": \"FECI3761\",\n      \"aprobado\": true\n    }\n  ],\n  \"observacion\": \"Fondeador aprueba todas\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/v1/negociaciones/aprobacion",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "api",
+            "v1",
+            "negociaciones",
+            "aprobacion"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Negociar Facturas",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rutEmpresa\": \"900266102\",\n  \"rolEmpresa\": \"PROVEEDOR\",\n  \"tipoOperacion\": { \n    \"tipo\": \"FACTORING\",\n    \"clase\": \"SIN DESCUENTO\"\n    },\n  \"facturas\": [\n    {\n         \"numeroFactura\": \"FECI3958\",\n         \"fondeadores\": [\n      ]\n    }\n  ],\n  \"fondeadoresGlobales\": [\n      { \"rutFondeador\": \"900978051\"}\n  ],\n\n   \"rutOperador\": \"1128384790\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8083/negociar/factura",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8083",
+          "path": [
+            "negociar",
+            "factura"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Crear endoso Factura",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "idNegociacion",
+            "value": "{{idNegociacion}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"rutProveedor\": \"900266102\",\r\n  \"numerosFactura\": [\r\n    \"FECI3958\"\r\n  ]\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:8083/negociaciones/{{idNegociacion}}/endosos",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8083",
+          "path": [
+            "negociaciones",
+            "{{idNegociacion}}",
+            "endosos"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
 }
