@@ -29,19 +29,19 @@ public class FondeadorQuota {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "payer_quota", nullable = false)
+    @Column(name = "payer_quota")
     private BigDecimal payerQuota;
 
 
 
     // Estos tres campos almacenan RUTs, no IDs
-    @Column(name = "funder_id", nullable = false)
+    @Column(name = "funder_id")
     private Long funderId;
 
-    @Column(name = "supplier_id", nullable = false)
+    @Column(name = "supplier_id")
     private Long supplierId;
 
-    @Column(name = "payer_id", nullable = false)
+    @Column(name = "payer_id")
     private Long payerId;
 
     @Column(name = "payer_current_quota")
