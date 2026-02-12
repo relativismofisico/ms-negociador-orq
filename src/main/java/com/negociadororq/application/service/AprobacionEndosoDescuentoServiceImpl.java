@@ -6,18 +6,21 @@ import com.negociadororq.application.controller.dto.AprobacionResponseDto;
 import com.negociadororq.domain.model.AprobacionActorDto;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
-import com.negociadororq.enums.*;
+import com.negociadororq.domain.model.Operacion;
+import com.negociadororq.enums.EstadoEndoso;
+import com.negociadororq.enums.EstadoFirma;
+import com.negociadororq.enums.EstadoNegociacion;
+import com.negociadororq.enums.RolActor;
 import com.negociadororq.infrastructure.repository.EndosoPatchRepository;
 import com.negociadororq.infrastructure.repository.FacturaPatchRepository;
 import com.negociadororq.infrastructure.repository.NegociacionRepository;
-import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
-import com.negociadororq.enums.RolActor;
 
 
 
@@ -29,6 +32,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final NegociacionRepository negociacionRepository;
     private final FacturaPatchRepository facturaPatchRepository;
     private  final EndosoPatchRepository endosoPatchRepository;
+
+
 
     @Override
     public AprobacionResponseDto aprobar(AprobacionRequestDto request) {
@@ -65,7 +70,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             factura.getAprobaciones().removeIf(a -> a.getRutActor().equals(request.getRutEmpresa()));
             factura.getAprobaciones().add(aprobacion);
 
-            actualizarEstadosFacturaEndosoNegociacion(negociacion.getId(), factura, negociacion.getTipoOperacion().getTipo());
+            actualizarEstadosFacturaEndosoNegociacion(negociacion.getId(), factura, negociacion.getTipoOperacion());
         }
 
         //Actualizamos los campos de la negociacion
@@ -77,13 +82,13 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         AprobacionResponseDto response = new AprobacionResponseDto();
         response.setIdNegociacion(negociacion.getId());
         response.setEstado(negociacion.getEstado());
-        response.setFacturas(negociacion.getFacturas()); // aquí ya cuadra porque es List<FacturaNegociada>
+        response.setFacturas(negociacion.getFacturas());
         response.setErrores(errores);
         return response;
 
     }
 
-    private void actualizarEstadosFacturaEndosoNegociacion(String idNegociacion, FacturaNegociada factura, String tipoOperacion) {
+    private void actualizarEstadosFacturaEndosoNegociacion(String idNegociacion, FacturaNegociada factura, Operacion tipoOperacion) {
 
         // 1. Si hay rechazo → RECHAZADA
         boolean hayRechazo = factura.getAprobaciones().stream().anyMatch(a -> !a.isAprobado());
@@ -95,7 +100,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         }
 
         // 2. Actores requeridos
-        Set<RolActor> actoresRequeridos = obtenerActoresRequeridos(tipoOperacion);
+        Set<RolActor> actoresRequeridos = obtenerActoresRequeridos(tipoOperacion.getTipo());
 
         // 3. Actores que aprobaron
         Set<RolActor> rolesQueAprobaron = factura.getAprobaciones().stream()
@@ -112,10 +117,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         EstadoEndoso estadoEndoso;
 
         if (todosAprobaron) {
-            estadoFactura = "FACTORING".equalsIgnoreCase(tipoOperacion)
-                    ? EstadoFirma.CESION
-                    : EstadoFirma.DESCUENTO;
+            estadoFactura = "FACTORING".equalsIgnoreCase(tipoOperacion.getTipo()) ? EstadoFirma.CESION : EstadoFirma.DESCUENTO;
             estadoEndoso = EstadoEndoso.ACEPTADO;
+
         } else if (alguienAprobo) {
             estadoFactura = EstadoFirma.EN_APROBACION;
             estadoEndoso = EstadoEndoso.PENDIENTE;

@@ -8,5 +8,4 @@ import java.util.List;
 
 public interface NegociacionFactoringComfirmingService {
     NegociacionResponseDto crearNegociacion(NegociacionRequestDto negociacion);
-    void aprobarFactura(String idNegociacion, String rutEmpresa, List<AprobacionFacturaRequestDto> facturasDto);
 }

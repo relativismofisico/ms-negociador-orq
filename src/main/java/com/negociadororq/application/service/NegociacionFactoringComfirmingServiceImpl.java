@@ -210,7 +210,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                             motivosFondeador.add("Fondeador " + fon.getRutFondeador() + " no tiene supplier_current_quota suficiente para factura " + numero + ". Disponible: " + supplierCurrent + ", requerido: " + valorFactura);
                             break;
                         }
-                    } else if ("CONFIRMING".equals(tipoOp)) {
+                    } else if ("COMFIRMING".equals(tipoOp)) {
                         // revisar payer_current_quota
                         BigDecimal payerCurrent = fq.getPayerCurrentQuota() == null ? BigDecimal.ZERO : fq.getPayerCurrentQuota();
                         if (payerCurrent.compareTo(valorFactura) < 0) {
@@ -354,115 +354,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         return response;
     }
 
-    @Override
-    public void aprobarFactura(String idNegociacion, String rutEmpresa, List<AprobacionFacturaRequestDto> facturasDto) {
-
-    }
-
-    /*@Override
-    @Transactional
-    public void aprobarFactura(String idNegociacion, String rutEmpresa,
-                               List<AprobacionFacturaRequestDto> facturasDto) {
-
-
-        Update updateFactura = new Update();
-        Update updateEndoso = new Update();
-        Update updateNegociacion = new Update();
-
-        Negociacion negociacion = negociacionRepository.findById(idNegociacion)
-                .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
-
-        String rolActor = determinarRolActor(rutEmpresa, negociacion);
-        if ("DESCONOCIDO".equals(rolActor)) {
-            throw new IllegalArgumentException("La empresa con RUT " + rutEmpresa + " no participa en esta negociación");
-        }
-
-        // 1️⃣ Registrar aprobaciones individuales
-        for (AprobacionFacturaRequestDto fa : facturasDto) {
-
-            negociacion.getFacturas().stream()
-                    .filter(f -> f.getNumeroFactura().equals(fa.getNumeroFactura()))
-                    .findFirst()
-                    .ifPresent(f -> {
-                        f.getAprobaciones().add(new AprobacionActorDto(
-                                rutEmpresa,
-                                fa.isAprobado(),
-                                fa.getObservacion(),
-                                LocalDateTime.now()
-                        ));
-                    });
-
-            aprobacionNegociacionRepository.save(
-                    AprobacionNegociacion.builder()
-                            .negociacionId(idNegociacion)
-                            .rutEmpresa(rutEmpresa)
-                            .rol(rolActor)
-                            .aprobado(fa.isAprobado())
-                            .fecha(LocalDateTime.now())
-                            .build()
-            );
-        }
-
-        // 2️⃣ Recalcular estado de CADA factura
-        int aprobadas = 0;
-        int rechazadas = 0;
-        int pendientes = 0;
-
-        for (FacturaNegociada f : negociacion.getFacturas()) {
-
-            Query queryFactura = Query.query(
-                    Criteria.where("numeroFactura").is(f.getNumeroFactura())
-            );
-
-            Query queryEndoso = Query.query(
-                    Criteria.where("negociacionId").is(negociacion.getId())
-            );
-
-
-            boolean tieneRechazo = f.getAprobaciones().stream().anyMatch(a -> !a.isAprobado());
-            boolean tieneAprobacion = f.getAprobaciones().stream().anyMatch(AprobacionActorDto::isAprobado);
-
-            if (tieneRechazo) {
-                rechazadas++;
-                updateFactura.set("estadoFirma",EstadoFirma.RECHAZADA.name());
-                updateFactura.set("estadoNegociacion",EstadoFactura.RECHAZADA.name());
-                updateEndoso.set("estado", EstadoEndoso.RECHAZADO.name());
-            } else if (tieneAprobacion) {
-                aprobadas++;
-                evaluarEstadosFactura(f, negociacion.getTipoOperacion().getTipo());
-
-            } else {
-                pendientes++;
-                updateFactura.set("estadoFirma",EstadoFirma.EN_APROBACION.name());
-                updateEndoso.set("estado", EstadoEndoso.PENDIENTE.name());
-
-
-            }
-
-        }
-
-        Query queryNegociacion = Query.query(
-                Criteria.where("negociacionId").is(negociacion.getId())
-        );
-
-        // 3️⃣ Decidir estado global de la negociación
-        if (aprobadas > 0 && rechazadas == 0 && pendientes == 0) {
-            updateNegociacion.set("estado",EstadoNegociacion.APROBADA.name());
-        } else if (rechazadas > 0 && aprobadas == 0) {
-            updateNegociacion.set("estado",EstadoNegociacion.RECHAZADA.name());
-        } else {
-            updateNegociacion.set("estado",EstadoNegociacion.PENDIENTE.name());
-        }
-
-        updateNegociacion.set("fechaUltimaActualizacion",LocalDateTime.now());
-        negociacionRepository.save(negociacion);
-        mongoTemplate.updateFirst(queryNegociacion, updateNegociacion, Negociacion.class);
-
-        log.info("Negociación {} procesada. Aprobadas: {}, Rechazadas: {}, Pendientes: {}",
-                idNegociacion, aprobadas, rechazadas, pendientes);
-    }
-*/
-
     private String determinarRolActor(String rutEmpresa, Negociacion negociacion) {
         // Cache para evitar múltiples llamadas a Mongo
         Map<String, Boolean> cache = new HashMap<>();
@@ -495,75 +386,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     }
 
 
-    private boolean actorAprobo(String rol, Negociacion negociacion) {
-        return negociacion.getFacturas().stream()
-                .flatMap(f -> f.getAprobaciones().stream())
-                .filter(a -> a.getRutActor() != null)
-                .anyMatch(a -> determinarRolActor(a.getRutActor(), negociacion).equals(rol) && a.isAprobado());
-    }
-
-    private boolean algunoRechazo(Negociacion negociacion) {
-        return negociacion.getFacturas().stream()
-                .flatMap(f -> f.getAprobaciones().stream())
-                .anyMatch(a -> !a.isAprobado());
-    }
-
-    private void evaluarEstadosFactura(FacturaNegociada factura, String tipoOperacion) {
-
-        Update updateFactura = new Update();
-        Update updateEndoso = new Update();
-
-        Query queryFactura = Query.query(
-                Criteria.where("numeroFactura").is(factura.getNumeroFactura())
-        );
-
-
-        Set<String> actoresRequeridos = tipoOperacion.equals("FACTORING")
-                ? Set.of("PAGADOR", "FONDEADOR")
-                : Set.of("PROVEEDOR", "FONDEADOR");
-
-        Map<String, Boolean> respuestas = factura.getAprobaciones().stream()
-                .collect(Collectors.toMap(
-                        AprobacionActorDto::getRutActor,
-                        AprobacionActorDto::isAprobado,
-                        (a, b) -> a // si hay duplicado, toma el primero
-                ));
-
-        boolean algunoRechazo = actoresRequeridos.stream()
-                .anyMatch(r -> respuestas.containsKey(r) && !respuestas.get(r));
-
-        long aprobacionesValidas = actoresRequeridos.stream()
-                .filter(r -> Boolean.TRUE.equals(respuestas.get(r)))
-                .count();
-
-        // 🔹 ESTADO FIRMA
-        String estadoFirma;
-        if (algunoRechazo) {
-            estadoFirma = "RECHAZADA";
-        } else if (aprobacionesValidas == actoresRequeridos.size()) {
-            estadoFirma = tipoOperacion.equals("FACTORING")
-                    ? "CESION"
-                    : "DESCUENTO";
-        } else if (aprobacionesValidas > 0) {
-            estadoFirma = "EN_APROBACION";
-        } else {
-            estadoFirma = "PENDIENTE";
-        }
-
-        // 🔹 ESTADO ENDOSO
-        String estadoEndoso;
-        if (algunoRechazo) {
-            estadoEndoso = "RECHAZADO";
-        } else if (aprobacionesValidas == actoresRequeridos.size()) {
-            estadoEndoso = "ACEPTADO";
-        } else {
-            estadoEndoso = "PENDIENTE";
-        }
-
-       /* // 🔹 Actualizar sin modificar colección
-        updateFactura.set("estadoFirma",estadoFirma);
-        facturaService.actualizarEstadoEndoso(factura.getNumeroFactura(), estadoEndoso);
-    */}
 
     private EstadoFirma calcularEstadoFirma(String tipoOperacion) {
         if (tipoOperacion == null) return EstadoFirma.SIN_CESION;
@@ -574,19 +396,4 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             default -> EstadoFirma.SIN_CESION;
         };
     }
-
-    private List<ActorFactura> construirActores(Factura factura, List<FondeadorAsignacion> fondeadores) {
-        List<ActorFactura> actores = Optional.ofNullable(factura.getActores())
-                .orElse(new ArrayList<>())
-                .stream()
-                .filter(a -> !"FONDEADOR".equalsIgnoreCase(a.getRolEmpresaFactura()))
-                .collect(Collectors.toList());
-
-        for (FondeadorAsignacion fon : fondeadores) {
-            actores.add(new ActorFactura(fon.getRutFondeador(), "FONDEADOR"));
-        }
-        return actores;
-    }
-
-
 }

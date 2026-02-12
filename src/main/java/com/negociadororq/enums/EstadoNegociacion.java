@@ -1,6 +1,6 @@
 package com.negociadororq.enums;
 
-public enum EstadoNegociacion {
+public enum  EstadoNegociacion {
     PENDIENTE,   // creada, esperando aprobaciones
     APROBADA,    // pagador + fondeador aceptaron
     RECHAZADA,   // alguien rechazó
