@@ -29,10 +29,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final CompanyRepository companyRepository;
     private final EmpresaQuotaRepository empresaQuotaRepository;
     private final FondeadorQuotaRepository fondeadorQuotaRepository;
-    private final AprobacionNegociacionRepository aprobacionNegociacionRepository;
     private final FacturaPatchRepository facturaPatchRepository;
-
-
 
     /**
      * Crea una negociación procesando factura a factura:
@@ -55,14 +52,13 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                 .map(User::getIdeUser)
                 .orElseThrow(() -> new RuntimeException("No existe operador con username " + request.getRutOperador()));
 
-
         /* ======================================================
            1. Agrupar facturas por pagador SOLO en CONFIRMING
         ====================================================== */
         Map<String, List<FacturaNegociada>> facturasPorPagador = new HashMap<>();
 
         if (request.getTipoOperacion() != null
-                && "CONFIRMING".equalsIgnoreCase(request.getTipoOperacion().getTipo())) {
+                && "COMFIRMING".equalsIgnoreCase(request.getTipoOperacion().getTipo())) {
 
             for (FacturaNegociada fn : request.getFacturas()) {
                 Factura factura = facturaRepository.findByNumeroFactura(fn.getNumeroFactura())
@@ -113,6 +109,20 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                 }
 
                 Factura factura = optFactura.get();
+
+                // 🔥 VALIDACIÓN DE PERMISOS SEGÚN TIPO DE OPERACIÓN
+                try {
+                    validarPermisoOperacion(
+                            request.getTipoOperacion().getTipo(),
+                            request.getRutEmpresa(),
+                            factura
+                    );
+                } catch (RuntimeException e) {
+                    errores.add(e.getMessage());
+                    facturasRechazadas.add(numero + " -> " + e.getMessage());
+                    throw new RuntimeException("No autorizado para negociar esta factura");
+                }
+
 
                 // validar estado origen
                 if (!"SIN_NEGOCIAR".equalsIgnoreCase(factura.getEstadoNegociacion())) {
@@ -392,4 +402,41 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             default -> EstadoFirma.SIN_CESION;
         };
     }
+
+    private void validarPermisoOperacion(String tipoOperacion, String rutEmpresaRequest, Factura factura) {
+
+        if (tipoOperacion == null) {
+            throw new RuntimeException("Tipo de operación no informado");
+        }
+
+        String tipo = tipoOperacion.toUpperCase();
+
+        if ("FACTORING".equals(tipo)) {
+
+            // SOLO el proveedor puede negociar
+            if (!rutEmpresaRequest.equalsIgnoreCase(factura.getRutProveedor())) {
+                throw new RuntimeException(
+                        "Operación FACTORING solo puede ser realizada por el proveedor de la factura. " +
+                                "Empresa solicitante: " + rutEmpresaRequest +
+                                ", proveedor factura: " + factura.getRutProveedor()
+                );
+            }
+
+        } else if ("COMFIRMING".equals(tipo)) {
+
+            // SOLO el pagador puede negociar
+            if (!rutEmpresaRequest.equalsIgnoreCase(factura.getRutPagador())) {
+                throw new RuntimeException(
+                        "Operación CONFIRMING solo puede ser realizada por la empresa pagadora de la factura. " +
+                                "Empresa solicitante: " + rutEmpresaRequest +
+                                ", pagador factura: " + factura.getRutPagador()
+                );
+            }
+
+        } else {
+            throw new RuntimeException("Tipo de operación no soportado: " + tipo);
+        }
+    }
+
+
 }
