@@ -1,7 +1,7 @@
 package com.negociadororq.application.service;
 
 import com.negociadororq.domain.model.MessageTemplate;
-import com.negociadororq.infrastructure.repository.MessageTemplateRepository;
+import com.negociadororq.infrastructure.persistence.repository.MessageTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

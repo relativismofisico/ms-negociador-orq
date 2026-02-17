@@ -1,9 +1,8 @@
 package com.negociadororq.application.service;
 
 import com.negociadororq.domain.model.UserQuota;
-import com.negociadororq.domain.model.User;
-import com.negociadororq.infrastructure.repository.UserQuotaRepository;
-import com.negociadororq.infrastructure.repository.UserRepository;
+import com.negociadororq.infrastructure.persistence.repository.UserQuotaRepository;
+import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

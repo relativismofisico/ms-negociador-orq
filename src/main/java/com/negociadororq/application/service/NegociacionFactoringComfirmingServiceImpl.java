@@ -1,17 +1,13 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.controller.dto.AprobacionFacturaRequestDto;
 import com.negociadororq.application.controller.dto.NegociacionRequestDto;
 import com.negociadororq.application.controller.dto.NegociacionResponseDto;
 import com.negociadororq.domain.model.*;
 import com.negociadororq.enums.EstadoFirma;
 import com.negociadororq.enums.EstadoNegociacion;
-import com.negociadororq.infrastructure.repository.*;
+import com.negociadororq.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

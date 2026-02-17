@@ -3,6 +3,9 @@ package com.negociadororq.application.service;
 import com.negociadororq.application.controller.dto.AprobacionFacturaRequestDto;
 import com.negociadororq.application.controller.dto.AprobacionRequestDto;
 import com.negociadororq.application.controller.dto.AprobacionResponseDto;
+import com.negociadororq.application.controller.dto.OperacionRequest;
+import com.negociadororq.application.mapper.OperacionMapper;
+import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
 import com.negociadororq.domain.model.AprobacionActorDto;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
@@ -11,12 +14,13 @@ import com.negociadororq.enums.EstadoEndoso;
 import com.negociadororq.enums.EstadoFirma;
 import com.negociadororq.enums.EstadoNegociacion;
 import com.negociadororq.enums.RolActor;
-import com.negociadororq.infrastructure.repository.EndosoPatchRepository;
-import com.negociadororq.infrastructure.repository.FacturaPatchRepository;
-import com.negociadororq.infrastructure.repository.NegociacionRepository;
+import com.negociadororq.infrastructure.persistence.repository.EndosoPatchRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
+import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -32,9 +36,12 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final NegociacionRepository negociacionRepository;
     private final FacturaPatchRepository facturaPatchRepository;
     private  final EndosoPatchRepository endosoPatchRepository;
+    private final OperacionMapper operacionMapper;
+    private final OutboxService outboxService;
 
 
 
+    @Transactional
     @Override
     public AprobacionResponseDto aprobar(AprobacionRequestDto request) {
         Negociacion negociacion = negociacionRepository.findById(request.getIdNegociacion())
@@ -120,6 +127,10 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             estadoFactura = "FACTORING".equalsIgnoreCase(tipoOperacion.getTipo()) ? EstadoFirma.CESION : EstadoFirma.DESCUENTO;
             estadoEndoso = EstadoEndoso.ACEPTADO;
 
+            OperacionRequest request = new OperacionRequest();
+            request.setNumeroFactura(factura.getNumeroFactura());
+            request.setOperacion(operacionMapper.toDto(tipoOperacion));
+
         } else if (alguienAprobo) {
             estadoFactura = EstadoFirma.EN_APROBACION;
             estadoEndoso = EstadoEndoso.PENDIENTE;
@@ -131,6 +142,25 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         // 5️⃣ PATCH ATÓMICO
         facturaPatchRepository.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), estadoFactura);
         endosoPatchRepository.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), estadoEndoso);
+
+
+        Operacion operacion = Operacion.builder()
+                .tipo(tipoOperacion.getTipo())
+                .clase(tipoOperacion.getClase())
+                .build();
+
+        LiquidacionSolicitadaEvent event =
+                new LiquidacionSolicitadaEvent(
+                        idNegociacion,
+                        factura.getNumeroFactura(),
+                        operacion,
+                        LocalDateTime.now()
+                );
+
+        outboxService.guardarEvento(idNegociacion,
+                "LIQUIDACION_SOLICITADA",
+                event
+        );
 
     }
 
@@ -173,7 +203,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             return Set.of(RolActor.PAGADOR, RolActor.FONDEADOR);
         }
 
-        if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
+        if ("COMFIRMING".equalsIgnoreCase(tipoOperacion)) {
             return Set.of(RolActor.PROVEEDOR, RolActor.FONDEADOR);
         }
 

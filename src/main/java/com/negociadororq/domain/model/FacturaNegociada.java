@@ -30,6 +30,6 @@ public class FacturaNegociada {
     private List<FondeadorAsignacion> fondeadores;
 
     // Historial de aprobaciones (puede haber varias, según los roles que participen)
-    private List<AprobacionActorDto> aprobaciones = new ArrayList<>();;
+    private List<AprobacionActorDto> aprobaciones;
 
 }

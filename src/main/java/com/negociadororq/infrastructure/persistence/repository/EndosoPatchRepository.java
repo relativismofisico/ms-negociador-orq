@@ -1,9 +1,7 @@
-package com.negociadororq.infrastructure.repository;
+package com.negociadororq.infrastructure.persistence.repository;
 
 import com.negociadororq.domain.model.Endoso;
-import com.negociadororq.domain.model.Factura;
 import com.negociadororq.enums.EstadoEndoso;
-import com.negociadororq.enums.EstadoFirma;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;

@@ -1,18 +1,13 @@
 package com.negociadororq.application.service;
 
-import com.mongodb.client.result.UpdateResult;
 import com.negociadororq.domain.model.Factura;
-import com.negociadororq.infrastructure.repository.FacturaRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
 
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j

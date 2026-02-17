@@ -1,4 +1,4 @@
-package com.negociadororq.infrastructure.repository;
+package com.negociadororq.infrastructure.persistence.repository;
 
 import com.negociadororq.domain.model.ActorFactura;
 import com.negociadororq.domain.model.Factura;

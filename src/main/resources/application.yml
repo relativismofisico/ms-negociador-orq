@@ -22,3 +22,11 @@ spring:
     mongodb:
       uri: mongodb://localhost:27017/DB_Facturas
       database: DB_Facturas
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+topics:
+  liquidacion: liquidacion.solicitada
