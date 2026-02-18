@@ -204,7 +204,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         }
 
         if ("COMFIRMING".equalsIgnoreCase(tipoOperacion)) {
-            return Set.of(RolActor.PROVEEDOR, RolActor.FONDEADOR);
+            return Set.of(RolActor.PROVEEDOR);
         }
 
         return Set.of();
