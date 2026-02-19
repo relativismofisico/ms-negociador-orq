@@ -64,6 +64,21 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             if (factura.getAprobaciones() == null) {
                 factura.setAprobaciones(new ArrayList<>());
             }
+
+            // 🔐 VALIDACIÓN: NO PERMITIR DOBLE ENDOSO
+            boolean yaEndoso = factura.getAprobaciones().stream()
+                    .anyMatch(a -> a.getRutActor().equals(request.getRutEmpresa()));
+
+            if (yaEndoso) {
+                errores.add("El actor " + request.getRutEmpresa() +
+                        " ya realizó el endoso para la factura " +
+                        factura.getNumeroFactura());
+                throw new RuntimeException(
+                        "El actor ya realizó el endoso para la factura " +
+                                factura.getNumeroFactura()
+                );
+            }
+
             RolActor rolActor = resolverRolActor(request.getRutEmpresa(), factura);
 
             AprobacionActorDto aprobacion = new AprobacionActorDto(
@@ -203,7 +218,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             return Set.of(RolActor.PAGADOR, RolActor.FONDEADOR);
         }
 
-        if ("COMFIRMING".equalsIgnoreCase(tipoOperacion)) {
+        if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
             return Set.of(RolActor.PROVEEDOR);
         }
 
