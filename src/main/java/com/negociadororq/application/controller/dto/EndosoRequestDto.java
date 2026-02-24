@@ -13,7 +13,7 @@ import java.util.List;
 @AllArgsConstructor
 public class EndosoRequestDto {
     private String idNegociacion;
-    private String rutProveedor;    // quien endosa
+    private String rutActor;    // quien endosa
 
     /**
      * Lista de facturas a endosar.

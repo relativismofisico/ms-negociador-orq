@@ -6,22 +6,19 @@ import com.negociadororq.application.controller.dto.AprobacionResponseDto;
 import com.negociadororq.application.controller.dto.OperacionRequest;
 import com.negociadororq.application.mapper.OperacionMapper;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
-import com.negociadororq.domain.model.AprobacionActorDto;
-import com.negociadororq.domain.model.FacturaNegociada;
-import com.negociadororq.domain.model.Negociacion;
-import com.negociadororq.domain.model.Operacion;
+import com.negociadororq.domain.model.*;
 import com.negociadororq.enums.EstadoEndoso;
 import com.negociadororq.enums.EstadoFirma;
 import com.negociadororq.enums.EstadoNegociacion;
 import com.negociadororq.enums.RolActor;
-import com.negociadororq.infrastructure.persistence.repository.EndosoPatchRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
-import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
+import com.negociadororq.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -38,8 +35,12 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private  final EndosoPatchRepository endosoPatchRepository;
     private final OperacionMapper operacionMapper;
     private final OutboxService outboxService;
-
-
+    @Lazy
+    private final OperadorService operadorService;
+    private final CompanyRepository companyRepository;
+    private final FondeadorQuotaRepository fondeadorQuotaRepository;
+    private final FacturaRepository facturaRepository;
+    private final UserRepository userRepository;
 
     @Transactional
     @Override
@@ -92,7 +93,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             factura.getAprobaciones().removeIf(a -> a.getRutActor().equals(request.getRutEmpresa()));
             factura.getAprobaciones().add(aprobacion);
 
-            actualizarEstadosFacturaEndosoNegociacion(negociacion.getId(), factura, negociacion.getTipoOperacion());
+            actualizarEstadosFacturaEndosoNegociacion(negociacion.getId(), factura, negociacion.getTipoOperacion(), request.getRutOperador());
         }
 
         //Actualizamos los campos de la negociacion
@@ -110,12 +111,17 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
     }
 
-    private void actualizarEstadosFacturaEndosoNegociacion(String idNegociacion, FacturaNegociada factura, Operacion tipoOperacion) {
+    private void actualizarEstadosFacturaEndosoNegociacion(String idNegociacion, FacturaNegociada factura, Operacion tipoOperacion, String rutOperador) {
 
         // 1. Si hay rechazo → RECHAZADA
         boolean hayRechazo = factura.getAprobaciones().stream().anyMatch(a -> !a.isAprobado());
 
         if (hayRechazo) {
+
+            log.info("Reversando cupos por rechazo de factura {}", factura.getNumeroFactura());
+
+            // 🔥 NUEVO: Reversar cupos
+            revertirCupos(factura, tipoOperacion, factura.getRutProveedor(), rutOperador);
             facturaPatchRepository.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), EstadoFirma.RECHAZADA);
             endosoPatchRepository.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), EstadoEndoso.RECHAZADO);
             return;
@@ -247,6 +253,56 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
         throw new RuntimeException("No se pudo determinar el rol del actor " + rutActor +
                 " para la factura " + factura.getNumeroFactura());
+    }
+
+    private void revertirCupos(FacturaNegociada factura, Operacion tipoOperacion, String rutEmpresa, String rutOperador) {
+
+        // Obtener factura completa
+        Factura facturaDb = facturaRepository.findByNumeroFactura(factura.getNumeroFactura())
+                .orElseThrow(() -> new RuntimeException("Factura no encontrada para reversión"));
+
+        BigDecimal valorFactura = Optional.ofNullable(facturaDb.getValorNetoFactura())
+                .orElse(facturaDb.getValorFactura());
+
+        if (valorFactura == null) valorFactura = BigDecimal.ZERO;
+
+        // 1️⃣ Usuario
+        Long userId = userRepository.findByUsername(rutOperador)
+                .map(User::getIdeUser)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        operadorService.revertirCupoUsuario(userId, valorFactura);
+
+        // 2 Empresa
+        Long companyId = companyRepository.findByNit(rutEmpresa)
+                .map(Company::getIdeCompany)
+                .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+
+        operadorService.revertirCupoEmpresa(companyId, valorFactura);
+
+
+        // 3️⃣ Revertir cupo fondeadores
+        final BigDecimal valorFinal = valorFactura;
+
+        if (factura.getFondeadores() != null) {
+            for (FondeadorAsignacion fon : factura.getFondeadores()) {
+
+                Long funderId = companyRepository.findByNit(fon.getRutFondeador())
+                        .map(Company::getIdeCompany)
+                        .orElseThrow(() -> new RuntimeException("Fondeador no encontrado"));
+
+                Long payerId = companyRepository.findByNit(facturaDb.getRutPagador())
+                        .map(Company::getIdeCompany)
+                        .orElseThrow(() -> new RuntimeException("Pagador no encontrado"));
+
+                fondeadorQuotaRepository.findByFunderIdAndPayerId(funderId, payerId)
+                        .ifPresent(fq -> {
+                            fq.setPayerCurrentQuota(
+                                    fq.getPayerCurrentQuota().add(valorFinal)
+                            );
+                        });
+            }
+        }
     }
 
 }

@@ -23,7 +23,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
     private final FacturaRepository facturaRepository;
     private final NegociacionRepository negociacionRepository;
-    private final FacturaService facturaService;
     private final OperadorService operadorService;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
@@ -216,7 +215,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                             motivosFondeador.add("Fondeador " + fon.getRutFondeador() + " no tiene supplier_current_quota suficiente para factura " + numero + ". Disponible: " + supplierCurrent + ", requerido: " + valorFactura);
                             break;
                         }
-                    } else if ("COMFIRMING".equals(tipoOp)) {
+                    } else if ("CONFIRMING".equals(tipoOp)) {
                         // revisar payer_current_quota
                         BigDecimal payerCurrent = fq.getPayerCurrentQuota() == null ? BigDecimal.ZERO : fq.getPayerCurrentQuota();
                         if (payerCurrent.compareTo(valorFactura) < 0) {
@@ -422,7 +421,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                 );
             }
 
-        } else if ("COMFIRMING".equals(tipo)) {
+        } else if ("CONFIRMING".equals(tipo)) {
 
             // SOLO el pagador puede negociar
             if (!rutEmpresaRequest.equalsIgnoreCase(factura.getRutPagador())) {

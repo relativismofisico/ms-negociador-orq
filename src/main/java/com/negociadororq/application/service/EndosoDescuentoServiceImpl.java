@@ -62,7 +62,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                             f.getNumeroFactura().equals(numeroFactura) &&
                                     esFacturaValidaParaOperacion(
                                             f,
-                                            request.getRutProveedor(), // ⚠️ nombre del campo, pero representa el solicitante
+                                            request.getRutActor(), // ⚠️ nombre del campo, pero representa el solicitante
                                             tipoOperacion
                                     )
                     )
@@ -71,8 +71,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
             if (fn == null) {
                 String actor = "FACTORING".equalsIgnoreCase(tipoOperacion)
-                        ? "proveedor"
-                        : "pagador";
+                        ? "PROVEEDOR"
+                        : "PAGADOR";
 
                 rechazadas.add(numeroFactura + " (no pertenece al " + actor + ")");
                 continue;
@@ -101,7 +101,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
             Endoso endoso = Endoso.builder()
                     .negociacionId(request.getIdNegociacion())
                     .numeroFactura(factura.getNumeroFactura()) // ✅ CORRECTO
-                    .rutProveedor(request.getRutProveedor())
+                    .rutProveedor(request.getRutActor())
                     .rutPagador(fn.getRutPagador())
                     .rutFondeador(fn.getFondeadores().get(0).getRutFondeador())
                     .estado(EstadoEndoso.EN_REVISION)
@@ -120,7 +120,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
             if (htmlPreview == null) {
                 htmlPreview = templateRenderService.renderEndosoTemplate(
-                        request.getRutProveedor(),
+                        request.getRutActor(),
                         fn.getRutPagador(),
                         fn.getFondeadores().get(0).getRutFondeador(),
                         factura.getFechaEsperadaPagoPagador(),
@@ -155,7 +155,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
             return factura.getRutProveedor().equals(rutSolicitante);
         }
 
-        if ("COMFIRMING".equalsIgnoreCase(tipoOperacion)) {
+        if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
             return factura.getRutPagador().equals(rutSolicitante);
         }
 

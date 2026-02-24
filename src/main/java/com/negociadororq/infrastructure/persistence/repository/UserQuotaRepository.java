@@ -9,4 +9,5 @@ import org.springframework.stereotype.Repository;
 public interface UserQuotaRepository extends JpaRepository<UserQuota, String> {
 
     Optional<UserQuota> findByUser_IdeUser(Long userId);
+
 }
