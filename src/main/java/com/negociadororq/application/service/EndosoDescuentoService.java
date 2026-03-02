@@ -5,6 +5,5 @@ import com.negociadororq.application.controller.dto.EndosoResponseDto;
 import org.springframework.transaction.annotation.Transactional;
 
 public interface EndosoDescuentoService {
-    @Transactional
     EndosoResponseDto registrarEndoso(EndosoRequestDto request);
 }

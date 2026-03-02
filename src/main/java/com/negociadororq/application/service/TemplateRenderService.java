@@ -5,6 +5,17 @@ import java.time.LocalDateTime;
 
 public interface TemplateRenderService {
 
-    String renderEndosoTemplate(String rutProveedor, String rutPagador, String rutFondeador,
-            LocalDate fechaPago, LocalDateTime fechaSolicitud);
+    String renderEndosoFormalTemplate(
+            String ciudadNegociacion,
+            String nombrePagador,
+            String direccionPagador,
+            String ciudadPagador,
+            String nombreProveedor,
+            String nitProveedor,
+            String numeroFactura,
+            String tipoOperacion,
+            String nombreFondeador,
+            String rutFondeador,
+            LocalDateTime fechaOperacion
+    );
 }

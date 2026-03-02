@@ -32,6 +32,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     private final FacturaRepository facturaRepository;
     private final TemplateRenderService templateRenderService;
     private final FacturaPatchRepository facturaPatchRepository;
+    private final DocumentoEndosoService documentoEndosoService;
 
 
 
@@ -100,8 +101,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
             Endoso endoso = Endoso.builder()
                     .negociacionId(request.getIdNegociacion())
-                    .numeroFactura(factura.getNumeroFactura()) // ✅ CORRECTO
-                    .rutProveedor(request.getRutActor())
+                    .numeroFactura(factura.getNumeroFactura())
+                    .rutProveedor(factura.getRutProveedor())
                     .rutPagador(fn.getRutPagador())
                     .rutFondeador(fn.getFondeadores().get(0).getRutFondeador())
                     .estado(EstadoEndoso.EN_REVISION)
@@ -109,6 +110,13 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                     .fechaActualizacion(LocalDateTime.now())
                     .build();
 
+// 🔹 Generar documento formal antes de guardar
+            documentoEndosoService.generarDocumentoFormal(
+                    endoso,
+                    negociacion,
+                    factura,
+                    fn
+            );
 
             endosoRepository.save(endoso);
             creadas.add(numeroFactura);
@@ -117,16 +125,6 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                     factura.getId(),
                     EstadoFirma.EN_REVISION
             );
-
-            if (htmlPreview == null) {
-                htmlPreview = templateRenderService.renderEndosoTemplate(
-                        request.getRutActor(),
-                        fn.getRutPagador(),
-                        fn.getFondeadores().get(0).getRutFondeador(),
-                        factura.getFechaEsperadaPagoPagador(),
-                        LocalDateTime.now()
-                );
-            }
 
         }
 

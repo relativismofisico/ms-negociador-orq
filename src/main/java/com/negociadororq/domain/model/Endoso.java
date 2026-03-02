@@ -40,4 +40,10 @@ public class Endoso {
     private String documentoUrl; // enlace al PDF del endoso
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
+
+    private String documentoHtml;
+    private byte[] documentoPdf;
+    private String nombreArchivoPdf;
+
+
 }

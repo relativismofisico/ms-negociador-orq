@@ -17,16 +17,80 @@ public class TemplateRenderServiceImpl implements  TemplateRenderService{
 
 
     @Override
-    public String renderEndosoTemplate(String rutProveedor, String rutPagador, String rutFondeador, LocalDate fechaPago, LocalDateTime fechaSolicitud) {
-        MessageTemplate template = templateRepository
-                .findByTemplateName("Endoso")
-                .orElseThrow(() -> new RuntimeException("Plantilla Endoso no encontrada"));
+    public String renderEndosoFormalTemplate(
+            String ciudadNegociacion,
+            String nombrePagador,
+            String direccionPagador,
+            String ciudadPagador,
+            String nombreProveedor,
+            String nitProveedor,
+            String numeroFactura,
+            String tipoOperacion,
+            String nombreFondeador,
+            String rutFondeador,
+            LocalDateTime fechaOperacion
+    ) {
 
-        return template.getContent()
-                .replace("{{RUT_PROVEEDOR}}", rutProveedor)
-                .replace("{{RUT_PAGADOR}}", rutPagador)
-                .replace("{{RUT_FONDEADOR}}", rutFondeador)
-                .replace("{{FECHA_PAGO}}", fechaPago != null ? fechaPago.toString() : "N/A")
-                .replace("{{FECHA_SOLICITUD}}", fechaSolicitud.toString());
+        return """
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="UTF-8"/>
+<title>Endoso</title>
+</head>
+<body style="font-family: Arial; font-size: 14px;">
+
+<p>%s, %s</p>
+
+<p><strong>Señores:</strong><br/>
+%s<br/>
+%s<br/>
+%s</p>
+
+<p><strong>Referencia:</strong> Endoso en propiedad de factura</p>
+
+<p>
+Yo, actuando en calidad de autorizado por la empresa %s con NIT %s,
+como emisor de la factura %s, manifiesto expresa e irrevocablemente
+que he ENDOSADO EN PROPIEDAD Y %s a favor de %s.
+</p>
+
+<p>
+En consecuencia, al vencimiento debe pagarse directamente
+el importe a %s - %s.
+</p>
+
+<p>
+Suscribo el presente documento en la ciudad de %s,
+a los %s.
+</p>
+
+<br/><br/>
+
+_____________________________<br/>
+Firma Autorizada<br/>
+%s<br/>
+NIT: %s
+
+</body>
+</html>
+""".formatted(
+                ciudadNegociacion,
+                fechaOperacion,
+                nombrePagador,
+                direccionPagador,
+                ciudadPagador,
+                nombreProveedor,
+                nitProveedor,
+                numeroFactura,
+                tipoOperacion,
+                nombreFondeador,
+                nombreFondeador,
+                rutFondeador,
+                ciudadNegociacion,
+                fechaOperacion,
+                nombreProveedor,
+                nitProveedor
+        );
     }
 }
