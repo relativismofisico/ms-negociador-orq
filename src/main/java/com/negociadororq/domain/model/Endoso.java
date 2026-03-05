@@ -33,12 +33,14 @@ public class Endoso {
     private String rutFondeador;
 
     private EstadoEndoso estado; // PENDIENTE, ENDOSADO, RECHAZADO
+    private String otp;
 
     private Aprobacion pagadorAprobacion;
     private Aprobacion fondeadorAprobacion;
 
     private String documentoUrl; // enlace al PDF del endoso
     private LocalDateTime fechaCreacion;
+    private LocalDateTime fechaAprobacion;
     private LocalDateTime fechaActualizacion;
 
     private String documentoHtml;

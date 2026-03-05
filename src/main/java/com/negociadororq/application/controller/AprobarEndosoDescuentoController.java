@@ -1,6 +1,8 @@
 package com.negociadororq.application.controller;
 
 import com.negociadororq.application.controller.dto.AprobacionRequestDto;
+import com.negociadororq.application.controller.dto.AprobacionResponseDto;
+import com.negociadororq.application.controller.dto.ConfirmacionOtpRequestDto;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoService;
 import com.negociadororq.application.service.NegociacionFactoringComfirmingService;
 import lombok.RequiredArgsConstructor;
@@ -17,11 +19,18 @@ public class AprobarEndosoDescuentoController {
 
     private final AprobacionEndosoDescuentoService aprobacionEndosoDescuentoService;
 
-    @PostMapping("/aprobacion")
-    public ResponseEntity<String> aprobarFacturas(@RequestBody AprobacionRequestDto request) {
 
-        aprobacionEndosoDescuentoService.aprobar(request);
+    private final AprobacionEndosoDescuentoService service;
 
-        return ResponseEntity.ok("Facturas aprobadas/rechazadas correctamente");
+    @PostMapping("/solicitar-otp")
+    public ResponseEntity<String> solicitarOtp(@RequestBody AprobacionRequestDto request) {
+        service.solicitarOtp(request);
+        return ResponseEntity.ok("OTP solicitado");
+    }
+
+    @PostMapping("/confirmar-otp")
+    public ResponseEntity<String> confirmarOtp(@RequestBody ConfirmacionOtpRequestDto request) {
+        service.confirmarOtp(request);
+        return ResponseEntity.ok("Validando OTP...");
     }
 }

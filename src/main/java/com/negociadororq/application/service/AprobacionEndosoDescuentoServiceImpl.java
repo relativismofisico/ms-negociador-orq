@@ -1,11 +1,10 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.controller.dto.AprobacionFacturaRequestDto;
-import com.negociadororq.application.controller.dto.AprobacionRequestDto;
-import com.negociadororq.application.controller.dto.AprobacionResponseDto;
-import com.negociadororq.application.controller.dto.OperacionRequest;
+import com.negociadororq.application.controller.dto.*;
 import com.negociadororq.application.mapper.OperacionMapper;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
+import com.negociadororq.domain.event.OtpRequestEvent;
+import com.negociadororq.domain.event.OtpValidateRequestEvent;
 import com.negociadororq.domain.model.*;
 import com.negociadororq.enums.EstadoEndoso;
 import com.negociadororq.enums.EstadoFirma;
@@ -41,10 +40,54 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final FondeadorQuotaRepository fondeadorQuotaRepository;
     private final FacturaRepository facturaRepository;
     private final UserRepository userRepository;
+    private final PendingOtpRepository pendingOtpRepository;
+
+
+
+    @Override
+    public void solicitarOtp(AprobacionRequestDto request) {
+        // Guardamos request temporal
+        PendingOtp pending = PendingOtp.builder()
+                .idNegociacion(request.getIdNegociacion())
+                .rutEmpresa(request.getRutEmpresa())
+                .request(request)
+                .build();
+
+        pendingOtpRepository.save(pending);
+
+        // Publicamos evento
+        outboxService.guardarEvento(
+                request.getIdNegociacion(),
+                "OTP_REQUESTED",
+                OtpRequestEvent.builder()
+                        .idNegociacion(request.getIdNegociacion())
+                        .rutEmpresa(request.getRutEmpresa())
+                        .rutOperador(request.getRutOperador())
+                        .fechaSolicitud(LocalDateTime.now())
+                        .build()
+        );
+    }
+
+    @Override
+    public void confirmarOtp(ConfirmacionOtpRequestDto request) {
+
+        outboxService.guardarEvento(
+                request.getIdNegociacion(),
+                "OTP_VALIDATE_REQUEST",
+                OtpValidateRequestEvent.builder()
+                        .idNegociacion(request.getIdNegociacion())
+                        .rutEmpresa(request.getRutEmpresa())
+                        .rutOperador(request.getRutOperador())
+                        .otp(request.getOtp())
+                        .build()
+        );
+    }
+
+
+
 
     @Transactional
-    @Override
-    public AprobacionResponseDto aprobar(AprobacionRequestDto request) {
+    public AprobacionResponseDto aprobarInterno(AprobacionRequestDto request) {
         Negociacion negociacion = negociacionRepository.findById(request.getIdNegociacion())
                 .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
 
@@ -120,7 +163,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             log.info("Reversando cupos por rechazo de factura {}", factura.getNumeroFactura());
 
-            // 🔥 NUEVO: Reversar cupos
+            // Reversar cupos
             revertirCupos(factura, tipoOperacion, factura.getRutProveedor(), rutOperador);
             facturaPatchRepository.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), EstadoFirma.RECHAZADA);
             endosoPatchRepository.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), EstadoEndoso.RECHAZADO);
@@ -172,16 +215,10 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
         LiquidacionSolicitadaEvent event =
                 new LiquidacionSolicitadaEvent(
-                        idNegociacion,
-                        factura.getNumeroFactura(),
-                        operacion,
-                        LocalDateTime.now()
-                );
+                        idNegociacion, factura.getNumeroFactura(),
+                        operacion, LocalDateTime.now());
 
-        outboxService.guardarEvento(idNegociacion,
-                "LIQUIDACION_SOLICITADA",
-                event
-        );
+        outboxService.guardarEvento(idNegociacion, "LIQUIDACION_SOLICITADA", event);
 
     }
 
@@ -304,6 +341,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             }
         }
     }
+
 
 }
 

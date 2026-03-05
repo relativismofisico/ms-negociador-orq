@@ -1,16 +1,13 @@
 package com.negociadororq.application.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.negociadororq.infrastructure.persistence.entity.OutboxEventEntity;
-import com.negociadororq.infrastructure.persistence.repository.OutboxEventRepository;
+import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
+import com.negociadororq.domain.event.OtpRequestEvent;
+import com.negociadororq.domain.event.OtpValidateRequestEvent;
+import com.negociadororq.infrastructure.kafka.config.TopicsProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -18,13 +15,29 @@ import java.util.List;
 public class OutboxEventPublisher {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final TopicsProperties topics;
 
-    @Value("${topics.liquidacion}")
-    private String topic;
+    public void   publicar(Object event) {
 
-    public void publicar(Object event) {
+        String topic = null;
 
-        log.info("Publicando evento en Kafka: {}", event);
+        if (event instanceof OtpRequestEvent) {
+            topic = topics.getOtpRequest();
+        }
+
+        if (event instanceof OtpValidateRequestEvent) {
+            topic = topics.getOtpValidate();
+        }
+
+        if (event instanceof LiquidacionSolicitadaEvent) {
+            topic = topics.getLiquidacion();
+        }
+
+        if (topic == null) {
+            throw new RuntimeException("No se encontró topic para evento " + event.getClass());
+        }
+
+        log.info("Publicando evento en topic {} -> {}", topic, event);
 
         kafkaTemplate.send(topic, event);
     }

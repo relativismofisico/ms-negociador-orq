@@ -18,6 +18,8 @@ public class OutboxEventEntity {
     @Id
     private String id;
 
+    private String eventType;
+
     private String aggregateId;
 
     private String tipoEvento;

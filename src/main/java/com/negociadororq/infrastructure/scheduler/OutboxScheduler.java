@@ -3,6 +3,8 @@ package com.negociadororq.infrastructure.scheduler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.negociadororq.application.service.OutboxEventPublisher;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
+import com.negociadororq.domain.event.OtpRequestEvent;
+import com.negociadororq.domain.event.OtpValidateRequestEvent;
 import com.negociadororq.infrastructure.persistence.entity.OutboxEventEntity;
 import com.negociadororq.infrastructure.persistence.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,17 +41,50 @@ public class OutboxScheduler {
 
             try {
 
-                LiquidacionSolicitadaEvent event =
-                        objectMapper.readValue(evento.getPayload(), LiquidacionSolicitadaEvent.class);
+                Object event;
+
+                String tipoEvento = evento.getTipoEvento();
+
+                if (tipoEvento == null) {
+                    log.error("Evento {} no tiene tipoEvento", evento.getId());
+                    evento.setIntentos(evento.getIntentos() + 1);
+                    repository.save(evento);
+                    continue;
+                }
+
+
+                switch (tipoEvento) {
+
+                    case "OTP_REQUESTED":
+                        event = objectMapper.readValue(
+                                evento.getPayload(),
+                                OtpRequestEvent.class
+                        );
+                        break;
+
+                    case "OTP_VALIDATE_REQUEST":
+                        event = objectMapper.readValue(
+                                evento.getPayload(),
+                                OtpValidateRequestEvent.class
+                        );
+                        break;
+
+                    case "LIQUIDACION_SOLICITADA":
+                        event = objectMapper.readValue(
+                                evento.getPayload(),
+                                LiquidacionSolicitadaEvent.class
+                        );
+                        break;
+
+                    default:
+                        throw new RuntimeException("Evento no soportado: " + tipoEvento);
+                }
 
                 publisher.publicar(event);
 
                 evento.setEnviado(true);
                 evento.setFechaEnvio(LocalDateTime.now());
-
-                repository.save(evento); // 🔥 ESTO ES CLAVE
-
-                log.info("Evento {} enviado correctamente", evento.getId());
+                repository.save(evento);
 
             } catch (Exception e) {
 

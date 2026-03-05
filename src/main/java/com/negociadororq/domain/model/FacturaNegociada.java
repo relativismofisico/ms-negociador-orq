@@ -1,5 +1,6 @@
 package com.negociadororq.domain.model;
 
+import com.negociadororq.enums.EstadoEndoso;
 import com.negociadororq.enums.EstadoFirma;
 import com.negociadororq.enums.EstadoNegociacion;
 import java.math.BigDecimal;
@@ -7,6 +8,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.ArrayList;
 
@@ -31,5 +34,11 @@ public class FacturaNegociada {
 
     // Historial de aprobaciones (puede haber varias, según los roles que participen)
     private List<AprobacionActorDto> aprobaciones;
+    //private EstadoFacturaNegociada estado;
+    private EstadoEndoso estadoEndoso;
+
+    private String otpEndoso;
+
+    private LocalDateTime fechaOtp;
 
 }
