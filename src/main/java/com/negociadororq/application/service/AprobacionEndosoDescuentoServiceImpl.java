@@ -49,6 +49,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     @Value("${topics.otp-validate}")
     private String topicValidateOtp;
 
+    @Value("${topics.liquidacion}")
+    private String topicLiquidacionSolicitada;
+
 
     @Override
     public void solicitarOtp(AprobacionRequestDto request) {
@@ -224,7 +227,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         idNegociacion, factura.getNumeroFactura(),
                         operacion, LocalDateTime.now());
 
-        outboxService.guardarEvento(idNegociacion, "LIQUIDACION_SOLICITADA", event);
+        outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
 
     }
 

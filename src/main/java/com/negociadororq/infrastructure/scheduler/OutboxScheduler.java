@@ -5,6 +5,7 @@ import com.negociadororq.application.service.OutboxEventPublisher;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
 import com.negociadororq.domain.event.OtpRequestEvent;
 import com.negociadororq.domain.event.OtpValidateRequestEvent;
+import com.negociadororq.domain.event.OtpValidateResponseEvent;
 import com.negociadororq.infrastructure.persistence.entity.OutboxEventEntity;
 import com.negociadororq.infrastructure.persistence.repository.OutboxEventRepository;
 import jakarta.annotation.PostConstruct;
@@ -35,10 +36,14 @@ public class OutboxScheduler {
     @Value("${topics.otp-validate}")
     private String topicValidateOtp;
 
+    @Value("${topics.otp-validate-response}")
+    private String topicValidateResponse;
+
     @Value("${topics.liquidacion}")
     private String liquidacionFactura;
 
     private Map<String, Class<?>> eventMap;
+    private static final int MAX_INTENTOS = 5;
 
     @PostConstruct
     public void init() {
@@ -47,7 +52,9 @@ public class OutboxScheduler {
 
         eventMap.put(topicRequestOtp, OtpRequestEvent.class);
         eventMap.put(topicValidateOtp, OtpValidateRequestEvent.class);
+        eventMap.put(topicValidateResponse, OtpValidateResponseEvent.class);
         eventMap.put(liquidacionFactura, LiquidacionSolicitadaEvent.class);
+        log.info("OutboxScheduler inicializado con eventos: {}", eventMap.keySet());
     }
 
 
@@ -66,25 +73,31 @@ public class OutboxScheduler {
 
             try {
 
+                if (evento.getIntentos() >= MAX_INTENTOS) {
+
+                    log.error("Evento {} superó el máximo de intentos", evento.getId());
+
+                    marcarComoEnviado(evento);
+                    continue;
+                }
+
                 String tipoEvento = evento.getTipoEvento();
 
                 if (tipoEvento == null) {
+
                     log.error("Evento {} no tiene tipoEvento", evento.getId());
-                    evento.setIntentos(evento.getIntentos() + 1);
-                    repository.save(evento);
+
+                    incrementarIntentos(evento);
                     continue;
                 }
 
                 Class<?> eventClass = eventMap.get(tipoEvento);
 
                 if (eventClass == null) {
+
                     log.info("Evento ignorado por ms-negociador-orq: {}", tipoEvento);
 
-                    evento.setEnviado(true);
-                    evento.setFechaEnvio(LocalDateTime.now());
-
-                    repository.save(evento);
-
+                    marcarComoEnviado(evento);
                     continue;
                 }
 
@@ -95,21 +108,33 @@ public class OutboxScheduler {
 
                 publisher.publicar(event);
 
-                evento.setEnviado(true);
-                evento.setFechaEnvio(LocalDateTime.now());
+                marcarComoEnviado(evento);
 
-                repository.save(evento);
+                log.info("Evento {} publicado correctamente", evento.getId());
 
             } catch (Exception e) {
 
-                evento.setIntentos(evento.getIntentos() + 1);
-                repository.save(evento);
+                incrementarIntentos(evento);
 
                 log.error("Error publicando evento {}", evento.getId(), e);
             }
         }
     }
 
+    private void marcarComoEnviado(OutboxEventEntity evento) {
+
+        evento.setEnviado(true);
+        evento.setFechaEnvio(LocalDateTime.now());
+
+        repository.save(evento);
+    }
+
+    private void incrementarIntentos(OutboxEventEntity evento) {
+
+        evento.setIntentos(evento.getIntentos() + 1);
+
+        repository.save(evento);
+    }
 
 
 }
