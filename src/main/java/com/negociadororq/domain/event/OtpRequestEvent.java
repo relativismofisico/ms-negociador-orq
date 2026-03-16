@@ -16,6 +16,7 @@ public class OtpRequestEvent {
     private String rutEmpresa;
     private String rutOperador;
     private String idNegociacion;
+    private String rolActor;
     private LocalDateTime fechaSolicitud;
 
 }

@@ -12,6 +12,7 @@ public class AprobacionRequestDto {
     private String idNegociacion; // id de la negociación en mongo
     private String rutOperador;
     private String rutEmpresa;      // quien aprueba (pagador, fondeador, proveedor)
+    private String rolActor;
     private List<AprobacionFacturaRequestDto> facturas; // facturas con su decisión// true = aprueba, false = rechaza
     private String observacion;     // opcional
 }

@@ -13,6 +13,7 @@ import com.negociadororq.enums.RolActor;
 import com.negociadororq.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,14 +43,21 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final UserRepository userRepository;
     private final PendingOtpRepository pendingOtpRepository;
 
+    @Value("${topics.otp-request}")
+    private String topicRequestOtp;
+
+    @Value("${topics.otp-validate}")
+    private String topicValidateOtp;
 
 
     @Override
     public void solicitarOtp(AprobacionRequestDto request) {
+
         // Guardamos request temporal
         PendingOtp pending = PendingOtp.builder()
                 .idNegociacion(request.getIdNegociacion())
                 .rutEmpresa(request.getRutEmpresa())
+                .rolActor(request.getRolActor())
                 .request(request)
                 .build();
 
@@ -58,11 +66,12 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         // Publicamos evento
         outboxService.guardarEvento(
                 request.getIdNegociacion(),
-                "OTP_REQUESTED",
+                topicRequestOtp,
                 OtpRequestEvent.builder()
                         .idNegociacion(request.getIdNegociacion())
                         .rutEmpresa(request.getRutEmpresa())
                         .rutOperador(request.getRutOperador())
+                        .rolActor(request.getRolActor())
                         .fechaSolicitud(LocalDateTime.now())
                         .build()
         );
@@ -73,7 +82,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
         outboxService.guardarEvento(
                 request.getIdNegociacion(),
-                "OTP_VALIDATE_REQUEST",
+                topicValidateOtp,
                 OtpValidateRequestEvent.builder()
                         .idNegociacion(request.getIdNegociacion())
                         .rutEmpresa(request.getRutEmpresa())
@@ -82,9 +91,6 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         .build()
         );
     }
-
-
-
 
     @Transactional
     public AprobacionResponseDto aprobarInterno(AprobacionRequestDto request) {

@@ -20,6 +20,7 @@ public class PendingOtp {
 
     private String idNegociacion;
     private String rutEmpresa;
+    private String rolActor;
 
     private AprobacionRequestDto request;
 }
