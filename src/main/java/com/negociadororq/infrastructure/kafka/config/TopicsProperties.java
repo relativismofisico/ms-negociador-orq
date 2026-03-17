@@ -9,8 +9,10 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "topics")
 public class TopicsProperties {
 
-    private String liquidacion;
+
     private String otpRequest;
     private String otpValidate;
+    private String otpValidateResponse;
+    private String liquidacion;
 
 }

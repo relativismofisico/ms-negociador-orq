@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -31,8 +30,8 @@ public class OutboxEventPublisher {
         topicMap = new HashMap<>();
 
         topicMap.put(OtpRequestEvent.class, topics.getOtpRequest());
-        topicMap.put(OtpValidateRequestEvent.class, topics.getOtpRequest());
-        topicMap.put(OtpValidateResponseEvent.class, topics.getOtpValidate());
+        topicMap.put(OtpValidateRequestEvent.class, topics.getOtpValidate());
+        topicMap.put(OtpValidateResponseEvent.class, topics.getOtpValidateResponse());
         topicMap.put(LiquidacionSolicitadaEvent.class, topics.getLiquidacion());
     }
 

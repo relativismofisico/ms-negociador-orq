@@ -35,6 +35,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private  final EndosoPatchRepository endosoPatchRepository;
     private final OperacionMapper operacionMapper;
     private final OutboxService outboxService;
+
     @Lazy
     private final OperadorService operadorService;
     private final CompanyRepository companyRepository;
@@ -97,6 +98,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
     @Transactional
     public AprobacionResponseDto aprobarInterno(AprobacionRequestDto request) {
+
         Negociacion negociacion = negociacionRepository.findById(request.getIdNegociacion())
                 .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
 

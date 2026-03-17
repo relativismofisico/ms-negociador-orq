@@ -24,9 +24,7 @@ public class OtpValidatedListener {
 
         if (!event.isValido()) {
             log.warn("OTP inválido para negociación {}", event.getIdNegociacion());
-
             pendingOtpRepository.deleteByIdNegociacion(event.getIdNegociacion());
-
             return;
         }
 
@@ -34,6 +32,7 @@ public class OtpValidatedListener {
                 .findByIdNegociacion(event.getIdNegociacion())
                 .orElseThrow(() -> new RuntimeException("No existe solicitud pendiente"));
 
+        //TODO AJUSTAR AQUI SEGUN LA OPERACION QUE SE EFECTUE
         service.aprobarInterno(pending.getRequest());
 
         pendingOtpRepository.deleteByIdNegociacion(event.getIdNegociacion());

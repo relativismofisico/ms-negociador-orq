@@ -42,6 +42,9 @@ public class OutboxScheduler {
     @Value("${topics.liquidacion}")
     private String liquidacionFactura;
 
+    // Propietario de este MS
+    private static final String MS_PROPIETARIO = "ms-negociador-orq";
+
     private Map<String, Class<?>> eventMap;
     private static final int MAX_INTENTOS = 5;
 
@@ -70,6 +73,11 @@ public class OutboxScheduler {
         log.info("Eventos pendientes: {}", eventos.size());
 
         for (OutboxEventEntity evento : eventos) {
+            // 🔹 Filtrar por propietario
+            if (!MS_PROPIETARIO.equals(evento.getMsPropietario())) {
+                log.info("Evento {} ignorado, pertenece a {}", evento.getId(), evento.getMsPropietario());
+                continue;
+            }
 
             try {
 

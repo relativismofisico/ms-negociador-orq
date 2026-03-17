@@ -31,6 +31,7 @@ public class OutboxService {
             entity.setPayload(objectMapper.writeValueAsString(evento));
             entity.setFechaCreacion(LocalDateTime.now());
             entity.setEnviado(false);
+            entity.setMsPropietario("ms-negociador-orq");
             entity.setIntentos(0);
 
             repository.save(entity);

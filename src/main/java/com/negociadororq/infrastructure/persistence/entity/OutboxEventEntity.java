@@ -23,6 +23,7 @@ public class OutboxEventEntity {
     private String aggregateId;
 
     private String tipoEvento;
+    private String msPropietario;
 
     @Lob
     private String payload;
