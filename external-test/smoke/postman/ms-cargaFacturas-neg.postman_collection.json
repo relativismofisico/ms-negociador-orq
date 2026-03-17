@@ -1,72 +1,12 @@
 {
   "info": {
     "_postman_id": "1f63b724-6cb1-46b5-88b8-8733278cb265",
-    "name": "ms-negociardor-orq",
+    "name": "ms-negociador-orq",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "28222766",
     "_collection_link": "https://go.postman.co/collection/28222766-1f63b724-6cb1-46b5-88b8-8733278cb265?source=collection_link"
   },
   "item": [
-    {
-      "name": "Aprobar Factura en Negociación",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"idNegociacion\": \"69696d29ff855f01c461a98c\",\n  \"rutEmpresa\": \"900978051\",\n  \"rolActor\": \"FONDEADOR\",\n  \"facturas\": [\n    {\n      \"numeroFactura\": \"FECI3958\",\n      \"aprobado\": true\n    }\n  ],\n  \"observacion\": \"FondePagador ador aprueba factroing de la factura \"\n}"
-        },
-        "url": {
-          "raw": "http://localhost:8083/negociaciones/aprobacion",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "8083",
-          "path": [
-            "negociaciones",
-            "aprobacion"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Aprobar Todas las Facturas",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"idNegociacion\": \"68ddccfc4e5ab011da2cb19a\",\n  \"rutEmpresa\": \"900978051\",\n  \"facturas\": [\n    {\n      \"numeroFactura\": \"FECI3644\",\n      \"aprobado\": true\n    },\n    {\n      \"numeroFactura\": \"FECI3761\",\n      \"aprobado\": true\n    }\n  ],\n  \"observacion\": \"Fondeador aprueba todas\"\n}"
-        },
-        "url": {
-          "raw": "http://localhost:8080/api/v1/negociaciones/aprobacion",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "8080",
-          "path": [
-            "api",
-            "v1",
-            "negociaciones",
-            "aprobacion"
-          ]
-        }
-      },
-      "response": []
-    },
     {
       "name": "Negociar Facturas",
       "request": {
@@ -97,7 +37,7 @@
       "response": []
     },
     {
-      "name": "Crear endoso Factura",
+      "name": "Crear Endoso/descuento de Factura",
       "request": {
         "method": "POST",
         "header": [
@@ -127,6 +67,63 @@
             "negociaciones",
             "{{idNegociacion}}",
             "endosos"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Aprobar Endosos/descuentos (Solicitar Otp)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idNegociacion\": \"65f1c2ab1234567890abcd12\",\n  \"rutOperador\": \"900123456\",\n  \"rutEmpresa\": \"800987654\",\n  \"observacion\": \"Aprobación de endoso\",\n  \"facturas\": [\n    {\n      \"numeroFactura\": \"FAC-001\",\n      \"aprueba\": true\n    },\n    {\n      \"numeroFactura\": \"FAC-002\",\n      \"aprueba\": true\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8083/solicitar-otp",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8083",
+          "path": [
+            "solicitar-otp"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Firmar Endoso/Descuento (Confirmar Otp)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idNegociacion\": \"NEG-1001\",\n  \"rutEmpresa\": \"900123456\",\n  \"rutOperador\": \"operador1\",\n  \"otp\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/aprobaciones/confirmar-otp",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "aprobaciones",
+            "confirmar-otp"
           ]
         }
       },
