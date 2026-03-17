@@ -10,9 +10,11 @@ import com.negociadororq.enums.EstadoEndoso;
 import com.negociadororq.enums.EstadoFirma;
 import com.negociadororq.enums.EstadoNegociacion;
 import com.negociadororq.enums.RolActor;
+import com.negociadororq.infrastructure.pdf.PdfFirmaService;
 import com.negociadororq.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.types.Binary;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final FacturaRepository facturaRepository;
     private final UserRepository userRepository;
     private final PendingOtpRepository pendingOtpRepository;
+    private final EndosoRepository endosoRepository;
+    private final PdfFirmaService pdfFirmaService;
 
     @Value("${topics.otp-request}")
     private String topicRequestOtp;
@@ -144,11 +148,35 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     LocalDateTime.now()
             );
 
+            // =========================
+            // 🔥 FIRMA PDF
+            // =========================
+            Endoso endoso = endosoRepository
+                    .findByNegociacionIdAndNumeroFactura(request.getIdNegociacion(), factura.getNumeroFactura())
+                    .orElseThrow(() -> new RuntimeException("Endoso no encontrado"));
+
+            byte[] pdfActual = endoso.getDocumentoPdf();
+
+            String firma = "Firmado por: " + request.getRutEmpresa()
+                    + " | Rol: " + rolActor
+                    + " | Fecha: " + LocalDateTime.now();
+
+            int indexFirma = factura.getAprobaciones().size();
+
+            byte[] pdfFirmado = pdfFirmaService.agregarFirma(pdfActual, firma, indexFirma);
+
+            endoso.setDocumentoPdf(new Binary(pdfFirmado).getData());
+
+            endosoRepository.save(endoso);
+
+
+
             factura.getAprobaciones().removeIf(a -> a.getRutActor().equals(request.getRutEmpresa()));
             factura.getAprobaciones().add(aprobacion);
 
             actualizarEstadosFacturaEndosoNegociacion(negociacion.getId(), factura, negociacion.getTipoOperacion(), request.getRutOperador());
         }
+
 
         //Actualizamos los campos de la negociacion
         EstadoNegociacion  estadoGlobal = calcularEstadoNegociacion(negociacion);
