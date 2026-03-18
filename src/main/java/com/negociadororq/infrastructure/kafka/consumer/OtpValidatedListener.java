@@ -32,8 +32,10 @@ public class OtpValidatedListener {
                 .findByIdNegociacion(event.getIdNegociacion())
                 .orElseThrow(() -> new RuntimeException("No existe solicitud pendiente"));
 
-        //TODO AJUSTAR AQUI SEGUN LA OPERACION QUE SE EFECTUE
-        service.aprobarInterno(pending.getRequest());
+        pending.setOtp(event.getOtp());
+        pending.setIp(event.getIpAprobacion());
+
+        service.aprobarInterno(pending);
 
         pendingOtpRepository.deleteByIdNegociacion(event.getIdNegociacion());
     }

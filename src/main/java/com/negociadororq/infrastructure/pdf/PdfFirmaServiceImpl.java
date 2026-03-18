@@ -1,5 +1,6 @@
 package com.negociadororq.infrastructure.pdf;
 
+import com.negociadororq.domain.model.FirmaOtpMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -9,14 +10,14 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.List;
 
 @Slf4j
 @Service
 public class PdfFirmaServiceImpl implements PdfFirmaService {
 
     @Override
-    public byte[] agregarFirma(byte[] pdfBytes, String textoFirma, int indexFirma) {
-
+    public byte[] agregarFirma(byte[] pdfBytes, FirmaOtpMetadata firma, int indexFirma) {
         try (PDDocument document = PDDocument.load(pdfBytes)) {
 
             PDPage page = document.getPage(document.getNumberOfPages() - 1);
@@ -29,15 +30,20 @@ public class PdfFirmaServiceImpl implements PdfFirmaService {
             );
 
             contentStream.beginText();
-            contentStream.setFont(PDType1Font.HELVETICA_BOLD, 10);
+            contentStream.setFont(PDType1Font.HELVETICA_BOLD, 8);
 
-            // 📍 Posición dinámica (cada firma baja)
             float x = 50;
-            float y = 100 + (indexFirma * 20);
+            float y = 100 + (indexFirma * 60); // 🔥 más espacio porque ahora es multilinea
 
             contentStream.newLineAtOffset(x, y);
 
-            contentStream.showText(textoFirma);
+            // 🔥 TEXTO MULTILINEA
+            List<String> lineas = construirLineasFirma(firma);
+
+            for (String linea : lineas) {
+                contentStream.showText(linea);
+                contentStream.newLineAtOffset(0, -10); // salto de línea
+            }
 
             contentStream.endText();
             contentStream.close();
@@ -51,5 +57,20 @@ public class PdfFirmaServiceImpl implements PdfFirmaService {
             log.error("Error agregando firma al PDF", e);
             throw new RuntimeException("Error agregando firma al PDF", e);
         }
+    }
+
+    private List<String> construirLineasFirma(FirmaOtpMetadata firma) {
+
+        return List.of(
+                "===== FIRMA ELECTRONICA =====",
+                "Actor: " + firma.getRolActor(),
+                "Empresa: " + firma.getRutEmpresa(),
+                "Operador: " + firma.getRutOperador(),
+                "Resultado: " + (firma.isAprobado() ? "APROBADO" : "RECHAZADO"),
+                "OTP: " + firma.getOtp(),
+                "IP: " + firma.getIp(),
+                "Fecha: " + firma.getFecha(),
+                "Obs: " + (firma.getObservacion() != null ? firma.getObservacion() : "")
+        );
     }
 }

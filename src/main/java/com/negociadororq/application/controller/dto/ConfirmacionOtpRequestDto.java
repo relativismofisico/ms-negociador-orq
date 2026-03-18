@@ -17,6 +17,7 @@ public class ConfirmacionOtpRequestDto {
     private String rutEmpresa;
     private String rutOperador;
     private String otp;
+    private String ipAprobacion;
     private List<AprobacionFacturaRequestDto> facturas;
 }
 

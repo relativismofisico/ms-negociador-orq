@@ -15,4 +15,5 @@ public class OtpValidateRequestEvent {
     private String rutEmpresa;
     private String rutOperador;
     private String otp;
+    private String ipAprobacion;
 }

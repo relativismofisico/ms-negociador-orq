@@ -5,6 +5,8 @@ import com.negociadororq.application.controller.dto.AprobacionResponseDto;
 import com.negociadororq.application.controller.dto.ConfirmacionOtpRequestDto;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoService;
 import com.negociadororq.application.service.NegociacionFactoringComfirmingService;
+import com.negociadororq.infrastructure.util.IpUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,7 +31,9 @@ public class AprobarEndosoDescuentoController {
     }
 
     @PostMapping("/confirmar-otp")
-    public ResponseEntity<String> confirmarOtp(@RequestBody ConfirmacionOtpRequestDto request) {
+    public ResponseEntity<String> confirmarOtp(@RequestBody ConfirmacionOtpRequestDto request, HttpServletRequest httpRequest) {
+        String ip = IpUtils.obtenerIp(httpRequest);
+        request.setIpAprobacion(ip);
         service.confirmarOtp(request);
         return ResponseEntity.ok("Validando OTP...");
     }

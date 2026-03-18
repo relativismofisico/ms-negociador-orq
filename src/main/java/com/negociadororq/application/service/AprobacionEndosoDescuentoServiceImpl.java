@@ -96,12 +96,15 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         .rutEmpresa(request.getRutEmpresa())
                         .rutOperador(request.getRutOperador())
                         .otp(request.getOtp())
+                        .ipAprobacion(request.getIpAprobacion())
                         .build()
         );
     }
 
     @Transactional
-    public AprobacionResponseDto aprobarInterno(AprobacionRequestDto request) {
+    public AprobacionResponseDto aprobarInterno(PendingOtp pending) {
+
+        AprobacionRequestDto request = pending.getRequest();
 
         Negociacion negociacion = negociacionRepository.findById(request.getIdNegociacion())
                 .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
@@ -157,11 +160,18 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             byte[] pdfActual = endoso.getDocumentoPdf();
 
-            String firma = "Firmado por: " + request.getRutEmpresa()
-                    + " | Rol: " + rolActor
-                    + " | Fecha: " + LocalDateTime.now();
-
             int indexFirma = factura.getAprobaciones().size();
+
+            FirmaOtpMetadata firma = FirmaOtpMetadata.builder()
+                    .rutEmpresa(request.getRutEmpresa())
+                    .rutOperador(request.getRutOperador())
+                    .rolActor(rolActor.name())
+                    .otp(pending.getOtp())
+                    .ip(pending.getIp())
+                    .aprobado(factReq.isAprobado())
+                    .fecha(LocalDateTime.now())
+                    .observacion(request.getObservacion())
+                    .build();
 
             byte[] pdfFirmado = pdfFirmaService.agregarFirma(pdfActual, firma, indexFirma);
 

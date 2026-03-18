@@ -22,5 +22,10 @@ public class PendingOtp {
     private String rutEmpresa;
     private String rolActor;
 
+
+    private String ip;
+    private String otp;
+    private Boolean aprobado;
+
     private AprobacionRequestDto request;
 }
