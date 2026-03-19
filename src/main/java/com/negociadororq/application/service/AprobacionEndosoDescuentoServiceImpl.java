@@ -45,8 +45,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final FacturaRepository facturaRepository;
     private final UserRepository userRepository;
     private final PendingOtpRepository pendingOtpRepository;
-    private final EndosoRepository endosoRepository;
-    private final PdfFirmaService pdfFirmaService;
+    private final FirmaEndosoService firmaEndosoService;
 
     @Value("${topics.otp-request}")
     private String topicRequestOtp;
@@ -151,35 +150,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     LocalDateTime.now()
             );
 
-            // =========================
-            // 🔥 FIRMA PDF
-            // =========================
-            Endoso endoso = endosoRepository
-                    .findByNegociacionIdAndNumeroFactura(request.getIdNegociacion(), factura.getNumeroFactura())
-                    .orElseThrow(() -> new RuntimeException("Endoso no encontrado"));
-
-            byte[] pdfActual = endoso.getDocumentoPdf();
-
-            int indexFirma = factura.getAprobaciones().size();
-
-            FirmaOtpMetadata firma = FirmaOtpMetadata.builder()
-                    .rutEmpresa(request.getRutEmpresa())
-                    .rutOperador(request.getRutOperador())
-                    .rolActor(rolActor.name())
-                    .otp(pending.getOtp())
-                    .ip(pending.getIp())
-                    .aprobado(factReq.isAprobado())
-                    .fecha(LocalDateTime.now())
-                    .observacion(request.getObservacion())
-                    .build();
-
-            byte[] pdfFirmado = pdfFirmaService.agregarFirma(pdfActual, firma, indexFirma);
-
-            endoso.setDocumentoPdf(new Binary(pdfFirmado).getData());
-
-            endosoRepository.save(endoso);
-
-
+            firmaEndosoService.firmarPdfEndoso(
+                    request.getIdNegociacion(), factura, pending, request.getRutEmpresa(),
+                    request.getRutOperador(), rolActor, factReq.isAprobado(), request.getObservacion());
 
             factura.getAprobaciones().removeIf(a -> a.getRutActor().equals(request.getRutEmpresa()));
             factura.getAprobaciones().add(aprobacion);
