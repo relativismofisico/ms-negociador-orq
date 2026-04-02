@@ -1,9 +1,6 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
-import com.negociadororq.domain.event.OtpRequestEvent;
-import com.negociadororq.domain.event.OtpValidateRequestEvent;
-import com.negociadororq.domain.event.OtpValidateResponseEvent;
+import com.negociadororq.domain.event.*;
 import com.negociadororq.infrastructure.kafka.config.TopicsProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +30,8 @@ public class OutboxEventPublisher {
         topicMap.put(OtpValidateRequestEvent.class, topics.getOtpValidate());
         topicMap.put(OtpValidateResponseEvent.class, topics.getOtpValidateResponse());
         topicMap.put(LiquidacionSolicitadaEvent.class, topics.getLiquidacion());
+        topicMap.put(NotificacionEmailEvent.class, topics.getNotificacionEmail());
+
     }
 
     public void publicar(Object event) {

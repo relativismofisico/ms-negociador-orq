@@ -50,4 +50,6 @@ topics:
   otp-request: otp.requested
   otp-validate: otp.validate
   otp-validate-response: otp.validate.response
+  notificacion-email: notificacion.email
+
 

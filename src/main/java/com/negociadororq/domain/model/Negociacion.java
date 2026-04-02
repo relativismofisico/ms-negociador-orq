@@ -32,6 +32,7 @@ public class Negociacion {
 
     // Podría ser una lista si hay múltiples fondeadores
     private List<String> rutFondeadores;
+    private List<String> rutPagadores;
 
     private BigDecimal totalNegociado;
 

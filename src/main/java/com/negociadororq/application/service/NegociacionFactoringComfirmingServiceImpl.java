@@ -2,6 +2,7 @@ package com.negociadororq.application.service;
 
 import com.negociadororq.application.controller.dto.NegociacionRequestDto;
 import com.negociadororq.application.controller.dto.NegociacionResponseDto;
+import com.negociadororq.domain.event.OtpRequestEvent;
 import com.negociadororq.domain.model.*;
 import com.negociadororq.enums.EstadoFirma;
 import com.negociadororq.enums.EstadoNegociacion;
@@ -29,6 +30,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final EmpresaQuotaRepository empresaQuotaRepository;
     private final FondeadorQuotaRepository fondeadorQuotaRepository;
     private final FacturaPatchRepository facturaPatchRepository;
+    private final NotificacionService notificacionService;
+
 
     /**
      * Crea una negociación procesando factura a factura:
@@ -56,21 +59,14 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         ====================================================== */
         Map<String, List<FacturaNegociada>> facturasPorPagador = new HashMap<>();
 
-        if (request.getTipoOperacion() != null
-                && "COMFIRMING".equalsIgnoreCase(request.getTipoOperacion().getTipo())) {
+        for (FacturaNegociada fn : request.getFacturas()) {
 
-            for (FacturaNegociada fn : request.getFacturas()) {
-                Factura factura = facturaRepository.findByNumeroFactura(fn.getNumeroFactura())
-                        .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + fn.getNumeroFactura()));
+            Factura factura = facturaRepository.findByNumeroFactura(fn.getNumeroFactura())
+                    .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + fn.getNumeroFactura()));
 
-                facturasPorPagador
-                        .computeIfAbsent(factura.getRutPagador(), k -> new ArrayList<>())
-                        .add(fn);
-            }
-
-        } else {
-            // FACTORING u otros → todo va en una sola negociación
-            facturasPorPagador.put("UNICO", request.getFacturas());
+            facturasPorPagador
+                    .computeIfAbsent(factura.getRutPagador(), k -> new ArrayList<>())
+                    .add(fn);
         }
 
         // cache para companyId por NIT
@@ -88,10 +84,9 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         // Recorremos factura a factura y procesamos (validación por factura)
         List<NegociacionResponseDto> negociacionesCreadas = new ArrayList<>();
 
-        String rutPagador = null;
+
         for (Map.Entry<String, List<FacturaNegociada>> entry : facturasPorPagador.entrySet()) {
 
-            rutPagador = entry.getKey();
             List<FacturaNegociada> facturasDelPagador = entry.getValue();
 
             for (FacturaNegociada reqFact : Optional.ofNullable(facturasDelPagador)
@@ -310,13 +305,22 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
 
         }
+        Set<String> pagadores = facturasPorPagador.keySet();
 
         // Construir negociación resumen con estado según resultados
         Negociacion negociacion = new Negociacion();
         negociacion.setTipoOperacion(request.getTipoOperacion());
         negociacion.setRutEmpresa(request.getRutEmpresa());
-        negociacion.setRutPagador("UNICO".equals(rutPagador) ? null : rutPagador);
-        //negociacion.setRutProveedor("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa()) ? request.getRutEmpresa() : null);
+
+        if (pagadores.size() == 1) {
+            negociacion.setRutPagador(pagadores.iterator().next());
+            negociacion.setRutPagadores(null);
+        } else {
+            negociacion.setRutPagador(null);
+            negociacion.setRutPagadores(new ArrayList<>(pagadores));
+        }
+
+        negociacion.setRutProveedor("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa()) ? request.getRutEmpresa() : null);
         negociacion.setFacturas(facturasAceptadas);
         negociacion.setRutFondeadores(facturasAceptadas.stream()
                 .flatMap(f -> Optional.ofNullable(f.getFondeadores()).orElse(Collections.emptyList()).stream())
@@ -336,11 +340,14 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
         negociacion.setEstado(estado);
         List<String> allErrores = new ArrayList<>(errores);
+
         // añadir motivos concretos de facturas rechazadas
         negociacion.setErrores(allErrores);
         negociacion.setFechaCreacion(LocalDateTime.now());
         negociacion.setFechaUltimaActualizacion(LocalDateTime.now());
         negociacionRepository.save(negociacion);
+
+        notificacionService.notificarCreacionNegociacion(negociacion);
 
         // preparar respuesta
         NegociacionResponseDto response = new NegociacionResponseDto();
@@ -348,7 +355,14 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         response.setRutEmpresa(request.getRutEmpresa());
         response.setTipoOperacion(request.getTipoOperacion());
         response.setFacturas(facturasAceptadas);
-        negociacion.setRutPagador("UNICO".equals(rutPagador) ? null : rutPagador);
+        if (pagadores.size() == 1) {
+            negociacion.setRutPagador(pagadores.iterator().next());
+            negociacion.setRutPagadores(null);
+        } else {
+            negociacion.setRutPagador(null);
+            negociacion.setRutPagadores(new ArrayList<>(pagadores));
+        }
+        negociacion.setRutProveedor("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa()) ? request.getRutEmpresa() : null);
         response.setFondeadoresAsignados(negociacion.getRutFondeadores().stream()
                 .map(r -> FondeadorAsignacion.builder().rutFondeador(r).nombreFondeador("DESCONOCIDO").build())
                 .collect(Collectors.toList()));
@@ -358,39 +372,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
         return response;
     }
-
-    private String determinarRolActor(String rutEmpresa, Negociacion negociacion) {
-        // Cache para evitar múltiples llamadas a Mongo
-        Map<String, Boolean> cache = new HashMap<>();
-
-        List<String> numerosFacturas = negociacion.getFacturas().stream()
-                .map(FacturaNegociada::getNumeroFactura)
-                .collect(Collectors.toList());
-
-        // 1️⃣ Revisar si el RUT es Pagador
-        cache.computeIfAbsent("pagador", k ->
-                facturaRepository.existsByNumeroFacturaInAndRutPagador(numerosFacturas, rutEmpresa)
-        );
-        if (cache.get("pagador")) return "PAGADOR";
-
-        // 2️⃣ Revisar si el RUT es Proveedor
-        cache.computeIfAbsent("proveedor", k ->
-                facturaRepository.existsByNumeroFacturaInAndRutProveedor(numerosFacturas, rutEmpresa)
-        );
-        if (cache.get("proveedor")) return "PROVEEDOR";
-
-        // 3️⃣ Revisar si el RUT es Fondeador (nivel factura)
-        boolean esFondeador = negociacion.getFacturas().stream()
-                .filter(f -> f.getFondeadores() != null)
-                .flatMap(f -> f.getFondeadores().stream())
-                .anyMatch(f -> rutEmpresa.equals(f.getRutFondeador()));
-        if (esFondeador) return "FONDEADOR";
-
-        // 4️⃣ Si no coincide con ninguno
-        return "DESCONOCIDO";
-    }
-
-
 
     private EstadoFirma calcularEstadoFirma(String tipoOperacion) {
         if (tipoOperacion == null) return EstadoFirma.SIN_CESION;

@@ -19,7 +19,6 @@ public class CrearNegociacionFactoringComfirmingController {
 
     private final NegociacionFactoringComfirmingService negociacionFactoringComfirmingService;
 
-
     /**
      * Permite negociar las facturas que estan disponibles (estadoFirma="SIN_NEGOCIAR") dependiendo
      * del tipo de operacion enviado al momento de la consulta
