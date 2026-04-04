@@ -1,5 +1,6 @@
 package com.negociadororq.application.service;
 
+import com.negociadororq.application.service.notificacion.CuerpoNotificacionFactory;
 import com.negociadororq.domain.event.DestinatarioEmail;
 import com.negociadororq.domain.event.NotificacionEmailEvent;
 import com.negociadororq.domain.model.Negociacion;
@@ -11,12 +12,14 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class NotificacionServiceImpl implements NotificacionService {
 
     private final OutboxService outboxService;
+    private final CuerpoNotificacionFactory cuerpoFactory;
 
     @Value("${topics.notificacion-email}")
     private String topicNotificacionEmail;
@@ -67,17 +70,27 @@ public class NotificacionServiceImpl implements NotificacionService {
 
         String asunto = "NEGOCIACION";
 
-        String cuerpo = construirCuerpo(negociacion);
-
+        String cuerpo = cuerpoFactory.construir(negociacion);
         // =========================
         // 🔥 EVENTO
         // =========================
+
+        Map<String, Object> data = Map.of(
+                "id", negociacion.getId(),
+                "tipoOperacion", negociacion.getTipoOperacion().getTipo(),
+                "rutPagador", negociacion.getRutPagador(),
+                "rutProveedor", negociacion.getRutProveedor(),
+                "rutFondeadores", negociacion.getRutFondeadores(),
+                "totalNegociado", negociacion.getTotalNegociado(),
+                "facturas", negociacion.getFacturas().size()
+
+        );
 
         NotificacionEmailEvent event = NotificacionEmailEvent.builder()
                 .idNegociacion(negociacion.getId())
                 .destinatarios(destinatarios)
                 .asunto(asunto)
-                .cuerpo(cuerpo)
+                .data(data)
                 .tipoNotificacion(TipoNotificacion.NEGOCIACION_CREADA.name())
                 .fecha(LocalDateTime.now())
                 .build();
@@ -89,13 +102,4 @@ public class NotificacionServiceImpl implements NotificacionService {
         );
     }
 
-    private String construirCuerpo(Negociacion negociacion) {
-
-        return "Se ha creado una nueva negociación.\n\n" +
-                "ID: " + negociacion.getId() + "\n" +
-                "Tipo: " + negociacion.getTipoOperacion().getTipo() + "\n" +
-                "Total: " + negociacion.getTotalNegociado() + "\n" +
-                "Facturas: " + negociacion.getFacturas().size() + "\n\n" +
-                "Por favor ingrese a la plataforma para revisar.";
-    }
 }

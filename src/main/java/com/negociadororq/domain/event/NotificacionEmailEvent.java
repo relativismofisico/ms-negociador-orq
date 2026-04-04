@@ -4,6 +4,7 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -18,6 +19,6 @@ public class NotificacionEmailEvent {
     private List<DestinatarioEmail> destinatarios;
     private String tipoNotificacion;
     private String asunto;
-    private String cuerpo;
+    private Map<String, Object> data;
     private LocalDateTime fecha;
 }
