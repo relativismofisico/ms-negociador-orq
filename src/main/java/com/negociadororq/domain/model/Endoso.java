@@ -31,6 +31,7 @@ public class Endoso {
     private String rutProveedor; // quien endosa
     private String rutPagador;
     private String rutFondeador;
+    private Operacion tipoOperacion;
 
     private EstadoEndoso estado; // PENDIENTE, ENDOSADO, RECHAZADO
     private String otp;

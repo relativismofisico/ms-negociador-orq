@@ -1,10 +1,13 @@
 package com.negociadororq.application.service;
 
+import com.negociadororq.application.controller.dto.AprobacionRequestDto;
 import com.negociadororq.application.service.notificacion.CuerpoNotificacionFactory;
 import com.negociadororq.domain.event.DestinatarioEmail;
 import com.negociadororq.domain.event.NotificacionEmailEvent;
+import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.enums.TipoNotificacion;
+import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -20,9 +23,12 @@ public class NotificacionServiceImpl implements NotificacionService {
 
     private final OutboxService outboxService;
     private final CuerpoNotificacionFactory cuerpoFactory;
+    private final NegociacionRepository negociacionRepository;
 
     @Value("${topics.notificacion-email}")
     private String topicNotificacionEmail;
+
+
 
     @Override
     public void notificarCreacionNegociacion(Negociacion negociacion) {
@@ -34,7 +40,6 @@ public class NotificacionServiceImpl implements NotificacionService {
         // =========================
         // 🔥 DESTINATARIOS
         // =========================
-
         if ("FACTORING".equalsIgnoreCase(tipo)) {
 
             // PAGADOR
@@ -101,5 +106,189 @@ public class NotificacionServiceImpl implements NotificacionService {
                 event
         );
     }
+
+    @Override
+    public void notificarEndoso(Endoso endoso) {
+        String tipo = endoso.getTipoOperacion().getTipo();
+        List<DestinatarioEmail> destinatarios = new ArrayList<>();
+
+        // =========================
+        // 🔥 DESTINATARIOS
+        // =========================
+        if ("FACTORING".equalsIgnoreCase(tipo)) {
+
+            // PAGADOR
+            if (endoso.getRutPagador() != null) {
+                destinatarios.add(new DestinatarioEmail(
+                        "PAGADOR",
+                        endoso.getRutPagador(),
+                        "EMPRESA"
+                ));
+            }
+
+            // FONDEADOR
+            if (endoso.getRutFondeador() != null) {
+                destinatarios.add(new DestinatarioEmail(
+                        "FONDEADOR",
+                        endoso.getRutFondeador(),
+                        "EMPRESA"
+                ));
+            }
+
+        } else if ("CONFIRMING".equalsIgnoreCase(tipo)) {
+
+            // PROVEEDOR
+            if (endoso.getRutProveedor() != null) {
+                destinatarios.add(new DestinatarioEmail(
+                        "PROVEEDOR",
+                        endoso.getRutProveedor(),
+                        "EMPRESA"
+                ));
+            }
+        }
+
+        // 🔥 DATA PARA TEMPLATE
+        // =========================
+
+        Map<String, Object> data = Map.of(
+                "idEndoso", endoso.getId(),
+                "numeroFactura", endoso.getNumeroFactura(),
+                "tipoOperacion", endoso.getTipoOperacion().getTipo(),
+                "rutProveedor", endoso.getRutProveedor(),
+                "rutPagador", endoso.getRutPagador(),
+                "rutFondeador", endoso.getRutFondeador(),
+                "estado", endoso.getEstado().name(),
+                "documento", endoso.getDocumentoPdf()
+        );
+
+        // =========================
+        // 🔥 EVENTO
+        // =========================
+
+        NotificacionEmailEvent event = NotificacionEmailEvent.builder()
+                .idNegociacion(endoso.getNegociacionId())
+                .destinatarios(destinatarios)
+                .asunto("ENDOSO") //NOmbre del template
+                .data(data)
+                .tipoNotificacion(TipoNotificacion.ENDOSO_CREADO.name())
+                .fecha(LocalDateTime.now())
+                .build();
+
+        outboxService.guardarEvento(
+                endoso.getNegociacionId(),
+                topicNotificacionEmail,
+                event
+        );
+
+    }
+
+    @Override
+    public void notificarFirmaEndoso(AprobacionRequestDto aprobacion) {
+
+        Negociacion negociacion = negociacionRepository
+                .findById(aprobacion.getIdNegociacion())
+                .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
+
+        String tipo = negociacion.getTipoOperacion().getTipo();
+        String rutFirmante = aprobacion.getRutEmpresa();
+
+        List<DestinatarioEmail> destinatarios = new ArrayList<>();
+
+        // =========================
+        // 🔥 LOGICA DE DESTINATARIOS
+        // =========================
+
+        if ("CONFIRMING".equalsIgnoreCase(tipo)) {
+
+            // Firma PROVEEDOR → notificar PAGADOR
+            if (negociacion.getRutPagador() != null) {
+                destinatarios.add(new DestinatarioEmail(
+                        "PAGADOR",
+                        negociacion.getRutPagador(),
+                        "EMPRESA"
+                ));
+            }
+
+        } else if ("FACTORING".equalsIgnoreCase(tipo)) {
+
+            boolean esPagador = rutFirmante.equals(negociacion.getRutPagador());
+
+            boolean esFondeador = negociacion.getRutFondeadores() != null &&
+                    negociacion.getRutFondeadores().contains(rutFirmante);
+
+            // 🔹 SI FIRMA PAGADOR
+            if (esPagador) {
+
+                // NOTIFICAR FONDEADORES
+                if (negociacion.getRutFondeadores() != null) {
+                    negociacion.getRutFondeadores().forEach(rut ->
+                            destinatarios.add(new DestinatarioEmail("FONDEADOR", rut, "EMPRESA"))
+                    );
+                }
+
+                // NOTIFICAR PROVEEDOR
+                negociacion.getFacturas().stream()
+                        .map(f -> f.getRutProveedor())
+                        .distinct()
+                        .forEach(rut ->
+                                destinatarios.add(new DestinatarioEmail("PROVEEDOR", rut, "EMPRESA"))
+                        );
+            }
+
+            // 🔹 SI FIRMA FONDEADOR
+            else if (esFondeador) {
+
+                // NOTIFICAR PAGADOR
+                if (negociacion.getRutPagador() != null) {
+                    destinatarios.add(new DestinatarioEmail(
+                            "PAGADOR",
+                            negociacion.getRutPagador(),
+                            "EMPRESA"
+                    ));
+                }
+
+                // NOTIFICAR PROVEEDOR
+                negociacion.getFacturas().stream()
+                        .map(f -> f.getRutProveedor())
+                        .distinct()
+                        .forEach(rut ->
+                                destinatarios.add(new DestinatarioEmail("PROVEEDOR", rut, "EMPRESA"))
+                        );
+            }
+        }
+
+        // =========================
+        // 🔥 DATA PARA TEMPLATE
+        // =========================
+
+        Map<String, Object> data = Map.of(
+                "idNegociacion", negociacion.getId(),
+                "firmante", rutFirmante,
+                "tipoOperacion", tipo,
+                "estado", "FIRMADO",
+                "observacion", aprobacion.getObservacion() != null ? aprobacion.getObservacion() : "N/A",
+                "cantidadFacturas", aprobacion.getFacturas().size()
+        );
+
+        // =========================
+        // 🔥 EVENTO
+        // =========================
+
+        NotificacionEmailEvent event = NotificacionEmailEvent.builder()
+                .idNegociacion(negociacion.getId())
+                .destinatarios(destinatarios)
+                .asunto("FIRMA_ENDOSO")
+                .data(data)
+                .tipoNotificacion(TipoNotificacion.ENDOSO_FIRMADO.name())
+                .fecha(LocalDateTime.now())
+                .build();
+
+        outboxService.guardarEvento(
+                negociacion.getId(),
+                topicNotificacionEmail,
+                event
+        );
+    }
+
 
 }

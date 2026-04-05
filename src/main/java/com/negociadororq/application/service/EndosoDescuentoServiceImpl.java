@@ -30,7 +30,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     private final NegociacionRepository negociacionRepository;
     private final EndosoRepository endosoRepository;
     private final FacturaRepository facturaRepository;
-    private final TemplateRenderService templateRenderService;
+    private final NotificacionService notificacionService;
     private final FacturaPatchRepository facturaPatchRepository;
     private final DocumentoEndosoService documentoEndosoService;
 
@@ -47,35 +47,34 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
             throw new RuntimeException("Debe indicar al menos una factura");
         }
 
-        List<String> creadas = new ArrayList<>();
-        List<String> rechazadas = new ArrayList<>();
+        List<String> facturasCreadas = new ArrayList<>();
+        List<String> facturasRechazadas = new ArrayList<>();
 
 
-        String htmlPreview = null;
 
         for (String numeroFactura : request.getNumerosFactura()) {
 
             String tipoOperacion = negociacion.getTipoOperacion().getTipo();
 
 
-            FacturaNegociada fn = negociacion.getFacturas().stream()
-                    .filter(f ->
-                            f.getNumeroFactura().equals(numeroFactura) &&
+            FacturaNegociada facturaNegociada = negociacion.getFacturas().stream()
+                    .filter(facturaNegociadaPivote ->
+                            facturaNegociadaPivote.getNumeroFactura().equals(numeroFactura) &&
                                     esFacturaValidaParaOperacion(
-                                            f,
-                                            request.getRutActor(), // ⚠️ nombre del campo, pero representa el solicitante
+                                            facturaNegociadaPivote,
+                                            request.getRutActor(),
                                             tipoOperacion
                                     )
                     )
                     .findFirst()
                     .orElse(null);
 
-            if (fn == null) {
+            if (facturaNegociada == null) {
                 String actor = "FACTORING".equalsIgnoreCase(tipoOperacion)
                         ? "PROVEEDOR"
                         : "PAGADOR";
 
-                rechazadas.add(numeroFactura + " (no pertenece al " + actor + ")");
+                facturasRechazadas.add(numeroFactura + " (no pertenece al " + actor + ")");
                 continue;
             }
 
@@ -84,17 +83,17 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                     .orElse(null);
 
             if (factura == null) {
-                rechazadas.add(numeroFactura + " (factura no existe en BD)");
+                facturasRechazadas.add(numeroFactura + " (factura no existe en BD)");
                 continue;
             }
 
             // 🔹 Evitar doble endoso
-            boolean yaEndosada = endosoRepository.existsByNegociacionIdAndNumeroFactura(
+            boolean facturaYaEndosada = endosoRepository.existsByNegociacionIdAndNumeroFactura(
                             request.getIdNegociacion(),
                             factura.getNumeroFactura());
 
-            if (yaEndosada) {
-                rechazadas.add(numeroFactura + " (ya tiene endoso)");
+            if (facturaYaEndosada) {
+                facturasRechazadas.add(numeroFactura + " (ya tiene endoso)");
                 continue;
             }
 
@@ -103,51 +102,42 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                     .negociacionId(request.getIdNegociacion())
                     .numeroFactura(factura.getNumeroFactura())
                     .rutProveedor(factura.getRutProveedor())
-                    .rutPagador(fn.getRutPagador())
-                    .rutFondeador(fn.getFondeadores().get(0).getRutFondeador())
+                    .tipoOperacion(negociacion.getTipoOperacion())
+                    .rutPagador(facturaNegociada.getRutPagador())
+                    .rutFondeador(facturaNegociada.getFondeadores().get(0).getRutFondeador())
                     .estado(EstadoEndoso.EN_REVISION)
                     .fechaCreacion(LocalDateTime.now())
                     .fechaActualizacion(LocalDateTime.now())
                     .build();
 
-// 🔹 Generar documento formal antes de guardar
-            documentoEndosoService.generarDocumentoFormal(
-                    endoso,
-                    negociacion,
-                    factura,
-                    fn
-            );
+            // 🔹 Generar documento formal antes de guardar
+            documentoEndosoService.generarDocumentoFormal(endoso, negociacion, factura, facturaNegociada);
 
             endosoRepository.save(endoso);
-            creadas.add(numeroFactura);
 
-            facturaPatchRepository.actualizarEstadoPorId(
-                    factura.getId(),
-                    EstadoFirma.EN_REVISION
-            );
+            notificacionService.notificarEndoso(endoso);
+
+            facturasCreadas.add(numeroFactura);
+
+            facturaPatchRepository.actualizarEstadoPorId(factura.getId(), EstadoFirma.EN_REVISION);
 
         }
 
         String estadoGlobal =
-                creadas.isEmpty() ? "RECHAZADO"
-                        : rechazadas.isEmpty() ? "PENDIENTE"
+                facturasCreadas.isEmpty() ? "RECHAZADO"
+                        : facturasRechazadas.isEmpty() ? "PENDIENTE"
                         : "PARCIAL";
 
         return EndosoResponseDto.builder()
                 .idNegociacion(request.getIdNegociacion())
                 .estadoEndoso(estadoGlobal)
-                .facturasEndosadas(creadas)
-                .facturasRechazadas(rechazadas)
-                .plantillaHtml(htmlPreview)
+                .facturasEndosadas(facturasCreadas)
+                .facturasRechazadas(facturasRechazadas)
                 .build();
     }
 
 
-    private boolean esFacturaValidaParaOperacion(
-            FacturaNegociada factura,
-            String rutSolicitante,
-            String tipoOperacion
-    ) {
+    private boolean esFacturaValidaParaOperacion(FacturaNegociada factura, String rutSolicitante, String tipoOperacion) {
 
         if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
             return factura.getRutProveedor().equals(rutSolicitante);

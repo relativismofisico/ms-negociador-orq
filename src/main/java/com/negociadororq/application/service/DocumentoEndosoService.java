@@ -7,6 +7,5 @@ import com.negociadororq.domain.model.Negociacion;
 
 public interface DocumentoEndosoService {
 
-    void generarDocumentoFormal(Endoso endoso, Negociacion negociacion,
-                                Factura factura, FacturaNegociada facturaNegociada);
+    void generarDocumentoFormal(Endoso endoso, Negociacion negociacion, Factura factura, FacturaNegociada facturaNegociada);
 }

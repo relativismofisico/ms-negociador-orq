@@ -46,6 +46,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final UserRepository userRepository;
     private final PendingOtpRepository pendingOtpRepository;
     private final FirmaEndosoService firmaEndosoService;
+    private final NotificacionService notificacionService;
 
     @Value("${topics.otp-request}")
     private String topicRequestOtp;
@@ -150,6 +151,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     LocalDateTime.now()
             );
 
+
             firmaEndosoService.firmarPdfEndoso(
                     request.getIdNegociacion(), factura, pending, request.getRutEmpresa(),
                     request.getRutOperador(), rolActor, factReq.isAprobado(), request.getObservacion());
@@ -159,6 +161,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             actualizarEstadosFacturaEndosoNegociacion(negociacion.getId(), factura, negociacion.getTipoOperacion(), request.getRutOperador());
         }
+
+        notificacionService.notificarFirmaEndoso(request);
 
 
         //Actualizamos los campos de la negociacion
