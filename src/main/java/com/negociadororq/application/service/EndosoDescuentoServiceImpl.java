@@ -100,6 +100,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
             Endoso endoso = Endoso.builder()
                     .negociacionId(request.getIdNegociacion())
                     .numeroFactura(factura.getNumeroFactura())
+                    .rutActorEndosa(request.getRutActor())
                     .rutProveedor(factura.getRutProveedor())
                     .tipoOperacion(negociacion.getTipoOperacion())
                     .rutPagador(facturaNegociada.getRutPagador())

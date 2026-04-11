@@ -28,6 +28,7 @@ public class Endoso {
     private String negociacionId;
     private String numeroFactura;
 
+    private String rutActorEndosa;
     private String rutProveedor; // quien endosa
     private String rutPagador;
     private String rutFondeador;
