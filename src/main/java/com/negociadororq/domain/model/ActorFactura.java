@@ -9,6 +9,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class ActorFactura {
 
-    private String rutEmpresa;       // NIT/RUT leído del XML
+    private String rutEmpresa;
     private String rolEmpresaFactura;
 }

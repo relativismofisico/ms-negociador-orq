@@ -8,10 +8,8 @@ import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.enums.EstadoEndoso;
 import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.infrastructure.persistence.repository.EndosoRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
-import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
+import com.negociadororq.infrastructure.persistence.repository.*;
+
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +31,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     private final NotificacionService notificacionService;
     private final FacturaPatchRepository facturaPatchRepository;
     private final DocumentoEndosoService documentoEndosoService;
+    private final NegociacionPatchRepository negociacionPatchRepository;;
 
 
 
@@ -120,6 +119,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
             facturasCreadas.add(numeroFactura);
 
             facturaPatchRepository.actualizarEstadoPorId(factura.getId(), EstadoFirma.EN_REVISION);
+
+            negociacionPatchRepository.actualizarEstadoEndosoPorId(negociacion.getId(), factura.getNumeroFactura(), true);
 
         }
 

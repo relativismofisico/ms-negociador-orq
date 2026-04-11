@@ -248,7 +248,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                     empresaQuotaRepository.save(empresaQuota);
 
                     // Descontar cupo de cada fondeador en su relación
-                    String tipoOp = Optional.ofNullable(request.getTipoOperacion()).map(Operacion::getTipo).orElse("FACTORING").toUpperCase();
+                    String tipoOperacion = Optional.ofNullable(request.getTipoOperacion()).map(Operacion::getTipo).orElse("FACTORING").toUpperCase();
                     for (FondeadorAsignacion fon : fondeadoresUsados) {
                         Long funderCompanyId = resolveCompanyId.apply(fon.getRutFondeador());
                         Long supplierCompanyId = resolveCompanyId.apply(factura.getRutProveedor());
@@ -257,11 +257,11 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                         FondeadorQuota fq = fondeadorQuotaRepository.findByFunderIdAndPayerId(
                                         funderCompanyId, payerCompanyId)
                                 .orElseThrow(() -> new RuntimeException("Quota fondeador desapareció durante la operación"));
-
-                        if ("FACTORING".equals(tipoOp)) {
+                        //TODO AJUSTAR CUPO SEGUN OPERCION
+                        if ("FACTORING".equals(tipoOperacion)) {
                             BigDecimal nuevoSupplier = fq.getPayerCurrentQuota().subtract(valorFactura).max(BigDecimal.ZERO);
                             fq.setPayerCurrentQuota(nuevoSupplier);
-                        } else if ("CONFIRMING".equals(tipoOp)) {
+                        } else if ("CONFIRMING".equals(tipoOperacion)) {
                             BigDecimal nuevoPayer = fq.getPayerCurrentQuota().subtract(valorFactura).max(BigDecimal.ZERO);
                             fq.setPayerCurrentQuota(nuevoPayer);
                         } else {
@@ -289,6 +289,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                     reqFact.setFondeadores(finalFondeadores);
                     reqFact.setRutProveedor(factura.getRutProveedor());
                     reqFact.setRutPagador(factura.getRutPagador());
+                    reqFact.setEstadoCreacionEndoso(false);
                     reqFact.setValorFactura(factura.getValorFactura());
                     facturasAceptadas.add(reqFact);
 

@@ -29,6 +29,7 @@ public class FacturaPatchRepository {
 
         Update update = new Update()
                 .set("estadoFirma", estadoFirma)
+                .set("estadoCreacionEndoso", true)
                 .currentDate("fechaActualizacion");
 
         mongoTemplate.updateFirst(query, update, Factura.class);
@@ -57,5 +58,7 @@ public class FacturaPatchRepository {
 
         mongoTemplate.updateFirst(query, update, Factura.class);
     }
+
+
 
 }

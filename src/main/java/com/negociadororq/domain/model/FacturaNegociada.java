@@ -36,6 +36,7 @@ public class FacturaNegociada {
     private List<AprobacionActorDto> aprobaciones;
     //private EstadoFacturaNegociada estado;
     private EstadoEndoso estadoEndoso;
+    private Boolean estadoCreacionEndoso;
 
     private String otpEndoso;
 
