@@ -299,8 +299,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                     log.error(msg, e);
                     errores.add(msg);
                     facturasRechazadas.add(numero + " -> " + msg);
-                    // NOTA: aquí no revertimos las facturas previamente aplicadas (porque queremos parcial),
-                    // pero podríamos implementar compensaciones si lo deseas.
                 }
             } // end for each factura
 
@@ -321,7 +319,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             negociacion.setRutPagadores(new ArrayList<>(pagadores));
         }
 
-        negociacion.setRutProveedor("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa()) ? request.getRutEmpresa() : null);
+        negociacion.setRutProveedor("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa()) ? request.getRutEmpresa() : request.getFacturas().get(0).getRutProveedor());
+        //negociacion.setRutProveedor(request.getFacturas().get(0).getRutProveedor());
         negociacion.setFacturas(facturasAceptadas);
         negociacion.setRutFondeadores(facturasAceptadas.stream()
                 .flatMap(f -> Optional.ofNullable(f.getFondeadores()).orElse(Collections.emptyList()).stream())
@@ -363,7 +362,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             negociacion.setRutPagador(null);
             negociacion.setRutPagadores(new ArrayList<>(pagadores));
         }
-        negociacion.setRutProveedor("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa()) ? request.getRutEmpresa() : null);
+        negociacion.setRutProveedor("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa()) ? request.getRutEmpresa() : request.getFacturas().get(0).getRutProveedor());
         response.setFondeadoresAsignados(negociacion.getRutFondeadores().stream()
                 .map(r -> FondeadorAsignacion.builder().rutFondeador(r).nombreFondeador("DESCONOCIDO").build())
                 .collect(Collectors.toList()));
