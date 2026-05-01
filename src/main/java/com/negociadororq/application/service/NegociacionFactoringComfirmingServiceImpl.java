@@ -319,8 +319,16 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             negociacion.setRutPagadores(new ArrayList<>(pagadores));
         }
 
-        negociacion.setRutProveedor("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa()) ? request.getRutEmpresa() : request.getFacturas().get(0).getRutProveedor());
-        //negociacion.setRutProveedor(request.getFacturas().get(0).getRutProveedor());
+        String rutProveedor;
+
+        if ("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa())) {
+            rutProveedor = request.getRutEmpresa();
+        } else {
+            rutProveedor = facturasAceptadas.isEmpty()
+                    ? null
+                    : facturasAceptadas.get(0).getRutProveedor();
+        }
+        negociacion.setRutProveedor(rutProveedor);
         negociacion.setFacturas(facturasAceptadas);
         negociacion.setRutFondeadores(facturasAceptadas.stream()
                 .flatMap(f -> Optional.ofNullable(f.getFondeadores()).orElse(Collections.emptyList()).stream())
@@ -362,7 +370,16 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             negociacion.setRutPagador(null);
             negociacion.setRutPagadores(new ArrayList<>(pagadores));
         }
-        negociacion.setRutProveedor("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa()) ? request.getRutEmpresa() : request.getFacturas().get(0).getRutProveedor());
+
+
+        if ("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa())) {
+            rutProveedor = request.getRutEmpresa();
+        } else {
+            rutProveedor = facturasAceptadas.isEmpty()
+                    ? null
+                    : facturasAceptadas.get(0).getRutProveedor();
+        }
+        negociacion.setRutProveedor(rutProveedor);
         response.setFondeadoresAsignados(negociacion.getRutFondeadores().stream()
                 .map(r -> FondeadorAsignacion.builder().rutFondeador(r).nombreFondeador("DESCONOCIDO").build())
                 .collect(Collectors.toList()));
