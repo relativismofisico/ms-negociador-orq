@@ -5,6 +5,7 @@ import com.negociadororq.application.service.notificacion.CuerpoNotificacionFact
 import com.negociadororq.domain.event.DestinatarioEmail;
 import com.negociadororq.domain.event.NotificacionEmailEvent;
 import com.negociadororq.domain.model.Endoso;
+import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.enums.TipoNotificacion;
 import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
@@ -62,7 +63,7 @@ public class NotificacionServiceImpl implements NotificacionService {
 
             // PROVEEDOR (sale de las facturas)
             negociacion.getFacturas().stream()
-                    .map(f -> f.getRutProveedor())
+                    .map(FacturaNegociada::getRutProveedor)
                     .distinct()
                     .forEach(rut ->
                             destinatarios.add(new DestinatarioEmail("PROVEEDOR", rut, "EMPRESA"))
