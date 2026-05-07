@@ -2,6 +2,8 @@ package com.negociadororq.domain.model;
 
 import com.negociadororq.enums.EstadoEndoso;
 import java.time.LocalDateTime;
+import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -37,9 +39,10 @@ public class Endoso {
     private EstadoEndoso estado; // PENDIENTE, ENDOSADO, RECHAZADO
     private String otp;
 
-    private Aprobacion pagadorAprobacion;
-    private Aprobacion fondeadorAprobacion;
-
+    /**
+     * HISTORIAL COMPLETO DE APROBACIONES
+     */
+    private List<AprobacionActorDto> aprobaciones;
     private String documentoUrl; // enlace al PDF del endoso
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaAprobacion;

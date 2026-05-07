@@ -47,6 +47,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final PendingOtpRepository pendingOtpRepository;
     private final FirmaEndosoService firmaEndosoService;
     private final NotificacionService notificacionService;
+    private final EndosoRepository endosoRepository;
 
     @Value("${topics.otp-request}")
     private String topicRequestOtp;
@@ -158,6 +159,11 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             factura.getAprobaciones().removeIf(a -> a.getRutActor().equals(request.getRutEmpresa()));
             factura.getAprobaciones().add(aprobacion);
+            actualizarAprobacionEndoso(
+                    negociacion.getId(),
+                    factura,
+                    aprobacion
+            );
 
             actualizarEstadosFacturaEndosoNegociacion(negociacion.getId(), factura, negociacion.getTipoOperacion(), request.getRutOperador());
         }
@@ -368,6 +374,24 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         }
     }
 
+
+    private void actualizarAprobacionEndoso(
+            String idNegociacion,
+            FacturaNegociada factura,
+            AprobacionActorDto aprobacion
+    ) {
+
+        EstadoEndoso estado = aprobacion.isAprobado()
+                ? EstadoEndoso.PENDIENTE
+                : EstadoEndoso.RECHAZADO;
+
+        endosoPatchRepository.registrarAprobacionActor(
+                idNegociacion,
+                factura.getNumeroFactura(),
+                aprobacion,
+                estado
+        );
+    }
 
 }
 
