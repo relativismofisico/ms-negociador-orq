@@ -15,5 +15,6 @@ public class TopicsProperties {
     private String otpValidateResponse;
     private String liquidacion;
     private String notificacionEmail;
+    private String liquidacionFallida;
 
 }

@@ -19,7 +19,9 @@ public class OtpValidatedListener {
     private final PendingOtpRepository pendingOtpRepository;
     private final AprobacionEndosoDescuentoService service;
 
-    @KafkaListener(topics ="${topics.otp-validate-response}")
+    @KafkaListener(topics ="${topics.otp-validate-response}",
+            groupId = "ms-negociador-orq",
+            containerFactory = "otpKafkaListenerContainerFactory")
     public void handle(OtpValidatedEvent event) {
 
         if (!event.isValido()) {

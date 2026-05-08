@@ -324,7 +324,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 " para la factura " + factura.getNumeroFactura());
     }
 
-    private void revertirCupos(FacturaNegociada factura, Operacion tipoOperacion, String rutEmpresa, String rutOperador) {
+    public void revertirCupos(FacturaNegociada factura, Operacion tipoOperacion, String rutEmpresa, String rutOperador) {
 
         // Obtener factura completa
         Factura facturaDb = facturaRepository.findByNumeroFactura(factura.getNumeroFactura())

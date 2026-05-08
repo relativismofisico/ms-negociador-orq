@@ -30,21 +30,6 @@ spring:
       acks: all #Permite comfirmar el mensaje solo cuando todas las replicas lo guardan
       properties:
         enable.idempotence: true #Evita duplicados
-    consumer:
-      group-id: ms-negociador-orq
-      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      enable-auto-commit: false
-      properties:
-        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
-        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
-        spring.json.trusted.packages: "*"
-        spring.json.value.default.type: com.negociadororq.domain.event.OtpValidatedEvent
-        spring.json.type.mapping: com.security.ms_security.domain.event.OtpValidatedEvent:com.negociadororq.domain.event.OtpValidatedEvent
-        reconnect.backoff.ms: 1000 #Espera un seg e inicia reconexion
-        reconnect.backoff.max.ms: 10000 #Reintenta 10 veces
-        auto-offset-reset: earliest #Toma mensajes desde el inicio del topic
-
 
 topics:
   liquidacion: liquidacion.solicitada
@@ -52,5 +37,6 @@ topics:
   otp-validate: otp.validate
   otp-validate-response: otp.validate.response
   notificacion-email: notificacion.email
+  liquidacion-fallida: liquidacion.fallida
 
 
