@@ -1,133 +1,133 @@
 {
-  "info": {
-    "_postman_id": "1f63b724-6cb1-46b5-88b8-8733278cb265",
-    "name": "ms-negociador-orq",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_exporter_id": "28222766",
-    "_collection_link": "https://go.postman.co/collection/28222766-1f63b724-6cb1-46b5-88b8-8733278cb265?source=collection_link"
-  },
-  "item": [
-    {
-      "name": "Negociar Facturas",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"rutEmpresa\": \"900266102\",\n  \"rolEmpresa\": \"PROVEEDOR\",\n  \"tipoOperacion\": { \n    \"tipo\": \"FACTORING\",\n    \"clase\": \"SIN DESCUENTO\"\n    },\n  \"facturas\": [\n    {\n         \"numeroFactura\": \"FECI3958\",\n         \"fondeadores\": [\n      ]\n    }\n  ],\n  \"fondeadoresGlobales\": [\n      { \"rutFondeador\": \"900978051\"}\n  ],\n\n   \"rutOperador\": \"1128384790\"\n}"
-        },
-        "url": {
-          "raw": "http://localhost:8083/negociar/factura",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "8083",
-          "path": [
-            "negociar",
-            "factura"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Crear Endoso/descuento de Factura",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "idNegociacion",
-            "value": "{{idNegociacion}}",
-            "type": "text"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\r\n  \"rutProveedor\": \"900266102\",\r\n  \"numerosFactura\": [\r\n    \"FECI3958\"\r\n  ]\r\n}\r\n",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "http://localhost:8083/negociaciones/{{idNegociacion}}/endosos",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "8083",
-          "path": [
-            "negociaciones",
-            "{{idNegociacion}}",
-            "endosos"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Aprobar Endosos/descuentos (Solicitar Otp)",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"idNegociacion\": \"65f1c2ab1234567890abcd12\",\n  \"rutOperador\": \"900123456\",\n  \"rutEmpresa\": \"800987654\",\n  \"observacion\": \"Aprobación de endoso\",\n  \"facturas\": [\n    {\n      \"numeroFactura\": \"FAC-001\",\n      \"aprueba\": true\n    },\n    {\n      \"numeroFactura\": \"FAC-002\",\n      \"aprueba\": true\n    }\n  ]\n}"
-        },
-        "url": {
-          "raw": "http://localhost:8083/solicitar-otp",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "8083",
-          "path": [
-            "solicitar-otp"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Firmar Endoso/Descuento (Confirmar Otp)",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"idNegociacion\": \"NEG-1001\",\n  \"rutEmpresa\": \"900123456\",\n  \"rutOperador\": \"operador1\",\n  \"otp\": \"123456\"\n}"
-        },
-        "url": {
-          "raw": "http://localhost:8080/aprobaciones/confirmar-otp",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "8080",
-          "path": [
-            "aprobaciones",
-            "confirmar-otp"
-          ]
-        }
-      },
-      "response": []
-    }
-  ]
+	"info": {
+		"_postman_id": "1f63b724-6cb1-46b5-88b8-8733278cb265",
+		"name": "ms-negociador-orq",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "28222766",
+		"_collection_link": "https://facturas-8785.postman.co/workspace/Facturas~0f056199-548d-4012-9603-37b9d8a4b5e1/collection/28222766-1f63b724-6cb1-46b5-88b8-8733278cb265?action=share&source=collection_link&creator=28222766"
+	},
+	"item": [
+		{
+			"name": "Negociar Facturas",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"rutEmpresa\": \"900266102\",\n  \"rolEmpresa\": \"PROVEEDOR\",\n  \"tipoOperacion\": { \n    \"tipo\": \"FACTORING\",\n    \"clase\": \"SIN DESCUENTO\"\n    },\n  \"facturas\": [\n    {\n         \"numeroFactura\": \"FECI3958\",\n         \"fondeadores\": [\n      ]\n    }\n  ],\n  \"fondeadoresGlobales\": [\n      { \"rutFondeador\": \"900978051\"}\n  ],\n\n   \"rutOperador\": \"1128384790\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:8083/negociar/factura",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8083",
+					"path": [
+						"negociar",
+						"factura"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Crear Endoso/descuento de Factura",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "idNegociacion",
+						"value": "{{idNegociacion}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"rutProveedor\": \"900266102\",\r\n  \"numerosFactura\": [\r\n    \"FECI3958\"\r\n  ]\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8083/negociaciones/{{idNegociacion}}/endosos",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8083",
+					"path": [
+						"negociaciones",
+						"{{idNegociacion}}",
+						"endosos"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Aprobar Endosos/descuentos (Solicitar Otp)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"idNegociacion\": \"65f1c2ab1234567890abcd12\",\n  \"rutOperador\": \"900123456\",\n  \"rutEmpresa\": \"800987654\",\n  \"observacion\": \"Aprobación de endoso\",\n  \"facturas\": [\n    {\n      \"numeroFactura\": \"FAC-001\",\n      \"aprueba\": true\n    },\n    {\n      \"numeroFactura\": \"FAC-002\",\n      \"aprueba\": true\n    }\n  ]\n}"
+				},
+				"url": {
+					"raw": "http://localhost:8083/solicitar-otp",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8083",
+					"path": [
+						"solicitar-otp"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Firmar Endoso/Descuento (Confirmar Otp)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"idNegociacion\": \"NEG-1001\",\n  \"rutEmpresa\": \"900123456\",\n  \"rutOperador\": \"operador1\",\n  \"otp\": \"123456\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:8080/aprobaciones/confirmar-otp",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"aprobaciones",
+						"confirmar-otp"
+					]
+				}
+			},
+			"response": []
+		}
+	]
 }

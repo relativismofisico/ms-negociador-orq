@@ -1,20 +1,29 @@
 package com.negociadororq.application.service;
 
+import com.negociadororq.domain.model.EmpresaQuota;
+import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.domain.model.UserQuota;
 import com.negociadororq.infrastructure.persistence.repository.EmpresaQuotaRepository;
+import com.negociadororq.infrastructure.persistence.repository.FondeadorQuotaRepository;
 import com.negociadororq.infrastructure.persistence.repository.UserQuotaRepository;
 import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import java.math.BigDecimal;
+import java.util.Optional;
+
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OperadorServiceImpl implements OperadorService{
 
     private final UserQuotaRepository userQuotaRepository;
     private final EmpresaQuotaRepository empresaQuotaRepository;
+    private final FondeadorQuotaRepository fondeadorQuotaRepository;
 
     @Override
     public BigDecimal obtenerCupoDisponible(Long userId) {
@@ -56,22 +65,48 @@ public class OperadorServiceImpl implements OperadorService{
                     uq.setCurrentQuota(
                             uq.getCurrentQuota()
                                     .add(valor)
-                                    .max(BigDecimal.ZERO)
-                    );
-                });
+                                    .max(BigDecimal.ZERO));});
     }
 
     @Override
-    public void revertirCupoEmpresa(Long companyId, BigDecimal valor) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void revertirCupoEmpresa(Long companyId,
+                                    BigDecimal valor) {
 
-        empresaQuotaRepository.findByCompanyId(companyId)
-                .ifPresent(eq -> {
-                    eq.setCurrentQuota(
-                            eq.getCurrentQuota()
-                                    .add(valor)
-                                    .max(BigDecimal.ZERO)
-                    );
-                });
+        EmpresaQuota empresaQuota =
+                empresaQuotaRepository
+                        .findByCompanyId(companyId)
+                        .orElseThrow();
+
+        valor = valor.abs();
+
+        BigDecimal actual = empresaQuota.getCurrentQuota();
+
+        BigDecimal nuevo = actual.add(valor);
+
+        if (nuevo.compareTo(empresaQuota.getQuota()) > 0) {
+            nuevo = empresaQuota.getQuota();
+        }
+        empresaQuota.setCurrentQuota(nuevo);
+
+        empresaQuotaRepository.saveAndFlush(empresaQuota);
+
+    }
+
+    @Override
+    @Transactional
+    public void revertirCupoFondeador(Long funderId, Long payerId, BigDecimal valor) {
+
+        FondeadorQuota quota = fondeadorQuotaRepository
+                .findByFunderIdAndPayerId(funderId, payerId)
+                .orElseThrow(() ->
+                        new RuntimeException("No existe cupo para funderId=" + funderId + " payerId=" + payerId));
+
+        BigDecimal cupoActual = Optional.ofNullable(quota.getPayerCurrentQuota()).orElse(BigDecimal.ZERO);
+
+        quota.setPayerCurrentQuota(cupoActual.add(valor));
+
+        fondeadorQuotaRepository.save(quota);
     }
 
 }

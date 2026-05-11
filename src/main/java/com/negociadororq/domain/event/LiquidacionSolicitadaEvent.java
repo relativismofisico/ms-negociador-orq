@@ -14,7 +14,9 @@ import java.util.List;
 @NoArgsConstructor
 public class LiquidacionSolicitadaEvent {
 
+
     private String negociacionId;
+    private String rutOperador;
     private String numeroFactura;
     private Operacion tipoOperacion;
     private LocalDateTime fecha;

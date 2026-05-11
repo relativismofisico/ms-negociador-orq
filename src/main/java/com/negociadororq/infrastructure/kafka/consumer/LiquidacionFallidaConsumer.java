@@ -16,7 +16,7 @@ public class LiquidacionFallidaConsumer {
 
     @KafkaListener(
             topics = "${topics.liquidacion-fallida}",
-            groupId = "ms-negociador-orq",
+            groupId = "negociador-group",
             containerFactory = "liquidacionKafkaListenerContainerFactory"
     )
     public void consumir(LiquidacionFallidaEvent event) {
@@ -30,8 +30,7 @@ public class LiquidacionFallidaConsumer {
         try {
 
             reversionCuposService.revertirPorFactura(
-                    event.getNumeroFactura(),
-                    "SYSTEM",
+                    event.getNumeroFactura(), event.getRutOperador(),
                     event.getMotivo()
             );
 

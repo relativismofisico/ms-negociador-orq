@@ -16,6 +16,6 @@ public class LiquidacionFallidaEvent {
     private String numeroFactura;
     private String motivo;
     private String tipoOperacion;
-    private String actorId;
+    private String rutOperador;
     private LocalDateTime fecha;
 }

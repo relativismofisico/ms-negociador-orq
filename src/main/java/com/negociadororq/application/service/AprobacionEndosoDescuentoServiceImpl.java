@@ -247,7 +247,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
         LiquidacionSolicitadaEvent event =
                 new LiquidacionSolicitadaEvent(
-                        idNegociacion, factura.getNumeroFactura(),
+                        idNegociacion,
+                        rutOperador,
+                        factura.getNumeroFactura(),
                         operacion, LocalDateTime.now());
 
         outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
@@ -324,6 +326,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 " para la factura " + factura.getNumeroFactura());
     }
 
+    @Transactional
     public void revertirCupos(FacturaNegociada factura, Operacion tipoOperacion, String rutEmpresa, String rutOperador) {
 
         // Obtener factura completa
@@ -353,23 +356,30 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         // 3️⃣ Revertir cupo fondeadores
         final BigDecimal valorFinal = valorFactura;
 
-        if (factura.getFondeadores() != null) {
+        // 3️⃣ Revertir cupo fondeadores
+        if (factura.getFondeadores() != null &&
+                !factura.getFondeadores().isEmpty()) {
+
+            Long payerId = companyRepository.findByNit(facturaDb.getRutPagador())
+                    .map(Company::getIdeCompany)
+                    .orElseThrow(() ->
+                            new RuntimeException("Pagador no encontrado"));
+
             for (FondeadorAsignacion fon : factura.getFondeadores()) {
 
                 Long funderId = companyRepository.findByNit(fon.getRutFondeador())
                         .map(Company::getIdeCompany)
-                        .orElseThrow(() -> new RuntimeException("Fondeador no encontrado"));
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Fondeador no encontrado: "
+                                                + fon.getRutFondeador()
+                                ));
 
-                Long payerId = companyRepository.findByNit(facturaDb.getRutPagador())
-                        .map(Company::getIdeCompany)
-                        .orElseThrow(() -> new RuntimeException("Pagador no encontrado"));
-
-                fondeadorQuotaRepository.findByFunderIdAndPayerId(funderId, payerId)
-                        .ifPresent(fq -> {
-                            fq.setPayerCurrentQuota(
-                                    fq.getPayerCurrentQuota().add(valorFinal)
-                            );
-                        });
+                operadorService.revertirCupoFondeador(
+                        funderId,
+                        payerId,
+                        valorFactura
+                );
             }
         }
     }

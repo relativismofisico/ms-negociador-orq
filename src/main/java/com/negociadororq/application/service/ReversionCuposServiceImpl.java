@@ -36,8 +36,7 @@ public class ReversionCuposServiceImpl implements ReversionCuposService {
 
         Negociacion negociacion = negociacionRepository.findByNumeroFactura(numeroFactura)
                         .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Negociación no encontrada"));
+                                new RuntimeException("Negociación no encontrada"));
 
         FacturaNegociada facturaNegociada = negociacion.getFacturas()
                         .stream()
@@ -51,14 +50,11 @@ public class ReversionCuposServiceImpl implements ReversionCuposService {
                 facturaNegociada, negociacion.getTipoOperacion(),
                 facturaNegociada.getRutProveedor(), actorId);
 
-        facturaPatchRepository
-                .actualizarEstadoFirmaPorNoFactura(
+        facturaPatchRepository.actualizarEstadoFirmaPorNoFactura(
                         numeroFactura, EstadoFirma.RECHAZADA);
 
-        endosoPatchRepository
-                .actualizarEstadoEndosoPorNoFactura(
-                        negociacion.getId(),
-                        numeroFactura, EstadoEndoso.RECHAZADO);
+        endosoPatchRepository.actualizarEstadoEndosoPorNoFactura(
+                        negociacion.getId(), numeroFactura, EstadoEndoso.RECHAZADO);
 
         log.info("Cupos revertidos por fallo de liquidación factura {} motivo {}", numeroFactura, motivo);
     }
