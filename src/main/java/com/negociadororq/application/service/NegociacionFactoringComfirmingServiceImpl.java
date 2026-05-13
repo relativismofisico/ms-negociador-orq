@@ -2,6 +2,7 @@ package com.negociadororq.application.service;
 
 import com.negociadororq.application.controller.dto.NegociacionRequestDto;
 import com.negociadororq.application.controller.dto.NegociacionResponseDto;
+import com.negociadororq.application.controller.dto.ValidacionFacturaResponseDto;
 import com.negociadororq.domain.event.OtpRequestEvent;
 import com.negociadororq.domain.model.*;
 import com.negociadororq.enums.EstadoFirma;
@@ -31,6 +32,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final FondeadorQuotaRepository fondeadorQuotaRepository;
     private final FacturaPatchRepository facturaPatchRepository;
     private final NotificacionService notificacionService;
+    private final ValidacionFacturaService validacionFacturaService;
 
 
     /**
@@ -103,6 +105,16 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                 }
 
                 Factura factura = optFactura.get();
+
+                //Validamos fecha de vencimiento de la factura
+                ValidacionFacturaResponseDto validacionVencimiento =
+                        validacionFacturaService.validarFacturaVencida(factura.getNumeroFactura(), null);
+
+                if (!validacionVencimiento.isValida()) {
+                    errores.add(validacionVencimiento.getMensaje());
+                    facturasRechazadas.add(numero + " -> " + validacionVencimiento.getMensaje());
+                    continue;
+                }
 
                 // 🔥 VALIDACIÓN DE PERMISOS SEGÚN TIPO DE OPERACIÓN
                 try {
