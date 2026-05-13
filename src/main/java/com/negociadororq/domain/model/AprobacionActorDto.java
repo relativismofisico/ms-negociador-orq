@@ -12,8 +12,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AprobacionActorDto {
     private String rutActor;
-    private RolActor rolActor;// proveedor, pagador, fondeador
-    private boolean aprobado;   // true = aprueba, false = rechaza
-    private String observacion; // opcional
+    private RolActor rolActor;
+    private boolean aprobado;
+    private String observacion;
     private LocalDateTime fecha;
 }

@@ -15,8 +15,6 @@ public class NotificacionEmailEvent {
 
     private String idEvento;
     private String idNegociacion;
-
-    // destinatarios
     private List<DestinatarioEmail> destinatarios;
     private String tipoNotificacion;
     private String asunto;

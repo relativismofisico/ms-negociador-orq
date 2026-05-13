@@ -36,9 +36,6 @@ public class CupoServiceImpl implements CupoService{
 
         // SOLO cambiamos currentQuota
         empresaQuota.setCurrentQuota(nuevoCupo);
-
-        // opcional: repository.save(empresaQuota); si estás dentro de @Transactional no es obligatorio,
-        // pero puedes dejarlo para claridad:
         empresaQuotaRepository.save(empresaQuota);
     }
 

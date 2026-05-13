@@ -8,8 +8,7 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class DestinatarioEmail {
-
-    private String rolActor; // PAGADOR, PROVEEDOR, FONDEADOR
+    private String rolActor;
     private String rutActor;
     private String tipoActor;
 }

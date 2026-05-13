@@ -10,12 +10,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class NegociacionEvent {
-
         private String idNegociacion;
         private String numeroFactura;
         private String rutActor;
-        private String rolActor; // PROVEEDOR, PAGADOR, FONDEADOR
-        private String accion;   // INTENCION, APROBACION, ENDOSO, LIQUIDACION
-        private String estado;   // APROBADO, RECHAZADO
+        private String rolActor;
+        private String accion;
+        private String estado;
 }
 

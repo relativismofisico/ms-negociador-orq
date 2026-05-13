@@ -15,10 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class FacturaServiceImpl implements FacturaService{
 
-    private final MongoTemplate mongoTemplate;
     private final FacturaRepository facturaRepository;
-
-
 
     @Override
     @Transactional

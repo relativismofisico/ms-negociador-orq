@@ -24,7 +24,6 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
     public void firmarPdfEndoso(String idNegociacion, FacturaNegociada factura, PendingOtp pending, String rutEmpresa,
                                 String rutOperador, RolActor rolActor, boolean aprobado, String observacion) {
 
-
         // 1. Obtener endoso
         Endoso endoso = endosoRepository
                 .findByNegociacionIdAndNumeroFactura(idNegociacion, factura.getNumeroFactura())

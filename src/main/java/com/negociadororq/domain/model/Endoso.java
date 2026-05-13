@@ -31,19 +31,16 @@ public class Endoso {
     private String numeroFactura;
 
     private String rutActorEndosa;
-    private String rutProveedor; // quien endosa
+    private String rutProveedor;
     private String rutPagador;
     private String rutFondeador;
     private Operacion tipoOperacion;
 
-    private EstadoEndoso estado; // PENDIENTE, ENDOSADO, RECHAZADO
+    private EstadoEndoso estado;
     private String otp;
 
-    /**
-     * HISTORIAL COMPLETO DE APROBACIONES
-     */
     private List<AprobacionActorDto> aprobaciones;
-    private String documentoUrl; // enlace al PDF del endoso
+    private String documentoUrl;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaAprobacion;
     private LocalDateTime fechaActualizacion;

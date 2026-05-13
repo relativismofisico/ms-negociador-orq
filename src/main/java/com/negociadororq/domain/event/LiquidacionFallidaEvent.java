@@ -12,7 +12,6 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LiquidacionFallidaEvent {
-
     private String numeroFactura;
     private String motivo;
     private String tipoOperacion;

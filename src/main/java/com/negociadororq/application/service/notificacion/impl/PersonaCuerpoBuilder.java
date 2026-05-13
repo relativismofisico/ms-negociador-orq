@@ -14,9 +14,9 @@ public class PersonaCuerpoBuilder implements CuerpoNotificacionBuilder<User> {
     }
 
     @Override
-    public String construir(User p) {
+    public String construir(User user) {
         return "Nueva persona registrada.\n\n" +
-                "Nombre: " + p.getUsername() + "\n" +
-                "Identificación: " + p.getIdeUser() + "\n";
+                "Nombre: " + user.getUsername() + "\n" +
+                "Identificación: " + user.getIdeUser() + "\n";
     }
 }

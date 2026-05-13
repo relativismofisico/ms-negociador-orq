@@ -20,7 +20,7 @@ public class Factura {
     private String id;
 
     @Field("numeroFactura")
-    @Indexed(unique = true)   // <-- asegura unicidad en Mongo
+    @Indexed(unique = true)
     private String numeroFactura;
 
     private String codigoAlternoFactura;

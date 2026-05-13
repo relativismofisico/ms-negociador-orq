@@ -31,6 +31,4 @@ public class Company {
 
     @Column(name = "nit", unique = true)
     private String nit;
-
-    // demás campos opcionales omitidos...
 }

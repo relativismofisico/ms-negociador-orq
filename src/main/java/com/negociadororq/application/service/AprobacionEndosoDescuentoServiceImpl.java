@@ -137,20 +137,13 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         " ya realizó el endoso para la factura " +
                         factura.getNumeroFactura());
                 throw new RuntimeException(
-                        "El actor ya realizó el endoso para la factura " +
-                                factura.getNumeroFactura()
-                );
-            }
+                        "El actor ya realizó el endoso para la factura " + factura.getNumeroFactura());}
 
             RolActor rolActor = resolverRolActor(request.getRutEmpresa(), factura);
 
             AprobacionActorDto aprobacion = new AprobacionActorDto(
-                    request.getRutEmpresa(),
-                    rolActor,
-                    factReq.isAprobado(),
-                    request.getObservacion(),
-                    LocalDateTime.now()
-            );
+                    request.getRutEmpresa(), rolActor, factReq.isAprobado(),
+                    request.getObservacion(), LocalDateTime.now());
 
 
             firmaEndosoService.firmarPdfEndoso(
@@ -231,12 +224,10 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
         if (todosAprobaron) {
             estadoFactura = "FACTORING".equalsIgnoreCase(tipoOperacion.getTipo())
-                    ? EstadoFirma.CESION
-                    : EstadoFirma.DESCUENTO;
+                    ? EstadoFirma.CESION : EstadoFirma.DESCUENTO;
 
             estadoEndoso = EstadoEndoso.ACEPTADO;
 
-            // ✅ SOLO AQUÍ SE PUBLICA
             Operacion operacion = Operacion.builder()
                     .tipo(tipoOperacion.getTipo())
                     .clase(tipoOperacion.getClase())
@@ -250,10 +241,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                             operacion,
                             LocalDateTime.now());
 
-            outboxService.guardarEvento(
-                    idNegociacion,
-                    topicLiquidacionSolicitada,
-                    event);
+            outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
 
         } else if (alguienAprobo) {
             estadoFactura = EstadoFirma.EN_APROBACION;
@@ -266,21 +254,6 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         // 5️⃣ PATCH ATÓMICO
         facturaPatchRepository.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), estadoFactura);
         endosoPatchRepository.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), estadoEndoso);
-
-
-        /*Operacion operacion = Operacion.builder()
-                .tipo(tipoOperacion.getTipo())
-                .clase(tipoOperacion.getClase())
-                .build();
-
-        LiquidacionSolicitadaEvent event =
-                new LiquidacionSolicitadaEvent(
-                        idNegociacion,
-                        rutOperador,
-                        factura.getNumeroFactura(),
-                        operacion, LocalDateTime.now());
-
-        outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);*/
 
     }
 
@@ -398,37 +371,22 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 Long funderId = companyRepository.findByNit(fon.getRutFondeador())
                         .map(Company::getIdeCompany)
                         .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Fondeador no encontrado: "
-                                                + fon.getRutFondeador()
-                                ));
+                                new RuntimeException("Fondeador no encontrado: " + fon.getRutFondeador()));
 
-                operadorService.revertirCupoFondeador(
-                        funderId,
-                        payerId,
-                        valorFactura
-                );
+                operadorService.revertirCupoFondeador(funderId, payerId, valorFactura);
             }
         }
     }
 
 
     private void actualizarAprobacionEndoso(
-            String idNegociacion,
-            FacturaNegociada factura,
-            AprobacionActorDto aprobacion
-    ) {
+            String idNegociacion, FacturaNegociada factura, AprobacionActorDto aprobacion) {
 
-        EstadoEndoso estado = aprobacion.isAprobado()
-                ? EstadoEndoso.PENDIENTE
-                : EstadoEndoso.RECHAZADO;
+        EstadoEndoso estado = aprobacion.isAprobado() ? EstadoEndoso.PENDIENTE : EstadoEndoso.RECHAZADO;
 
         endosoPatchRepository.registrarAprobacionActor(
-                idNegociacion,
-                factura.getNumeroFactura(),
-                aprobacion,
-                estado
-        );
+                idNegociacion, factura.getNumeroFactura(),
+                aprobacion, estado);
     }
 
 }

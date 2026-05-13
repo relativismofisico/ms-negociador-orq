@@ -17,10 +17,9 @@ public class AprobacionNegociacion {
 
     @Id
     private String id;
-
     private String negociacionId;
     private String rutEmpresa;
-    private String rol; // PAGADOR, PROVEEDOR, FONDEADOR
+    private String rol;
     private boolean aprobado;
     private String observacion;
     private LocalDateTime fecha;

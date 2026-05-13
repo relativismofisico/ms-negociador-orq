@@ -13,10 +13,10 @@ public class FacturaCuerpoBuilder implements CuerpoNotificacionBuilder<Factura> 
     }
 
     @Override
-    public String construir(Factura f) {
+    public String construir(Factura factura) {
         return "Nueva factura registrada.\n\n" +
-                "Número: " + f.getNumeroFactura() + "\n" +
-                "Proveedor: " + f.getRutProveedor() + "\n" +
-                "Valor: " + f.getValorFactura() + "\n";
+                "Número: " + factura.getNumeroFactura() + "\n" +
+                "Proveedor: " + factura.getRutProveedor() + "\n" +
+                "Valor: " + factura.getValorFactura() + "\n";
     }
 }

@@ -11,9 +11,7 @@ import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
-public class TemplateRenderServiceImpl implements  TemplateRenderService{
-
-    private final MessageTemplateRepository templateRepository;
+public class TemplateRenderServiceImpl implements TemplateRenderService {
 
 
     @Override
@@ -32,49 +30,49 @@ public class TemplateRenderServiceImpl implements  TemplateRenderService{
     ) {
 
         return """
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<meta charset="UTF-8"/>
-<title>Endoso</title>
-</head>
-<body style="font-family: Arial; font-size: 14px;">
-
-<p>%s, %s</p>
-
-<p><strong>Señores:</strong><br/>
-%s<br/>
-%s<br/>
-%s</p>
-
-<p><strong>Referencia:</strong> Endoso en propiedad de factura</p>
-
-<p>
-Yo, actuando en calidad de autorizado por la empresa %s con NIT %s,
-como emisor de la factura %s, manifiesto expresa e irrevocablemente
-que he ENDOSADO EN PROPIEDAD Y %s a favor de %s.
-</p>
-
-<p>
-En consecuencia, al vencimiento debe pagarse directamente
-el importe a %s - %s.
-</p>
-
-<p>
-Suscribo el presente documento en la ciudad de %s,
-a los %s.
-</p>
-
-<br/><br/>
-
-_____________________________<br/>
-Firma Autorizada<br/>
-%s<br/>
-NIT: %s
-
-</body>
-</html>
-""".formatted(
+                <!DOCTYPE html>
+                <html xmlns="http://www.w3.org/1999/xhtml">
+                <head>
+                <meta charset="UTF-8"/>
+                <title>Endoso</title>
+                </head>
+                <body style="font-family: Arial; font-size: 14px;">
+                
+                <p>%s, %s</p>
+                
+                <p><strong>Señores:</strong><br/>
+                %s<br/>
+                %s<br/>
+                %s</p>
+                
+                <p><strong>Referencia:</strong> Endoso en propiedad de factura</p>
+                
+                <p>
+                Yo, actuando en calidad de autorizado por la empresa %s con NIT %s,
+                como emisor de la factura %s, manifiesto expresa e irrevocablemente
+                que he ENDOSADO EN PROPIEDAD Y %s a favor de %s.
+                </p>
+                
+                <p>
+                En consecuencia, al vencimiento debe pagarse directamente
+                el importe a %s - %s.
+                </p>
+                
+                <p>
+                Suscribo el presente documento en la ciudad de %s,
+                a los %s.
+                </p>
+                
+                <br/><br/>
+                
+                _____________________________<br/>
+                Firma Autorizada<br/>
+                %s<br/>
+                NIT: %s
+                
+                </body>
+                </html>
+                """.formatted(
                 ciudadNegociacion,
                 fechaOperacion,
                 nombrePagador,

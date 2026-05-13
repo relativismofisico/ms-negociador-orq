@@ -13,12 +13,12 @@ public class NegociacionCuerpoBuilder implements CuerpoNotificacionBuilder<Negoc
     }
 
     @Override
-    public String construir(Negociacion n) {
+    public String construir(Negociacion negociacion) {
         return "Se ha creado una nueva negociación.\n\n" +
-                "ID: " + n.getId() + "\n" +
-                "Tipo: " + n.getTipoOperacion().getTipo() + "\n" +
-                "Total: " + n.getTotalNegociado() + "\n" +
-                "Facturas: " + n.getFacturas().size() + "\n\n" +
+                "ID: " + negociacion.getId() + "\n" +
+                "Tipo: " + negociacion.getTipoOperacion().getTipo() + "\n" +
+                "Total: " + negociacion.getTotalNegociado() + "\n" +
+                "Facturas: " + negociacion.getFacturas().size() + "\n\n" +
                 "Por favor ingrese a la plataforma para revisar.";
     }
 }
