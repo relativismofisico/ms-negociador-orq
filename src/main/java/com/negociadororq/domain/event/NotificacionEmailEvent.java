@@ -13,6 +13,7 @@ import java.util.Map;
 @AllArgsConstructor
 public class NotificacionEmailEvent {
 
+    private String idEvento;
     private String idNegociacion;
 
     // destinatarios

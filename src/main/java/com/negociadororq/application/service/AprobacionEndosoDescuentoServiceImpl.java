@@ -165,7 +165,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     aprobacion
             );
 
-            actualizarEstadosFacturaEndosoNegociacion(negociacion.getId(), factura, negociacion.getTipoOperacion(), request.getRutOperador());
+            actualizarEstadosFacturaEndosoNegociacion( negociacion, negociacion.getId(), factura, negociacion.getTipoOperacion(), request.getRutOperador());
         }
 
         notificacionService.notificarFirmaEndoso(request);
@@ -186,7 +186,11 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
     }
 
-    private void actualizarEstadosFacturaEndosoNegociacion(String idNegociacion, FacturaNegociada factura, Operacion tipoOperacion, String rutOperador) {
+    private void actualizarEstadosFacturaEndosoNegociacion(Negociacion negociacion,
+                                                           String idNegociacion,
+                                                           FacturaNegociada factura,
+                                                           Operacion tipoOperacion,
+                                                           String rutOperador) {
 
         // 1. Si hay rechazo → RECHAZADA
         boolean hayRechazo = factura.getAprobaciones().stream().anyMatch(a -> !a.isAprobado());
@@ -195,8 +199,14 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             log.info("Reversando cupos por rechazo de factura {}", factura.getNumeroFactura());
 
+            String motivoError =
+                    "La factura "
+                            + factura.getNumeroFactura()
+                            + " fue rechazada durante el proceso de aprobación/endoso";
+
             // Reversar cupos
             revertirCupos(factura, tipoOperacion, factura.getRutProveedor(), rutOperador);
+            notificacionService.notificarLiquidacionFallida(negociacion, motivoError);
             facturaPatchRepository.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), EstadoFirma.RECHAZADA);
             endosoPatchRepository.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), EstadoEndoso.RECHAZADO);
             return;
@@ -220,12 +230,30 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         EstadoEndoso estadoEndoso;
 
         if (todosAprobaron) {
-            estadoFactura = "FACTORING".equalsIgnoreCase(tipoOperacion.getTipo()) ? EstadoFirma.CESION : EstadoFirma.DESCUENTO;
+            estadoFactura = "FACTORING".equalsIgnoreCase(tipoOperacion.getTipo())
+                    ? EstadoFirma.CESION
+                    : EstadoFirma.DESCUENTO;
+
             estadoEndoso = EstadoEndoso.ACEPTADO;
 
-            OperacionRequest request = new OperacionRequest();
-            request.setNumeroFactura(factura.getNumeroFactura());
-            request.setOperacion(operacionMapper.toDto(tipoOperacion));
+            // ✅ SOLO AQUÍ SE PUBLICA
+            Operacion operacion = Operacion.builder()
+                    .tipo(tipoOperacion.getTipo())
+                    .clase(tipoOperacion.getClase())
+                    .build();
+
+            LiquidacionSolicitadaEvent event =
+                    new LiquidacionSolicitadaEvent(
+                            idNegociacion,
+                            rutOperador,
+                            factura.getNumeroFactura(),
+                            operacion,
+                            LocalDateTime.now());
+
+            outboxService.guardarEvento(
+                    idNegociacion,
+                    topicLiquidacionSolicitada,
+                    event);
 
         } else if (alguienAprobo) {
             estadoFactura = EstadoFirma.EN_APROBACION;
@@ -240,7 +268,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         endosoPatchRepository.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), estadoEndoso);
 
 
-        Operacion operacion = Operacion.builder()
+        /*Operacion operacion = Operacion.builder()
                 .tipo(tipoOperacion.getTipo())
                 .clase(tipoOperacion.getClase())
                 .build();
@@ -252,7 +280,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         factura.getNumeroFactura(),
                         operacion, LocalDateTime.now());
 
-        outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
+        outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);*/
 
     }
 

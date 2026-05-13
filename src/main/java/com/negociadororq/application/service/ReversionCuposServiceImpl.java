@@ -19,14 +19,12 @@ import org.springframework.stereotype.Service;
 public class ReversionCuposServiceImpl implements ReversionCuposService {
 
     private final NegociacionRepository negociacionRepository;
-
     private final FacturaRepository facturaRepository;
-
     private final FacturaPatchRepository facturaPatchRepository;
-
     private final EndosoPatchRepository endosoPatchRepository;
-
     private final AprobacionEndosoDescuentoServiceImpl aprobacionService;
+    private final NotificacionService notificacionService;
+
 
     @Override
     public void revertirPorFactura(String numeroFactura, String actorId, String motivo) {
@@ -57,5 +55,18 @@ public class ReversionCuposServiceImpl implements ReversionCuposService {
                         negociacion.getId(), numeroFactura, EstadoEndoso.RECHAZADO);
 
         log.info("Cupos revertidos por fallo de liquidación factura {} motivo {}", numeroFactura, motivo);
+        // ==========================================
+        // 🔥 NOTIFICAR FALLA
+        // ==========================================
+
+        notificacionService.notificarLiquidacionFallida(
+                negociacion,
+                motivo
+        );
+
+        log.info(
+                "Evento de notificación de liquidación fallida generado negociación={}",
+                negociacion.getId()
+        );
     }
 }

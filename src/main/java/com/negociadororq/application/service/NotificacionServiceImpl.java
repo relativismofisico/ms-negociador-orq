@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -281,6 +282,125 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .asunto("FIRMA_ENDOSO")
                 .data(data)
                 .tipoNotificacion(TipoNotificacion.ENDOSO_FIRMADO.name())
+                .fecha(LocalDateTime.now())
+                .build();
+
+        outboxService.guardarEvento(
+                negociacion.getId(),
+                topicNotificacionEmail,
+                event
+        );
+    }
+
+    @Override
+    public void notificarLiquidacionFallida(Negociacion negociacion, String motivo) {
+
+        List<DestinatarioEmail> destinatarios = new ArrayList<>();
+
+        String tipo = negociacion.getTipoOperacion().getTipo();
+
+        // ==========================================
+        // DESTINATARIOS
+        // ==========================================
+
+        if ("FACTORING".equalsIgnoreCase(tipo)) {
+
+            // PAGADOR
+            if (negociacion.getRutPagador() != null) {
+
+                destinatarios.add(
+                        new DestinatarioEmail(
+                                "PAGADOR",
+                                negociacion.getRutPagador(),
+                                "EMPRESA"
+                        )
+                );
+            }
+
+            // PROVEEDORES
+            negociacion.getFacturas().stream()
+                    .map(FacturaNegociada::getRutProveedor)
+                    .distinct()
+                    .forEach(rut ->
+                            destinatarios.add(
+                                    new DestinatarioEmail(
+                                            "PROVEEDOR",
+                                            rut,
+                                            "EMPRESA"
+                                    )
+                            )
+                    );
+
+            // FONDEADORES
+            if (negociacion.getRutFondeadores() != null) {
+
+                negociacion.getRutFondeadores()
+                        .forEach(rut ->
+                                destinatarios.add(
+                                        new DestinatarioEmail(
+                                                "FONDEADOR",
+                                                rut,
+                                                "EMPRESA"
+                                        )
+                                )
+                        );
+            }
+
+        } else if ("CONFIRMING".equalsIgnoreCase(tipo)) {
+
+            // PROVEEDORES
+            negociacion.getFacturas().stream()
+                    .map(FacturaNegociada::getRutProveedor)
+                    .distinct()
+                    .forEach(rut ->
+                            destinatarios.add(
+                                    new DestinatarioEmail(
+                                            "PROVEEDOR",
+                                            rut,
+                                            "EMPRESA"
+                                    )
+                            )
+                    );
+
+            // PAGADOR
+            if (negociacion.getRutPagador() != null) {
+
+                destinatarios.add(
+                        new DestinatarioEmail(
+                                "PAGADOR",
+                                negociacion.getRutPagador(),
+                                "EMPRESA"
+                        )
+                );
+            }
+        }
+
+        // ==========================================
+        // DATA TEMPLATE
+        // ==========================================
+
+        Map<String, Object> data = Map.of(
+                "idNegociacion", negociacion.getId(),
+                "tipoOperacion", negociacion.getTipoOperacion().getTipo(),
+                "motivo", motivo,
+                "totalNegociado", negociacion.getTotalNegociado(),
+                "cantidadFacturas", negociacion.getFacturas().size(),
+                "fecha", LocalDateTime.now().toString()
+        );
+
+        // ==========================================
+        // EVENTO
+        // ==========================================
+
+        NotificacionEmailEvent event = NotificacionEmailEvent.builder()
+                .idEvento(UUID.randomUUID().toString())
+                .idNegociacion(negociacion.getId())
+                .tipoNotificacion(
+                        TipoNotificacion.LIQUIDACION_FALLIDA.name()
+                )
+                .destinatarios(destinatarios)
+                .asunto("LIQUIDACION_FALLIDA")
+                .data(data)
                 .fecha(LocalDateTime.now())
                 .build();
 
