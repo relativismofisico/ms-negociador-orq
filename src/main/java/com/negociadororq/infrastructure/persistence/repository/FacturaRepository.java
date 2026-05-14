@@ -35,4 +35,8 @@ public interface FacturaRepository extends MongoRepository<Factura, String> {
      * 🔍 Busca todas las facturas cuyos números estén en la lista dada
      */
     List<Factura> findByNumeroFacturaIn(List<String> numerosFactura);
+
+    @Query("{ 'estadoNegociacion': { $nin: ['LIQUIDADA', 'VENCIDA', 'RECHAZADA'] } }")
+    List<Factura> findFacturasPendientesVencimiento();
+
 }

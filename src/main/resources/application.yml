@@ -42,4 +42,8 @@ topics:
 negociacion:
   dias-minimos-vencimiento: 10
 
+facturas:
+  vencimiento:
+    cron: "0 0 1 * * *"
+
 
