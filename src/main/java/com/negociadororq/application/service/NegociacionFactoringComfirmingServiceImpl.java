@@ -200,9 +200,13 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                     Long payerCompanyId = resolveCompanyId.apply(factura.getRutPagador());
 
                     // buscar fila en funder (fondeador_quota)
+                    String tipoOperacion = Optional.ofNullable(request.getTipoOperacion())
+                            .map(Operacion::getTipo)
+                            .orElse("FACTORING")
+                            .toUpperCase();
+
                     Optional<FondeadorQuota> fqOpt =
-                            fondeadorQuotaRepository.findByFunderIdAndPayerId(
-                                    funderCompanyId, payerCompanyId);
+                            obtenerQuotaPorOperacion(tipoOperacion, funderCompanyId, supplierCompanyId, payerCompanyId);
 
                     if (fqOpt.isEmpty()) {
                         fondeadorOK = false;
@@ -213,31 +217,17 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                     FondeadorQuota fq = fqOpt.get();
 
                     // decidir qué current_quota revisar según operación
-                    String tipoOp = Optional.ofNullable(request.getTipoOperacion()).map(Operacion::getTipo).orElse("FACTORING").toUpperCase();
-                    if ("FACTORING".equals(tipoOp)) {
-                        // revisar supplier_current_quota
-                        BigDecimal supplierCurrent = fq.getPayerCurrentQuota() == null ? BigDecimal.ZERO : fq.getPayerCurrentQuota();
-                        if (supplierCurrent.compareTo(valorFactura) < 0) {
-                            fondeadorOK = false;
-                            motivosFondeador.add("Fondeador " + fon.getRutFondeador() + " no tiene supplier_current_quota suficiente para factura " + numero + ". Disponible: " + supplierCurrent + ", requerido: " + valorFactura);
-                            break;
-                        }
-                    } else if ("CONFIRMING".equals(tipoOp)) {
-                        // revisar payer_current_quota
-                        BigDecimal payerCurrent = fq.getPayerCurrentQuota() == null ? BigDecimal.ZERO : fq.getPayerCurrentQuota();
-                        if (payerCurrent.compareTo(valorFactura) < 0) {
-                            fondeadorOK = false;
-                            motivosFondeador.add("Fondeador " + fon.getRutFondeador() + " no tiene payer_current_quota suficiente para factura " + numero + ". Disponible: " + payerCurrent + ", requerido: " + valorFactura);
-                            break;
-                        }
-                    } else {
-                        // default: revisar supplier_current_quota
-                        BigDecimal supplierCurrent = fq.getPayerCurrentQuota()== null ? BigDecimal.ZERO : fq.getPayerCurrentQuota();
-                        if (supplierCurrent.compareTo(valorFactura) < 0) {
-                            fondeadorOK = false;
-                            motivosFondeador.add("Fondeador " + fon.getRutFondeador() + " no tiene supplier_current_quota suficiente (operación desconocida).");
-                            break;
-                        }
+                    String tipoOp = Optional.ofNullable(request.getTipoOperacion()).map(Operacion::getTipo)
+                            .orElse("FACTORING").toUpperCase();
+
+                    BigDecimal cupoDisponible = obtenerCupoDisponiblePorOperacion(tipoOperacion, fq);
+
+                    if (cupoDisponible.compareTo(valorFactura) < 0) {
+                        fondeadorOK = false;
+                        motivosFondeador.add(
+                                "Fondeador " + fon.getRutFondeador() + " no tiene cupo suficiente para factura "
+                                        + numero + ". Disponible: " + cupoDisponible + ", requerido: " + valorFactura);
+                        break;
                     }
                 } // end for fondeadores
 
@@ -269,17 +259,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                         FondeadorQuota fq = fondeadorQuotaRepository.findByFunderIdAndPayerId(
                                         funderCompanyId, payerCompanyId)
                                 .orElseThrow(() -> new RuntimeException("Quota fondeador desapareció durante la operación"));
-                        //TODO AJUSTAR CUPO SEGUN OPERCION
-                        if ("FACTORING".equals(tipoOperacion)) {
-                            BigDecimal nuevoSupplier = fq.getPayerCurrentQuota().subtract(valorFactura).max(BigDecimal.ZERO);
-                            fq.setPayerCurrentQuota(nuevoSupplier);
-                        } else if ("CONFIRMING".equals(tipoOperacion)) {
-                            BigDecimal nuevoPayer = fq.getPayerCurrentQuota().subtract(valorFactura).max(BigDecimal.ZERO);
-                            fq.setPayerCurrentQuota(nuevoPayer);
-                        } else {
-                            BigDecimal nuevoSupplier = fq.getPayerCurrentQuota().subtract(valorFactura).max(BigDecimal.ZERO);
-                            fq.setPayerCurrentQuota(nuevoSupplier);
-                        }
+
+                        descontarCupoFondeador(tipoOperacion, fq, valorFactura);
                         fondeadorQuotaRepository.save(fq);
                     }
 
@@ -412,7 +393,9 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         };
     }
 
-    private void validarPermisoOperacion(String tipoOperacion, String rutEmpresaRequest, Factura factura) {
+    private void validarPermisoOperacion(String tipoOperacion,
+                                         String rutEmpresaRequest,
+                                         Factura factura) {
 
         if (tipoOperacion == null) {
             throw new RuntimeException("Tipo de operación no informado");
@@ -420,10 +403,14 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
         String tipo = tipoOperacion.toUpperCase();
 
+        String rutEmpresa = normalizarNit(rutEmpresaRequest);
+
         if ("FACTORING".equals(tipo)) {
 
-            // SOLO el proveedor puede negociar
-            if (!rutEmpresaRequest.equalsIgnoreCase(factura.getRutProveedor())) {
+            String rutProveedor = normalizarNit(factura.getRutProveedor());
+
+            if (!rutEmpresa.equals(rutProveedor)) {
+
                 throw new RuntimeException(
                         "Operación FACTORING solo puede ser realizada por el proveedor de la factura. " +
                                 "Empresa solicitante: " + rutEmpresaRequest +
@@ -433,10 +420,12 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
         } else if ("CONFIRMING".equals(tipo)) {
 
-            // SOLO el pagador puede negociar
-            if (!rutEmpresaRequest.equalsIgnoreCase(factura.getRutPagador())) {
+            String rutPagador = normalizarNit(factura.getRutPagador());
+
+            if (!rutEmpresa.equals(rutPagador)) {
+
                 throw new RuntimeException(
-                        "Operación CONFIRMING solo puede ser realizada por la empresa pagadora de la factura. " +
+                        "Operación CONFIRMING solo puede ser realizada por el pagador de la factura. " +
                                 "Empresa solicitante: " + rutEmpresaRequest +
                                 ", pagador factura: " + factura.getRutPagador()
                 );
@@ -447,5 +436,69 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         }
     }
 
+
+    private Optional<FondeadorQuota> obtenerQuotaPorOperacion(String tipoOperacion, Long funderId,
+                                                              Long supplierId, Long payerId) {
+
+        if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
+            return fondeadorQuotaRepository
+                    .findByFunderIdAndSupplierId(funderId, supplierId);
+        }
+
+        if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
+            return fondeadorQuotaRepository
+                    .findByFunderIdAndPayerId(funderId, payerId);
+        }
+        throw new RuntimeException("Tipo operación no soportado: " + tipoOperacion);
+    }
+
+    private BigDecimal obtenerCupoDisponiblePorOperacion(String tipoOperacion, FondeadorQuota quota) {
+
+        if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
+            return quota.getSupplierCurrentQuota() == null ? BigDecimal.ZERO : quota.getSupplierCurrentQuota();
+        }
+
+        if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
+            return quota.getPayerCurrentQuota() == null ? BigDecimal.ZERO : quota.getPayerCurrentQuota();
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private void descontarCupoFondeador(String tipoOperacion, FondeadorQuota quota, BigDecimal valorFactura) {
+        if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
+
+            BigDecimal actual = quota.getSupplierCurrentQuota();
+
+            if (actual == null) {
+                actual = BigDecimal.ZERO;
+            }
+
+            quota.setSupplierCurrentQuota(actual.subtract(valorFactura).max(BigDecimal.ZERO));
+
+            return;
+        }
+
+        if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
+
+            BigDecimal actual = quota.getPayerCurrentQuota();
+
+            if (actual == null) {
+                actual = BigDecimal.ZERO;
+            }
+
+            quota.setPayerCurrentQuota(actual.subtract(valorFactura).max(BigDecimal.ZERO));
+        }
+    }
+
+    private String normalizarNit(String nit) {
+        if (nit == null) {
+            return "";
+        }
+
+        return nit.replace(".", "")
+                .replace("-", "")
+                .replace(" ", "")
+                .trim()
+                .toUpperCase();}
 
 }

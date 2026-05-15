@@ -82,15 +82,18 @@ public class NotificacionServiceImpl implements NotificacionService {
         // 🔥 EVENTO
         // =========================
 
-        Map<String, Object> data = Map.of(
+        Map<String, Object> data = safeMap(
                 "id", negociacion.getId(),
-                "tipoOperacion", negociacion.getTipoOperacion().getTipo(),
+                "tipoOperacion", negociacion.getTipoOperacion() != null
+                        ? negociacion.getTipoOperacion().getTipo()
+                        : null,
                 "rutPagador", negociacion.getRutPagador(),
                 "rutProveedor", negociacion.getRutProveedor(),
                 "rutFondeadores", negociacion.getRutFondeadores(),
                 "totalNegociado", negociacion.getTotalNegociado(),
-                "facturas", negociacion.getFacturas().size()
-
+                "facturas", negociacion.getFacturas() != null
+                        ? negociacion.getFacturas().size()
+                        : 0
         );
 
         NotificacionEmailEvent event = NotificacionEmailEvent.builder()
@@ -263,13 +266,18 @@ public class NotificacionServiceImpl implements NotificacionService {
         // 🔥 DATA PARA TEMPLATE
         // =========================
 
-        Map<String, Object> data = Map.of(
-                "idNegociacion", negociacion.getId(),
-                "firmante", rutFirmante,
-                "tipoOperacion", tipo,
-                "estado", "FIRMADO",
-                "observacion", aprobacion.getObservacion() != null ? aprobacion.getObservacion() : "N/A",
-                "cantidadFacturas", aprobacion.getFacturas().size()
+        Map<String, Object> data = safeMap(
+                "id", negociacion.getId(),
+                "tipoOperacion", negociacion.getTipoOperacion() != null
+                        ? negociacion.getTipoOperacion().getTipo()
+                        : null,
+                "rutPagador", negociacion.getRutPagador(),
+                "rutProveedor", negociacion.getRutProveedor(),
+                "rutFondeadores", negociacion.getRutFondeadores(),
+                "totalNegociado", negociacion.getTotalNegociado(),
+                "facturas", negociacion.getFacturas() != null
+                        ? negociacion.getFacturas().size()
+                        : 0
         );
 
         // =========================
@@ -379,13 +387,18 @@ public class NotificacionServiceImpl implements NotificacionService {
         // DATA TEMPLATE
         // ==========================================
 
-        Map<String, Object> data = Map.of(
-                "idNegociacion", negociacion.getId(),
-                "tipoOperacion", negociacion.getTipoOperacion().getTipo(),
-                "motivo", motivo,
+        Map<String, Object> data = safeMap(
+                "id", negociacion.getId(),
+                "tipoOperacion", negociacion.getTipoOperacion() != null
+                        ? negociacion.getTipoOperacion().getTipo()
+                        : null,
+                "rutPagador", negociacion.getRutPagador(),
+                "rutProveedor", negociacion.getRutProveedor(),
+                "rutFondeadores", negociacion.getRutFondeadores(),
                 "totalNegociado", negociacion.getTotalNegociado(),
-                "cantidadFacturas", negociacion.getFacturas().size(),
-                "fecha", LocalDateTime.now().toString()
+                "facturas", negociacion.getFacturas() != null
+                        ? negociacion.getFacturas().size()
+                        : 0
         );
 
         // ==========================================
@@ -411,5 +424,23 @@ public class NotificacionServiceImpl implements NotificacionService {
         );
     }
 
+    private Map<String, Object> safeMap(Object... values) {
+
+        if (values.length % 2 != 0) {
+            throw new IllegalArgumentException("La cantidad de argumentos debe ser par");
+        }
+
+        Map<String, Object> map = new java.util.HashMap<>();
+
+        for (int i = 0; i < values.length; i += 2) {
+
+            String key = String.valueOf(values[i]);
+            Object value = values[i + 1];
+
+            map.put(key, value);
+        }
+
+        return map;
+    }
 
 }

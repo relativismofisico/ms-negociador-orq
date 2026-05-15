@@ -7,4 +7,5 @@ import java.util.Optional;
 
 public interface FondeadorQuotaRepository extends JpaRepository<FondeadorQuota, Long> {
     Optional<FondeadorQuota> findByFunderIdAndPayerId(Long funderId, Long payerId);
+    Optional<FondeadorQuota> findByFunderIdAndSupplierId(Long funderId, Long supplierId);
 }

@@ -29,12 +29,7 @@ public class FondeadorQuota {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "payer_quota")
-    private BigDecimal payerQuota;
 
-
-
-    // Estos tres campos almacenan RUTs, no IDs
     @Column(name = "funder_id")
     private Long funderId;
 
@@ -44,8 +39,23 @@ public class FondeadorQuota {
     @Column(name = "payer_id")
     private Long payerId;
 
+    /**
+     * Cupos máximos
+     */
+    @Column(name = "payer_quota")
+    private BigDecimal payerQuota;
+
+    @Column(name = "supplier_quota")
+    private BigDecimal supplierQuota;
+
+    /**
+     * Cupos disponibles actuales
+     */
     @Column(name = "payer_current_quota")
     private BigDecimal payerCurrentQuota;
+
+    @Column(name = "supplier_current_quota")
+    private BigDecimal supplierCurrentQuota;
 
 
 }
