@@ -1,42 +1,68 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.domain.model.Factura;
-import com.negociadororq.domain.model.FacturaNegociada;
-import com.negociadororq.domain.model.Negociacion;
+import com.negociadororq.domain.model.*;
 import com.negociadororq.enums.EstadoEndoso;
 import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.infrastructure.persistence.repository.EndosoPatchRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
-import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
+import com.negociadororq.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ReversionCuposServiceImpl implements ReversionCuposService {
+public class ReversionCuposServiceImpl
+        implements ReversionCuposService {
 
     private final NegociacionRepository negociacionRepository;
     private final FacturaRepository facturaRepository;
     private final FacturaPatchRepository facturaPatchRepository;
     private final EndosoPatchRepository endosoPatchRepository;
-    private final AprobacionEndosoDescuentoServiceImpl aprobacionService;
+
+    private final OperadorService operadorService;
+    private final UserRepository userRepository;
+    private final CompanyRepository companyRepository;
+
     private final NotificacionService notificacionService;
 
-
     @Override
-    public void revertirPorFactura(String numeroFactura, String actorId, String motivo) {
+    @Transactional
+    public void revertirPorFactura(
+            String numeroFactura,
+            String actorId,
+            String motivo) {
 
-        Factura factura = facturaRepository.findByNumeroFactura(numeroFactura)
-                .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
+        // ==========================================
+        // FACTURA
+        // ==========================================
 
-        Negociacion negociacion = negociacionRepository.findByNumeroFactura(numeroFactura)
+        Factura factura =
+                facturaRepository
+                        .findByNumeroFactura(numeroFactura)
                         .orElseThrow(() ->
-                                new RuntimeException("Negociación no encontrada"));
+                                new RuntimeException(
+                                        "Factura no encontrada"));
 
-        FacturaNegociada facturaNegociada = negociacion.getFacturas()
+        // ==========================================
+        // NEGOCIACIÓN
+        // ==========================================
+
+        Negociacion negociacion =
+                negociacionRepository
+                        .findByNumeroFactura(numeroFactura)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Negociación no encontrada"));
+
+        // ==========================================
+        // FACTURA NEGOCIADA
+        // ==========================================
+
+        FacturaNegociada facturaNegociada =
+                negociacion.getFacturas()
                         .stream()
                         .filter(f ->
                                 f.getNumeroFactura()
@@ -44,29 +70,151 @@ public class ReversionCuposServiceImpl implements ReversionCuposService {
                         .findFirst()
                         .orElseThrow();
 
-        aprobacionService.revertirCupos(
-                facturaNegociada, negociacion.getTipoOperacion(),
-                facturaNegociada.getRutProveedor(), actorId);
-
-        facturaPatchRepository.actualizarEstadoFirmaPorNoFactura(
-                        numeroFactura, EstadoFirma.RECHAZADA);
-
-        endosoPatchRepository.actualizarEstadoEndosoPorNoFactura(
-                        negociacion.getId(), numeroFactura, EstadoEndoso.RECHAZADO);
-
-        log.info("Cupos revertidos por fallo de liquidación factura {} motivo {}", numeroFactura, motivo);
         // ==========================================
-        // 🔥 NOTIFICAR FALLA
+        // TIPO OPERACIÓN
+        // ==========================================
+
+        String tipoOperacion =
+                negociacion.getTipoOperacion()
+                        .getTipo()
+                        .toUpperCase();
+
+        // ==========================================
+        // VALOR
+        // ==========================================
+
+        BigDecimal valor =
+                facturaNegociada.getValorFactura();
+
+        // ==========================================
+        // REVERSAR CUPO OPERADOR
+        // ==========================================
+
+        Long userId =
+                userRepository
+                        .findByUsername(actorId)
+                        .map(User::getIdeUser)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Usuario no encontrado"));
+
+        operadorService.revertirCupoUsuario(
+                userId,
+                valor);
+
+        // ==========================================
+        // REVERSAR CUPO EMPRESA
+        // ==========================================
+
+        Long companyId =
+                companyRepository
+                        .findByNit(negociacion.getRutEmpresa())
+                        .map(Company::getIdeCompany)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Empresa no encontrada"));
+
+        operadorService.revertirCupoEmpresa(
+                companyId,
+                valor);
+
+        // ==========================================
+        // REVERSAR CUPOS FONDEADORES
+        // ==========================================
+
+        if (facturaNegociada.getFondeadores() != null) {
+
+            for (FondeadorAsignacion fon :
+                    facturaNegociada.getFondeadores()) {
+
+                Long funderId =
+                        companyRepository
+                                .findByNit(fon.getRutFondeador())
+                                .map(Company::getIdeCompany)
+                                .orElseThrow(() ->
+                                        new RuntimeException(
+                                                "Fondeador no encontrado"));
+
+                // ==================================
+                // FACTORING
+                // ==================================
+
+                if ("FACTORING".equals(tipoOperacion)) {
+
+                    Long supplierId =
+                            companyRepository
+                                    .findByNit(
+                                            factura.getRutProveedor())
+                                    .map(Company::getIdeCompany)
+                                    .orElseThrow(() ->
+                                            new RuntimeException(
+                                                    "Proveedor no encontrado"));
+
+                    operadorService
+                            .revertirCupoFondeadorFactoring(
+                                    funderId,
+                                    supplierId,
+                                    valor);
+                }
+
+                // ==================================
+                // CONFIRMING
+                // ==================================
+
+                if ("CONFIRMING".equals(tipoOperacion)) {
+
+                    Long payerId =
+                            companyRepository
+                                    .findByNit(
+                                            factura.getRutPagador())
+                                    .map(Company::getIdeCompany)
+                                    .orElseThrow(() ->
+                                            new RuntimeException(
+                                                    "Pagador no encontrado"));
+
+                    operadorService
+                            .revertirCupoFondeadorConfirming(
+                                    funderId,
+                                    payerId,
+                                    valor);
+                }
+            }
+        }
+
+        // ==========================================
+        // ACTUALIZAR ESTADOS
+        // ==========================================
+
+        facturaPatchRepository
+                .actualizarEstadoFirmaPorNoFactura(
+                        numeroFactura,
+                        EstadoFirma.RECHAZADA);
+
+        endosoPatchRepository
+                .actualizarEstadoEndosoPorNoFactura(
+                        negociacion.getId(),
+                        numeroFactura,
+                        EstadoEndoso.RECHAZADO);
+
+        // ==========================================
+        // LOG
+        // ==========================================
+
+        log.info(
+                "Cupos revertidos factura={} motivo={}",
+                numeroFactura,
+                motivo);
+
+        // ==========================================
+        // NOTIFICACIÓN
         // ==========================================
 
         notificacionService.notificarLiquidacionFallida(
                 negociacion,
-                motivo
-        );
+                motivo);
 
         log.info(
-                "Evento de notificación de liquidación fallida generado negociación={}",
-                negociacion.getId()
-        );
+                "Notificación enviada negociación={}",
+                negociacion.getId());
     }
 }

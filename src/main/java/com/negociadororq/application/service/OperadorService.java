@@ -16,6 +16,8 @@ public interface OperadorService {
 
     void revertirCupoEmpresa(Long companyId, BigDecimal valor);
 
-    void revertirCupoFondeador(Long funderId, Long payerId, BigDecimal valor);
+    void revertirCupoFondeadorConfirming(Long funderId, Long payerId, BigDecimal valor);
+
+    void revertirCupoFondeadorFactoring(Long funderId, Long supplierId, BigDecimal valor);
 
 }

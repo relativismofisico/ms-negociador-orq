@@ -25,14 +25,11 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
     private final FacturaRepository facturaRepository;
     private final NegociacionRepository negociacionRepository;
-    private final OperadorService operadorService;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
-    private final EmpresaQuotaRepository empresaQuotaRepository;
     private final FondeadorQuotaRepository fondeadorQuotaRepository;
-    private final FacturaPatchRepository facturaPatchRepository;
     private final NotificacionService notificacionService;
-    private final ValidacionFacturaService validacionFacturaService;
+    private final ProcesarFacturaNegociacionService procesarFacturaNegociacionService;
 
 
     /**
@@ -86,217 +83,21 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         // Recorremos factura a factura y procesamos (validación por factura)
         List<NegociacionResponseDto> negociacionesCreadas = new ArrayList<>();
 
+        for (FacturaNegociada facturaReq : request.getFacturas()) {
 
-        for (Map.Entry<String, List<FacturaNegociada>> entry : facturasPorPagador.entrySet()) {
+            try {
+                FacturaNegociada procesada = procesarFacturaNegociacionService.procesarFactura(request, facturaReq);
+                facturasAceptadas.add(procesada);
 
-            List<FacturaNegociada> facturasDelPagador = entry.getValue();
+            } catch (Exception e) {
+                log.error("Error procesando factura {}", facturaReq.getNumeroFactura(), e);
 
-            for (FacturaNegociada reqFact : Optional.ofNullable(facturasDelPagador)
-                    .orElse(Collections.emptyList())) {
-
-                String numero = reqFact.getNumeroFactura();
-
-                Optional<Factura> optFactura = facturaRepository.findByNumeroFactura(numero);
-                if (optFactura.isEmpty()) {
-                    String msg = "Factura no encontrada: " + numero;
-                    errores.add(msg);
-                    facturasRechazadas.add(numero + " -> " + msg);
-                    continue;
-                }
-
-                Factura factura = optFactura.get();
-
-                //Validamos fecha de vencimiento de la factura
-                ValidacionFacturaResponseDto validacionVencimiento =
-                        validacionFacturaService.validarFacturaVencida(factura.getNumeroFactura(), null);
-
-                if (!validacionVencimiento.isValida()) {
-                    errores.add(validacionVencimiento.getMensaje());
-                    facturasRechazadas.add(numero + " -> " + validacionVencimiento.getMensaje());
-                    continue;
-                }
-
-                // 🔥 VALIDACIÓN DE PERMISOS SEGÚN TIPO DE OPERACIÓN
-                try {
-                    validarPermisoOperacion(
-                            request.getTipoOperacion().getTipo(),
-                            request.getRutEmpresa(),
-                            factura
-                    );
-                } catch (RuntimeException e) {
-                    errores.add(e.getMessage());
-                    facturasRechazadas.add(numero + " -> " + e.getMessage());
-                    throw new RuntimeException("No autorizado para negociar esta factura");
-                }
-
-
-                // validar estado origen
-                if (!"SIN_NEGOCIAR".equalsIgnoreCase(factura.getEstadoNegociacion())) {
-                    String msg = "Factura " + numero + " no puede negociarse (estado: " + factura.getEstadoNegociacion() + ")";
-                    errores.add(msg);
-                    facturasRechazadas.add(numero + " -> " + msg);
-                    continue;
-                }
-
-                // valor de la factura
-                BigDecimal valorFactura = Optional.ofNullable(factura.getValorNetoFactura())
-                        .orElse(factura.getValorFactura());
-                if (valorFactura == null) valorFactura = BigDecimal.ZERO;
-
-                // 1) Validar cupo operador
-                BigDecimal cupoOperador = operadorService.obtenerCupoDisponible(userId);
-                if (cupoOperador == null) cupoOperador = BigDecimal.ZERO;
-                if (cupoOperador.compareTo(valorFactura) < 0) {
-                    String msg = "Operador sin cupo suficiente para factura " + numero;
-                    errores.add(msg);
-                    facturasRechazadas.add(numero + " -> " + msg);
-                    continue;
-                }
-
-                // 2) Validar cupo empresa a la que pertenece el usuario (empresaQuota)
-                Long companyIdOperador = resolveCompanyId.apply(request.getRutEmpresa()); // si rutEmpresa es NIT de la company
-                EmpresaQuota empresaQuota = empresaQuotaRepository.findByCompanyId(companyIdOperador)
-                        .orElse(null);
-
-                if (empresaQuota == null) {
-                    String msg = "No existe cuota configurada para la empresa del operador (companyId " + companyIdOperador + ")";
-                    errores.add(msg);
-                    facturasRechazadas.add(numero + " -> " + msg);
-                    continue;
-                }
-                if (empresaQuota.getCurrentQuota().compareTo(valorFactura) < 0) {
-                    String msg = "Empresa (ID " + companyIdOperador + ") sin cupo suficiente para factura " + numero + ". Disponible: " + empresaQuota.getCurrentQuota() + ", requerido: " + valorFactura;
-                    errores.add(msg);
-                    facturasRechazadas.add(numero + " -> " + msg);
-                    continue;
-                }
-
-                // 3) Determinar fondeadores a usar para esta factura (si request trae fondeadores particulares, usarlos; si no, usar globales)
-                List<FondeadorAsignacion> fondeadoresUsados =
-                        (reqFact.getFondeadores() != null && !reqFact.getFondeadores().isEmpty())
-                                ? reqFact.getFondeadores()
-                                : Optional.ofNullable(request.getFondeadoresGlobales())
-                                .orElse(Collections.emptyList());
-
-                if (fondeadoresUsados == null) fondeadoresUsados = Collections.emptyList();
-
-                if (fondeadoresUsados.isEmpty()) {
-                    // si no hay fondeadores, aceptamos solo si la lógica de negocio lo permite.
-                    // Aquí suponemos que al menos debe haber un fondeador; si no, rechazamos.
-                    String msg = "Factura " + numero + " no tiene fondeador asignado";
-                    errores.add(msg);
-                    facturasRechazadas.add(numero + " -> " + msg);
-                    continue;
-                }
-
-                // 4) Para cada fondeador validar su cupo con esta relación (funder_id,supplier_id,payer_id)
-                boolean fondeadorOK = true;
-                List<String> motivosFondeador = new ArrayList<>();
-
-                for (FondeadorAsignacion fon : fondeadoresUsados) {
-                    // obtener IDs de company para funder, supplier y payer (supplier/payer provienen de la factura)
-                    Long funderCompanyId = resolveCompanyId.apply(fon.getRutFondeador());
-                    Long supplierCompanyId = resolveCompanyId.apply(factura.getRutProveedor());
-                    Long payerCompanyId = resolveCompanyId.apply(factura.getRutPagador());
-
-                    // buscar fila en funder (fondeador_quota)
-                    String tipoOperacion = Optional.ofNullable(request.getTipoOperacion())
-                            .map(Operacion::getTipo)
-                            .orElse("FACTORING")
-                            .toUpperCase();
-
-                    Optional<FondeadorQuota> fqOpt =
-                            obtenerQuotaPorOperacion(tipoOperacion, funderCompanyId, supplierCompanyId, payerCompanyId);
-
-                    if (fqOpt.isEmpty()) {
-                        fondeadorOK = false;
-                        motivosFondeador.add("No existe quota fondeador para funderId=" + funderCompanyId +  ", payerId=" + payerCompanyId);
-                        break;
-                    }
-
-                    FondeadorQuota fq = fqOpt.get();
-
-                    // decidir qué current_quota revisar según operación
-                    String tipoOp = Optional.ofNullable(request.getTipoOperacion()).map(Operacion::getTipo)
-                            .orElse("FACTORING").toUpperCase();
-
-                    BigDecimal cupoDisponible = obtenerCupoDisponiblePorOperacion(tipoOperacion, fq);
-
-                    if (cupoDisponible.compareTo(valorFactura) < 0) {
-                        fondeadorOK = false;
-                        motivosFondeador.add(
-                                "Fondeador " + fon.getRutFondeador() + " no tiene cupo suficiente para factura "
-                                        + numero + ". Disponible: " + cupoDisponible + ", requerido: " + valorFactura);
-                        break;
-                    }
-                } // end for fondeadores
-
-                if (!fondeadorOK) {
-                    String razon = String.join("; ", motivosFondeador);
-                    errores.add("Factura " + numero + " rechazada por fondeador: " + razon);
-                    facturasRechazadas.add(numero + " -> " + razon);
-                    continue;
-                }
-
-                // === Si llegamos hasta aquí: TODOS los checks pasaron para esta factura ===
-                // Procedemos a aplicar los cambios (descontar cupos y actualizar factura)
-                try {
-                    // Descontar cupo operador (cada factura)
-                    operadorService.descontarCupo(userId, valorFactura);
-
-                    // Descontar cupo empresa
-                    BigDecimal nuevoEmpresaCupo = empresaQuota.getCurrentQuota().subtract(valorFactura).max(BigDecimal.ZERO);
-                    empresaQuota.setCurrentQuota(nuevoEmpresaCupo);
-                    empresaQuotaRepository.save(empresaQuota);
-
-                    // Descontar cupo de cada fondeador en su relación
-                    String tipoOperacion = Optional.ofNullable(request.getTipoOperacion()).map(Operacion::getTipo).orElse("FACTORING").toUpperCase();
-                    for (FondeadorAsignacion fon : fondeadoresUsados) {
-                        Long funderCompanyId = resolveCompanyId.apply(fon.getRutFondeador());
-                        Long supplierCompanyId = resolveCompanyId.apply(factura.getRutProveedor());
-                        Long payerCompanyId = resolveCompanyId.apply(factura.getRutPagador());
-
-                        FondeadorQuota fq = fondeadorQuotaRepository.findByFunderIdAndPayerId(
-                                        funderCompanyId, payerCompanyId)
-                                .orElseThrow(() -> new RuntimeException("Quota fondeador desapareció durante la operación"));
-
-                        descontarCupoFondeador(tipoOperacion, fq, valorFactura);
-                        fondeadorQuotaRepository.save(fq);
-                    }
-
-                    // Actualizar factura: estados y actores
-                    List<FondeadorAsignacion> finalFondeadores = fondeadoresUsados;
-                    List<ActorFactura> actoresActualizados = Optional.ofNullable(factura.getActores())
-                            .orElse(new ArrayList<>())
-                            .stream()
-                            .filter(a -> !"FONDEADOR".equalsIgnoreCase(a.getRolEmpresaFactura()))
-                            .collect(Collectors.toList());
-                    for (FondeadorAsignacion fon : finalFondeadores) {
-                        actoresActualizados.add(new ActorFactura(fon.getRutFondeador(), "FONDEADOR"));
-                    }
-
-                    EstadoFirma estadoFirma = calcularEstadoFirma(request.getTipoOperacion().getTipo());
-
-                    facturaPatchRepository.marcarComoNegociada(factura.getId(), estadoFirma, actoresActualizados);
-                    // construir DTO aceptado
-                    reqFact.setFondeadores(finalFondeadores);
-                    reqFact.setRutProveedor(factura.getRutProveedor());
-                    reqFact.setRutPagador(factura.getRutPagador());
-                    reqFact.setEstadoCreacionEndoso(false);
-                    reqFact.setValorFactura(factura.getValorFactura());
-                    facturasAceptadas.add(reqFact);
-
-                } catch (Exception e) {
-                    // si falla la aplicación de cambios en esta factura, añadir al rechazo con motivo
-                    String msg = "Error aplicando cambios a factura " + numero + ": " + e.getMessage();
-                    log.error(msg, e);
-                    errores.add(msg);
-                    facturasRechazadas.add(numero + " -> " + msg);
-                }
-            } // end for each factura
-
-
+                errores.add(e.getMessage());
+                facturasRechazadas.add(facturaReq.getNumeroFactura() + " -> " + e.getMessage());
+            }
         }
+
+
         Set<String> pagadores = facturasPorPagador.keySet();
 
         // Construir negociación resumen con estado según resultados
@@ -328,6 +129,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                 .map(FondeadorAsignacion::getRutFondeador)
                 .distinct()
                 .collect(Collectors.toList()));
+
         // total negociado = suma aceptadas
         BigDecimal totalAceptado = facturasAceptadas.stream()
                 .map(f -> Optional.ofNullable(f.getValorFactura()).orElse(BigDecimal.ZERO))
@@ -501,4 +303,4 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                 .trim()
                 .toUpperCase();}
 
-}
+    }

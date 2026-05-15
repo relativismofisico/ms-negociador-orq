@@ -73,10 +73,7 @@ public class OperadorServiceImpl implements OperadorService{
     public void revertirCupoEmpresa(Long companyId,
                                     BigDecimal valor) {
 
-        EmpresaQuota empresaQuota =
-                empresaQuotaRepository
-                        .findByCompanyId(companyId)
-                        .orElseThrow();
+        EmpresaQuota empresaQuota = empresaQuotaRepository.findByCompanyId(companyId).orElseThrow();
 
         valor = valor.abs();
 
@@ -95,18 +92,66 @@ public class OperadorServiceImpl implements OperadorService{
 
     @Override
     @Transactional
-    public void revertirCupoFondeador(Long funderId, Long payerId, BigDecimal valor) {
+    public void revertirCupoFondeadorConfirming(Long funderId, Long payerId, BigDecimal valor) {
 
-        FondeadorQuota quota = fondeadorQuotaRepository
-                .findByFunderIdAndPayerId(funderId, payerId)
-                .orElseThrow(() ->
-                        new RuntimeException("No existe cupo para funderId=" + funderId + " payerId=" + payerId));
+        FondeadorQuota quota = fondeadorQuotaRepository.findByFunderIdAndPayerId(funderId, payerId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "No existe cupo confirming para funderId="
+                                                + funderId
+                                                + " payerId="
+                                                + payerId));
 
-        BigDecimal cupoActual = Optional.ofNullable(quota.getPayerCurrentQuota()).orElse(BigDecimal.ZERO);
+        BigDecimal actual =
+                Optional.ofNullable(quota.getPayerCurrentQuota())
+                        .orElse(BigDecimal.ZERO);
 
-        quota.setPayerCurrentQuota(cupoActual.add(valor));
+        BigDecimal nuevo = actual.add(valor.abs());
+
+        if (quota.getPayerQuota() != null
+                && nuevo.compareTo(quota.getPayerQuota()) > 0) {
+
+            nuevo = quota.getPayerQuota();
+        }
+
+        quota.setPayerCurrentQuota(nuevo);
 
         fondeadorQuotaRepository.save(quota);
+
+        log.info("Cupo confirming revertido funderId={} payerId={} valor={}", funderId, payerId, valor);
+    }
+
+    @Override
+    @Transactional
+    public void revertirCupoFondeadorFactoring(Long funderId, Long supplierId, BigDecimal valor) {
+
+        FondeadorQuota quota =
+                fondeadorQuotaRepository
+                        .findByFunderIdAndSupplierId(funderId, supplierId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "No existe cupo factoring para funderId="
+                                                + funderId
+                                                + " supplierId="
+                                                + supplierId));
+
+        BigDecimal actual =
+                Optional.ofNullable(quota.getSupplierCurrentQuota())
+                        .orElse(BigDecimal.ZERO);
+
+        BigDecimal nuevo = actual.add(valor.abs());
+
+        if (quota.getSupplierQuota() != null
+                && nuevo.compareTo(quota.getSupplierQuota()) > 0) {
+
+            nuevo = quota.getSupplierQuota();
+        }
+
+        quota.setSupplierCurrentQuota(nuevo);
+
+        fondeadorQuotaRepository.save(quota);
+
+        log.info("Cupo factoring revertido funderId={} supplierId={} valor={}", funderId, supplierId, valor);
     }
 
 }
