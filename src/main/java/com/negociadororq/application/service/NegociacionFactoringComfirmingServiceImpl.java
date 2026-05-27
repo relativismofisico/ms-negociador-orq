@@ -301,7 +301,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                 .replace("-", "")
                 .replace(" ", "")
                 .trim()
-add                .toUpperCase();
+                .toUpperCase();
     }
 
 }
