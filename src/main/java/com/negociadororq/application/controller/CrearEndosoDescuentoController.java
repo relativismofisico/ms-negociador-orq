@@ -5,6 +5,7 @@ import com.negociadororq.application.controller.dto.EndosoResponseDto;
 import com.negociadororq.application.service.EndosoDescuentoService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,7 +28,8 @@ public class CrearEndosoDescuentoController {
      *
      * */
     @Operation(summary = "Permite realizar el endoso de una o varias fcturas de una negociacion")
-
+    // 201 CREATED: se persisten nuevos recursos Endoso en MongoDB
+    // ⚠ RIESGO DE COMPATIBILIDAD: clientes que esperan 200 deben actualizarse a aceptar 201
     @PostMapping("/{idNegociacion}/endosos")
     public ResponseEntity<EndosoResponseDto> registrarEndoso(
             @PathVariable String idNegociacion,
@@ -35,6 +37,6 @@ public class CrearEndosoDescuentoController {
 
         request.setIdNegociacion(idNegociacion);
         EndosoResponseDto response = endosoDescuentoService.registrarEndoso(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }
