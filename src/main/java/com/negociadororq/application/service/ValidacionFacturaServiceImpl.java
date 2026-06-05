@@ -1,6 +1,7 @@
 package com.negociadororq.application.service;
 
 import com.negociadororq.application.controller.dto.ValidacionFacturaResponseDto;
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +30,7 @@ public class ValidacionFacturaServiceImpl implements ValidacionFacturaService {
         Factura factura = facturaRepository
                 .findByNumeroFactura(numeroFactura)
                 .orElseThrow(() ->
-                        new RuntimeException("Factura no encontrada: " + numeroFactura));
+                        new RecursoNoEncontradoException("Factura no encontrada: " + numeroFactura, "FACTURA_NO_ENCONTRADA"));
 
         if (factura.getFechavencimientoFactura() == null) {
 

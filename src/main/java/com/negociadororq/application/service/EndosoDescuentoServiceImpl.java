@@ -2,6 +2,8 @@ package com.negociadororq.application.service;
 
 import com.negociadororq.application.controller.dto.EndosoRequestDto;
 import com.negociadororq.application.controller.dto.EndosoResponseDto;
+import com.negociadororq.application.exception.PeticionInvalidaException;
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
@@ -40,10 +42,11 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     public EndosoResponseDto registrarEndoso(EndosoRequestDto request) {
 
         Negociacion negociacion = negociacionRepository.findById(request.getIdNegociacion())
-                .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "Negociación no encontrada: " + request.getIdNegociacion(), "NEGOCIACION_NO_ENCONTRADA"));
 
         if (request.getNumerosFactura() == null || request.getNumerosFactura().isEmpty()) {
-            throw new RuntimeException("Debe indicar al menos una factura");
+            throw new PeticionInvalidaException("Debe indicar al menos una factura", "FACTURAS_REQUERIDAS");
         }
 
         List<String> facturasCreadas = new ArrayList<>();
