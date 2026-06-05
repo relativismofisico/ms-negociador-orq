@@ -6,6 +6,7 @@ import com.negociadororq.application.service.EndosoDescuentoService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,7 +28,8 @@ public class CrearEndosoDescuentoController {
      *
      * */
     @Operation(summary = "Permite realizar el endoso de una o varias fcturas de una negociacion")
-
+    // Roles autorizados configurados en application.yml → security.roles.endoso
+    @PreAuthorize("@sec.tieneRol(authentication, 'endoso')")
     @PostMapping("/{idNegociacion}/endosos")
     public ResponseEntity<EndosoResponseDto> registrarEndoso(
             @PathVariable String idNegociacion,

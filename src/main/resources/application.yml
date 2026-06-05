@@ -46,4 +46,33 @@ facturas:
   vencimiento:
     cron: "0 0 1 * * *"
 
+# ─────────────────────────────────────────────────────────────
+# Seguridad corporativa — modificar roles aquí sin recompilar
+# ─────────────────────────────────────────────────────────────
+security:
+  jwt:
+    secret: AF84F1FGllNpNnLG055fdg5hGHJK4KGG5VH5TR5J05JFGGDFDGXVV545J4505G666JFGF2mMY95y
+  roles:
+    # POST /negociar/factura
+    negociacion:
+      - ADMINISTRADOR
+      - EMPRESA
+      - OPERARIO
+    # POST /negociaciones/{id}/endosos
+    endoso:
+      - ADMINISTRADOR
+      - EMPRESA
+      - FONDEADOR
+    # POST /negociaciones/solicitar-otp  y  POST /negociaciones/confirmar-otp
+    otp:
+      - ADMINISTRADOR
+      - EMPRESA
+      - FONDEADOR
+    # POST /validaciones/facturas/vencimiento
+    validacion:
+      - ADMINISTRADOR
+      - OPERARIO
+      - EMPRESA
+      - FONDEADOR
+
 
