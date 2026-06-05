@@ -1,6 +1,9 @@
 package com.negociadororq.application.service;
 
 import com.negociadororq.application.controller.dto.*;
+import com.negociadororq.application.exception.ConflictoException;
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
+import com.negociadororq.application.exception.ReglaDeNegocioException;
 import com.negociadororq.application.mapper.OperacionMapper;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
 import com.negociadororq.domain.event.OtpRequestEvent;
@@ -108,7 +111,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         AprobacionRequestDto request = pending.getRequest();
 
         Negociacion negociacion = negociacionRepository.findById(request.getIdNegociacion())
-                .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "Negociación no encontrada: " + request.getIdNegociacion(), "NEGOCIACION_NO_ENCONTRADA"));
 
         List<String> errores = new ArrayList<>();
 
@@ -133,11 +137,11 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     .anyMatch(a -> a.getRutActor().equals(request.getRutEmpresa()));
 
             if (yaEndoso) {
-                errores.add("El actor " + request.getRutEmpresa() +
-                        " ya realizó el endoso para la factura " +
-                        factura.getNumeroFactura());
-                throw new RuntimeException(
-                        "El actor ya realizó el endoso para la factura " + factura.getNumeroFactura());}
+                throw new ConflictoException(
+                        "El actor " + request.getRutEmpresa() +
+                        " ya realizó el endoso para la factura " + factura.getNumeroFactura(),
+                        "ENDOSO_DUPLICADO");
+            }
 
             RolActor rolActor = resolverRolActor(request.getRutEmpresa(), factura);
 
@@ -323,8 +327,10 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             return RolActor.FONDEADOR;
         }
 
-        throw new RuntimeException("No se pudo determinar el rol del actor " + rutActor +
-                " para la factura " + factura.getNumeroFactura());
+        throw new ReglaDeNegocioException(
+                "No se pudo determinar el rol del actor " + rutActor +
+                " para la factura " + factura.getNumeroFactura(),
+                "ROL_ACTOR_INDETERMINADO");
     }
 
     @Transactional
