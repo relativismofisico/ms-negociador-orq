@@ -6,7 +6,6 @@ import com.negociadororq.domain.model.UserQuota;
 import com.negociadororq.infrastructure.persistence.repository.EmpresaQuotaRepository;
 import com.negociadororq.infrastructure.persistence.repository.FondeadorQuotaRepository;
 import com.negociadororq.infrastructure.persistence.repository.UserQuotaRepository;
-import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import java.math.BigDecimal;
 import java.util.Optional;
 
@@ -65,7 +64,8 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
                     uq.setCurrentQuota(
                             uq.getCurrentQuota()
                                     .add(valor)
-                                    .max(BigDecimal.ZERO));});
+                                    .max(BigDecimal.ZERO));
+                });
     }
 
     @Override

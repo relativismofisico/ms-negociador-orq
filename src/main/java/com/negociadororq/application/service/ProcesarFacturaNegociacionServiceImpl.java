@@ -2,9 +2,21 @@ package com.negociadororq.application.service;
 
 import com.negociadororq.application.controller.dto.NegociacionRequestDto;
 import com.negociadororq.application.controller.dto.ValidacionFacturaResponseDto;
-import com.negociadororq.domain.model.*;
+import com.negociadororq.domain.model.ActorFactura;
+import com.negociadororq.domain.model.Company;
+import com.negociadororq.domain.model.EmpresaQuota;
+import com.negociadororq.domain.model.Factura;
+import com.negociadororq.domain.model.FacturaNegociada;
+import com.negociadororq.domain.model.FondeadorAsignacion;
+import com.negociadororq.domain.model.FondeadorQuota;
+import com.negociadororq.domain.model.User;
 import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.infrastructure.persistence.repository.*;
+import com.negociadororq.infrastructure.persistence.repository.CompanyRepository;
+import com.negociadororq.infrastructure.persistence.repository.EmpresaQuotaRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
+import com.negociadororq.infrastructure.persistence.repository.FondeadorQuotaRepository;
+import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -112,7 +124,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                         .orElseThrow(() ->
                                 new RuntimeException("EmpresaQuota no encontrada"));
 
-        if (empresaQuota.getCurrentQuota().compareTo(valorFactura) < 0 ) {
+        if (empresaQuota.getCurrentQuota().compareTo(valorFactura) < 0) {
             throw new RuntimeException("Empresa sin cupo");
         }
 

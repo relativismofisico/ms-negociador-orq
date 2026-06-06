@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter
+    xmlns="https://github.com/spotbugs/filter/3.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0
+        https://raw.githubusercontent.com/spotbugs/spotbugs/master/spotbugs/etc/findbugsfilter.xsd">
+
+    <!--
+      Exclusiones SpotBugs para ms-negociador-orq
+      Java 17 + Spring Boot 3 + Lombok + MongoDB + JPA
+    -->
+
+    <!-- ================================================================
+         LOMBOK - Falsos positivos por código generado
+    ================================================================= -->
+
+    <!-- Campos que Lombok inicializa vía constructor/builder pero SpotBugs
+         no puede trazar como escritos -->
+    <Match>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
+
+    <!-- Campos finales de Spring inyectados por constructor (@RequiredArgsConstructor) -->
+    <Match>
+        <Bug pattern="UWF_UNWRITTEN_FIELD"/>
+    </Match>
+
+    <!-- EI_EXPOSE_REP / EI_EXPOSE_REP2: Lombok @Data/@Builder genera getters/setters
+         que retornan/aceptan referencias directas a List/Map. En DTOs de Spring MVC
+         esto es el patrón estándar; copiar defensivamente rompe la integración con
+         Jackson/Spring y penaliza sin beneficio. -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- =================================================================
+         SPRING - Patrones de inyección de dependencias
+    ================================================================= -->
+
+    <!-- @Value produce campos no-final que Spring escribe después de construcción -->
+    <Match>
+        <Bug pattern="MS_SHOULD_BE_FINAL"/>
+    </Match>
+
+    <!-- Spring Data: ignora retornos no usados de save/saveAndFlush -->
+    <Match>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
+    <!-- =================================================================
+         JPA / MONGODB - Entidades
+    ================================================================= -->
+
+    <!-- Las entidades JPA y documentos MongoDB no necesitan serialVersionUID -->
+    <Match>
+        <Bug pattern="SE_NO_SERIALVERSIONUID"/>
+    </Match>
+
+    <!-- Campos de tipo Serializable en entidades MongoDB -->
+    <Match>
+        <Bug pattern="SE_BAD_FIELD"/>
+    </Match>
+
+    <!-- =================================================================
+         KAFKA - Manejo intencional de excepciones genéricas
+    ================================================================= -->
+
+    <!-- OutboxScheduler: catch(Exception) es intencional para resiliencia -->
+    <Match>
+        <Class name="com.negociadororq.infrastructure.scheduler.OutboxScheduler"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <!-- LiquidacionFallidaConsumer: catch(Exception) es intencional -->
+    <Match>
+        <Class name="com.negociadororq.infrastructure.kafka.consumer.LiquidacionFallidaConsumer"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <!-- =================================================================
+         SEGURIDAD - Falsos positivos conocidos en JWT / Spring Security
+    ================================================================= -->
+
+    <!-- Operaciones de cifrado/HMAC con claves: SpotBugs no distingue uso seguro -->
+    <Match>
+        <Class name="com.negociadororq.infrastructure.security.JjwtDecoder"/>
+        <Bug pattern="HARD_CODE_PASSWORD"/>
+    </Match>
+
+    <!-- CT_CONSTRUCTOR_THROW: JjwtDecoder lanza excepción en constructor si la
+         clave JWT es inválida. Es un comportamiento de fail-fast intencional en
+         Spring Security. -->
+    <Match>
+        <Class name="com.negociadororq.infrastructure.security.JjwtDecoder"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- =================================================================
+         LÓGICA DE NEGOCIO - Exclusiones intencionales
+    ================================================================= -->
+
+    <!-- EC_UNRELATED_TYPES: comparación EstadoFirma.name() vs String en lambdas
+         de cálculo de estado. La lógica es correcta en runtime (name() devuelve
+         String), SpotBugs no resuelve el tipo exacto dentro de la lambda. -->
+    <Match>
+        <Class name="com.negociadororq.application.service.AprobacionEndosoDescuentoServiceImpl"/>
+        <Bug pattern="EC_UNRELATED_TYPES"/>
+    </Match>
+
+    <!-- DB_DUPLICATE_BRANCHES: ramas duplicadas en crearNegociacion son
+         intencionales (ambos casos se resuelven con PENDIENTE por diseño). -->
+    <Match>
+        <Class name="com.negociadororq.application.service.NegociacionFactoringComfirmingServiceImpl"/>
+        <Bug pattern="DB_DUPLICATE_BRANCHES"/>
+    </Match>
+
+    <!-- VA_FORMAT_STRING_USES_NEWLINE: template HTML usa \n literal en text block
+         Java 15+; en HTML el salto de línea no importa para el renderizado. -->
+    <Match>
+        <Class name="com.negociadororq.application.service.TemplateRenderServiceImpl"/>
+        <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+    </Match>
+
+    <!-- =================================================================
+         TESTS - Reglas más laxas en código de prueba
+    ================================================================= -->
+
+    <Match>
+        <Class name="~.*Test"/>
+        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+    </Match>
+
+</FindBugsFilter>

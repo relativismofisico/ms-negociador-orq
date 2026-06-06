@@ -31,7 +31,7 @@ public class NegociacionPatchRepository {
         mongoTemplate.updateFirst(query, update, Negociacion.class);
     }
 
-    public void actualizarEstadoEndosoPorId(String negociacionId,String numeroFactura, Boolean creacionEndoso) {
+    public void actualizarEstadoEndosoPorId(String negociacionId, String numeroFactura, Boolean creacionEndoso) {
         Query query = Query.query(
                 Criteria.where("_id").is(negociacionId)
                         .and("facturas.numeroFactura").is(numeroFactura)
