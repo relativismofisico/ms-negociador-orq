@@ -8,7 +8,6 @@ import com.negociadororq.enums.RolActor;
 import com.negociadororq.infrastructure.pdf.PdfFirmaService;
 import com.negociadororq.infrastructure.persistence.repository.EndosoRepository;
 import lombok.RequiredArgsConstructor;
-import org.bson.types.Binary;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -49,7 +48,7 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
         byte[] pdfFirmado = pdfFirmaService.agregarFirma(pdfActual, firma, indexFirma);
 
         // 4. Guardar
-        endoso.setDocumentoPdf(new Binary(pdfFirmado).getData());
+        endoso.setDocumentoPdf(pdfFirmado);
         endosoRepository.save(endoso);
     }
 }
