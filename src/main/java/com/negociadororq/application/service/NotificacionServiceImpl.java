@@ -1,14 +1,14 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.controller.dto.AprobacionRequestDto;
+import com.negociadororq.application.port.output.NegociacionOutputPort;
 import com.negociadororq.application.service.notificacion.CuerpoNotificacionFactory;
 import com.negociadororq.application.service.notificacion.DestinatarioResolver;
 import com.negociadororq.domain.event.DestinatarioEmail;
 import com.negociadororq.domain.event.NotificacionEmailEvent;
+import com.negociadororq.domain.model.AprobacionRequest;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.Negociacion;
-import com.negociadororq.enums.TipoNotificacion;
-import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
+import com.negociadororq.domain.enums.TipoNotificacion;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -25,7 +25,7 @@ public class NotificacionServiceImpl implements NotificacionService {
 
     private final OutboxService outboxService;
     private final CuerpoNotificacionFactory cuerpoFactory;
-    private final NegociacionRepository negociacionRepository;
+    private final NegociacionOutputPort negociacionPort;
     private final DestinatarioResolver destinatarioResolver;
 
     @Value("${topics.notificacion-email}")
@@ -89,8 +89,8 @@ public class NotificacionServiceImpl implements NotificacionService {
     }
 
     @Override
-    public void notificarFirmaEndoso(AprobacionRequestDto aprobacion) {
-        Negociacion negociacion = negociacionRepository
+    public void notificarFirmaEndoso(AprobacionRequest aprobacion) {
+        Negociacion negociacion = negociacionPort
                 .findById(aprobacion.getIdNegociacion())
                 .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
 

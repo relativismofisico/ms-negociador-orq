@@ -13,3 +13,4 @@ public class FondeadorAsignacion {
     private String rutFondeador;
     private String nombreFondeador;
 }
+

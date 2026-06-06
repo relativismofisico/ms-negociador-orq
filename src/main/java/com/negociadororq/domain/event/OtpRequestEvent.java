@@ -20,3 +20,4 @@ public class OtpRequestEvent {
     private LocalDateTime fechaSolicitud;
 
 }
+

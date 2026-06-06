@@ -1,13 +1,14 @@
 package com.negociadororq.infrastructure.persistence.repository;
 
-import com.negociadororq.domain.model.UserQuota;
+import com.negociadororq.infrastructure.persistence.entity.UserQuotaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
-public interface UserQuotaRepository extends JpaRepository<UserQuota, String> {
+public interface UserQuotaRepository extends JpaRepository<UserQuotaEntity, Long> {
 
-    Optional<UserQuota> findByUser_IdeUser(Long userId);
-
+    Optional<UserQuotaEntity> findByUser_IdeUser(Long userId);
 }
+

@@ -1,63 +1,64 @@
 package com.negociadororq.application.service;
 
 import com.negociadororq.domain.model.Factura;
-import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
+import com.negociadororq.application.port.output.FacturaOutputPort;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
+@Log
 @Service
 @RequiredArgsConstructor
 public class FacturaServiceImpl implements FacturaService{
 
-    private final FacturaRepository facturaRepository;
+    private final FacturaOutputPort facturaPort;
 
     @Override
     @Transactional
     public void actualizarEstadoFirma(String numeroFactura, String nuevoEstado) {
-        Factura factura = facturaRepository.findByNumeroFactura(numeroFactura)
+        Factura factura = facturaPort.findByNumeroFactura(numeroFactura)
                 .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + numeroFactura));
 
         String estadoAnterior = factura.getEstadoFirma();
         factura.setEstadoFirma(nuevoEstado);
-        facturaRepository.save(factura);
+        facturaPort.save(factura);
 
-        log.info("🔄 Estado de factura {} actualizado de {} → {}", numeroFactura, estadoAnterior, nuevoEstado);
+        log.info(String.format("Estado de factura %s actualizado de %s a %s", numeroFactura, estadoAnterior, nuevoEstado));
     }
 
     @Override
     @Transactional
     public void actualizarEstadoFirmaMasivo(List<String> numerosFacturas, String nuevoEstado) {
-        List<Factura> facturas = facturaRepository.findByNumeroFacturaIn(numerosFacturas);
+        List<Factura> facturas = facturaPort.findByNumeroFacturaIn(numerosFacturas);
 
         if (facturas.isEmpty()) {
-            log.warn("⚠️ No se encontraron facturas para actualizar: {}", numerosFacturas);
+            log.warning(String.format("No se encontraron facturas para actualizar: %s", numerosFacturas));
             return;
         }
 
         facturas.forEach(f -> {
             String anterior = f.getEstadoFirma();
             f.setEstadoFirma(nuevoEstado);
-            log.debug("Factura {} → {} → {}", f.getNumeroFactura(), anterior, nuevoEstado);
+            log.fine(String.format("Factura %s -> %s -> %s", f.getNumeroFactura(), anterior, nuevoEstado));
         });
 
-        facturaRepository.saveAll(facturas);
-        log.info("✅ {} facturas actualizadas al estado {}", facturas.size(), nuevoEstado);
+        facturaPort.saveAll(facturas);
+        log.info(String.format("%d facturas actualizadas al estado %s", facturas.size(), nuevoEstado));
 
     }
 
     @Override
     public Factura obtenerPorNumero(String numeroFactura) {
-        return facturaRepository.findByNumeroFactura(numeroFactura)
+        return facturaPort.findByNumeroFactura(numeroFactura)
                 .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + numeroFactura));
     }
 
     @Override
     public boolean existenFacturasDePagador(List<String> numerosFacturas, String rutPagador) {
-        return facturaRepository.existsByNumeroFacturaInAndRutPagador(numerosFacturas, rutPagador);
+        return facturaPort.existsByNumeroFacturaInAndRutPagador(numerosFacturas, rutPagador);
     }
 }
+

@@ -37,3 +37,4 @@ public class CuerpoNotificacionFactory {
         return builder.construir(objeto);
     }
 }
+

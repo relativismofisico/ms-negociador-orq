@@ -79,3 +79,4 @@ public class SecurityConfig {
         return new JjwtDecoder(securityProperties.getJwt().getSecret(), objectMapper);
     }
 }
+

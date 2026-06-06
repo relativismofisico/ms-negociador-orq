@@ -23,3 +23,4 @@ public class ReglaDeNegocioException extends NegociadorException {
         super(mensaje, HttpStatus.UNPROCESSABLE_ENTITY, codigo);
     }
 }
+

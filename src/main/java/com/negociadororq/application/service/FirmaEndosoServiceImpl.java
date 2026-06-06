@@ -4,9 +4,9 @@ import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FirmaOtpMetadata;
 import com.negociadororq.domain.model.PendingOtp;
-import com.negociadororq.enums.RolActor;
-import com.negociadororq.infrastructure.pdf.PdfFirmaService;
-import com.negociadororq.infrastructure.persistence.repository.EndosoRepository;
+import com.negociadororq.domain.enums.RolActor;
+import com.negociadororq.application.port.output.EndosoOutputPort;
+import com.negociadororq.application.port.output.PdfFirmaOutputPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,15 +16,14 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class FirmaEndosoServiceImpl implements FirmaEndosoService {
 
-    private final EndosoRepository endosoRepository;
-    private final PdfFirmaService pdfFirmaService;
+    private final EndosoOutputPort endosoPort;
+    private final PdfFirmaOutputPort pdfFirmaPort;
 
     @Override
     public void firmarPdfEndoso(String idNegociacion, FacturaNegociada factura, PendingOtp pending, String rutEmpresa,
                                 String rutOperador, RolActor rolActor, boolean aprobado, String observacion) {
 
-        // 1. Obtener endoso
-        Endoso endoso = endosoRepository
+        Endoso endoso = endosoPort
                 .findByNegociacionIdAndNumeroFactura(idNegociacion, factura.getNumeroFactura())
                 .orElseThrow(() -> new RuntimeException("Endoso no encontrado"));
 
@@ -44,11 +43,10 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
                 .observacion(observacion)
                 .build();
 
-        // 3. Firmar PDF
-        byte[] pdfFirmado = pdfFirmaService.agregarFirma(pdfActual, firma, indexFirma);
+        byte[] pdfFirmado = pdfFirmaPort.agregarFirma(pdfActual, firma, indexFirma);
 
-        // 4. Guardar
         endoso.setDocumentoPdf(pdfFirmado);
-        endosoRepository.save(endoso);
+        endosoPort.save(endoso);
     }
 }
+

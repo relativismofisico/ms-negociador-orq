@@ -1,7 +1,7 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.controller.dto.NegociacionRequestDto;
-import com.negociadororq.application.controller.dto.ValidacionFacturaResponseDto;
+import com.negociadororq.application.dto.NegociacionRequestDto;
+import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
 import com.negociadororq.domain.model.ActorFactura;
 import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.EmpresaQuota;
@@ -10,15 +10,15 @@ import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.domain.model.User;
-import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.infrastructure.persistence.repository.CompanyRepository;
-import com.negociadororq.infrastructure.persistence.repository.EmpresaQuotaRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
-import com.negociadororq.infrastructure.persistence.repository.FondeadorQuotaRepository;
-import com.negociadororq.infrastructure.persistence.repository.UserRepository;
+import com.negociadororq.domain.enums.EstadoFirma;
+import com.negociadororq.application.port.output.CompanyOutputPort;
+import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
+import com.negociadororq.application.port.output.FacturaPatchOutputPort;
+import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
+import com.negociadororq.application.port.output.UserOutputPort;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,18 +30,18 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@Slf4j
+@Log
 @Service
 @RequiredArgsConstructor
 public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNegociacionService {
 
-    private final FacturaRepository facturaRepository;
+    private final FacturaOutputPort facturaPort;
     private final CupoConsumidorService cupoConsumidorService;
-    private final UserRepository userRepository;
-    private final CompanyRepository companyRepository;
-    private final EmpresaQuotaRepository empresaQuotaRepository;
-    private final FondeadorQuotaRepository fondeadorQuotaRepository;
-    private final FacturaPatchRepository facturaPatchRepository;
+    private final UserOutputPort userPort;
+    private final CompanyOutputPort companyPort;
+    private final EmpresaQuotaOutputPort empresaQuotaPort;
+    private final FondeadorQuotaOutputPort fondeadorQuotaPort;
+    private final FacturaPatchOutputPort facturaPatchPort;
     private final ValidacionFacturaService validacionFacturaService;
 
     @Override
@@ -50,7 +50,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         String numero = reqFact.getNumeroFactura();
 
-        Factura factura = facturaRepository.findByNumeroFactura(numero)
+        Factura factura = facturaPort.findByNumeroFactura(numero)
                 .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + numero));
 
         // ==========================================
@@ -92,7 +92,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         // OBTENER USER
         // ==========================================
 
-        Long userId = userRepository
+        Long userId = userPort
                 .findByUsername(request.getRutOperador())
                 .map(User::getIdeUser)
                 .orElseThrow(() ->
@@ -113,14 +113,14 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         // VALIDAR EMPRESA
         // ==========================================
 
-        Long companyId = companyRepository
+        Long companyId = companyPort
                 .findByNit(request.getRutEmpresa())
                 .map(Company::getIdeCompany)
                 .orElseThrow(() ->
                         new RuntimeException("Empresa no encontrada"));
 
         EmpresaQuota empresaQuota =
-                empresaQuotaRepository.findByCompanyId(companyId)
+                empresaQuotaPort.findByCompanyId(companyId)
                         .orElseThrow(() ->
                                 new RuntimeException("EmpresaQuota no encontrada"));
 
@@ -144,7 +144,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         empresaQuota.setCurrentQuota(empresaQuota.getCurrentQuota().subtract(valorFactura));
 
-        empresaQuotaRepository.save(empresaQuota);
+        empresaQuotaPort.save(empresaQuota);
 
         descontarCupoFondeadores(request, factura, fondeadores, valorFactura);
 
@@ -157,7 +157,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         EstadoFirma estadoFirma = calcularEstadoFirma(request.getTipoOperacion().getTipo());
 
-        facturaPatchRepository.marcarComoNegociada(factura.getId(), estadoFirma, actores);
+        facturaPatchPort.marcarComoNegociada(factura.getId(), estadoFirma, actores);
 
         // ==========================================
         // RESPUESTA
@@ -196,17 +196,17 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         for (FondeadorAsignacion fon : fondeadores) {
 
-            Long funderId = companyRepository
+            Long funderId = companyPort
                     .findByNit(fon.getRutFondeador())
                     .map(Company::getIdeCompany)
                     .orElseThrow();
 
-            Long supplierId = companyRepository
+            Long supplierId = companyPort
                     .findByNit(factura.getRutProveedor())
                     .map(Company::getIdeCompany)
                     .orElseThrow();
 
-            Long payerId = companyRepository
+            Long payerId = companyPort
                     .findByNit(factura.getRutPagador())
                     .map(Company::getIdeCompany)
                     .orElseThrow();
@@ -216,7 +216,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
             if ("FACTORING".equalsIgnoreCase(
                     request.getTipoOperacion().getTipo())) {
 
-                quota = fondeadorQuotaRepository
+                quota = fondeadorQuotaPort
                         .findByFunderIdAndSupplierId(
                                 funderId,
                                 supplierId)
@@ -231,7 +231,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
             } else {
 
-                quota = fondeadorQuotaRepository
+                quota = fondeadorQuotaPort
                         .findByFunderIdAndPayerId(
                                 funderId,
                                 payerId)
@@ -256,18 +256,18 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         for (FondeadorAsignacion fon : fondeadores) {
 
-            Long funderId = companyRepository
+            Long funderId = companyPort
                     .findByNit(fon.getRutFondeador())
                     .map(Company::getIdeCompany)
                     .orElseThrow();
 
-            Long payerId = companyRepository
+            Long payerId = companyPort
                     .findByNit(factura.getRutPagador())
                     .map(Company::getIdeCompany)
                     .orElseThrow();
 
             FondeadorQuota quota =
-                    fondeadorQuotaRepository
+                    fondeadorQuotaPort
                             .findByFunderIdAndPayerId(
                                     funderId,
                                     payerId)
@@ -287,7 +287,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                                 .subtract(valorFactura));
             }
 
-            fondeadorQuotaRepository.save(quota);
+            fondeadorQuotaPort.save(quota);
         }
     }
 
@@ -372,3 +372,4 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 .toUpperCase();
     }
 }
+

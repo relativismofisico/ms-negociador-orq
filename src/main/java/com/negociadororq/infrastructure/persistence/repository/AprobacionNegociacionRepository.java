@@ -1,10 +1,10 @@
 package com.negociadororq.infrastructure.persistence.repository;
 
-import com.negociadororq.domain.model.AprobacionNegociacion;
+import com.negociadororq.infrastructure.persistence.entity.AprobacionNegociacionDocument;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.List;
 
-public interface AprobacionNegociacionRepository extends MongoRepository<AprobacionNegociacion, String> {
-    List<AprobacionNegociacion> findByNegociacionId(String negociacionId);
+public interface AprobacionNegociacionRepository extends MongoRepository<AprobacionNegociacionDocument, String> {
+    List<AprobacionNegociacionDocument> findByNegociacionId(String negociacionId);
 }

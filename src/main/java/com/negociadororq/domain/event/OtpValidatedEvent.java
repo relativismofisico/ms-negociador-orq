@@ -19,3 +19,4 @@ public class OtpValidatedEvent {
     private String ip;
     private String ipAprobacion;
 }
+

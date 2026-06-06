@@ -16,3 +16,4 @@ public class Operacion {
     private String clase;
 
 }
+

@@ -26,3 +26,4 @@ public class FirmaOtpMetadata {
 
     private String observacion;
 }
+

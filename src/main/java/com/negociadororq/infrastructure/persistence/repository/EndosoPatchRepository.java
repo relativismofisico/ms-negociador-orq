@@ -1,8 +1,9 @@
 package com.negociadororq.infrastructure.persistence.repository;
 
 import com.negociadororq.domain.model.AprobacionActorDto;
-import com.negociadororq.domain.model.Endoso;
-import com.negociadororq.enums.EstadoEndoso;
+import com.negociadororq.domain.enums.EstadoEndoso;
+import com.negociadororq.infrastructure.persistence.entity.EndosoDocument;
+import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -20,23 +21,19 @@ public class EndosoPatchRepository {
         this.mongoTemplate = mongoTemplate;
     }
 
-    public void actualizarEstadoEndosoPorNoFactura(String idNegociacion, String numeroFactura,  EstadoEndoso estadoFirma) {
+    public void actualizarEstadoEndosoPorNoFactura(String idNegociacion, String numeroFactura, EstadoEndoso estadoFirma) {
 
         Query query = Query.query(
                 Criteria.where("negociacionId").is(idNegociacion)
                         .and("numeroFactura").is(numeroFactura));
 
-
         Update update = new Update()
                 .set("estado", estadoFirma.name())
                 .set("fechaUltimaActualizacion", LocalDateTime.now());
 
-        mongoTemplate.updateFirst(query, update, Endoso.class);
+        mongoTemplate.updateFirst(query, update, EndosoDocument.class);
     }
 
-    /**
-     * Registrar aprobación/rechazo actor
-     */
     public void registrarAprobacionActor(
             String idNegociacion,
             String numeroFactura,
@@ -49,24 +46,18 @@ public class EndosoPatchRepository {
                         .and("numeroFactura").is(numeroFactura)
         );
 
-        // eliminar aprobación previa del mismo actor
         Update removeUpdate = new Update()
                 .pull("aprobaciones",
-                        new org.bson.Document(
-                                "rutActor",
-                                aprobacion.getRutActor()
-                        )
+                        new Document("rutActor", aprobacion.getRutActor())
                 );
 
-        mongoTemplate.updateFirst(query, removeUpdate, Endoso.class);
+        mongoTemplate.updateFirst(query, removeUpdate, EndosoDocument.class);
 
-        // agregar nueva aprobación
         Update addUpdate = new Update()
                 .push("aprobaciones", aprobacion)
                 .set("estado", estado.name())
                 .set("fechaUltimaActualizacion", LocalDateTime.now());
 
-        mongoTemplate.updateFirst(query, addUpdate, Endoso.class);
+        mongoTemplate.updateFirst(query, addUpdate, EndosoDocument.class);
     }
-
 }

@@ -25,3 +25,4 @@ public class NotificacionEmailEvent {
     private Map<String, Object> data;
     private LocalDateTime fecha;
 }
+

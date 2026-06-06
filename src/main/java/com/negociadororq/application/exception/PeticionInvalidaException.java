@@ -22,3 +22,4 @@ public class PeticionInvalidaException extends NegociadorException {
         super(mensaje, HttpStatus.BAD_REQUEST, codigo);
     }
 }
+
