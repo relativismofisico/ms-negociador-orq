@@ -133,4 +133,13 @@
         <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
     </Match>
 
+    <!-- NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE: en tests que usan el patrón
+         (Type) converter.convert(obj) el cast se hace directamente sobre el
+         retorno. SpotBugs no sabe que la implementación nunca devuelve null
+         para un JWT válido; en tests el NPE fallaría el test de forma evidente. -->
+    <Match>
+        <Class name="com.negociadororq.infrastructure.security.JwtRolConverterTest"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+
 </FindBugsFilter>
