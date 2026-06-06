@@ -32,9 +32,10 @@ public class JwtRolConverter implements Converter<Jwt, AbstractAuthenticationTok
         String rol = jwt.getClaimAsString(CLAIM_ROL);
         if (StringUtils.hasText(rol)) {
             // Sin prefijo ROLE_ — se usa hasAuthority() en @PreAuthorize
-            authorities.add(new SimpleGrantedAuthority(rol));
+            authorities.add(new SimpleGrantedAuthority(rol.toUpperCase()));
         }
 
         return new JwtAuthenticationToken(jwt, authorities, jwt.getSubject());
     }
 }
+

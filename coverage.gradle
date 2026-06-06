@@ -1,0 +1,58 @@
+/*
+ * Copyright (c). Todos los derechos reservados.
+ */
+def jacocoExcludes = [
+        'com/cargafacturas/domain/**',
+        'com/cargafacturas/infrastructure/**',
+        'com/cargafacturas/web/controller/**',
+        'com/cargafacturas/MsCargaFacturasNegApplication.class',
+        'com/cargafacturas/application/service/ProveedorFacturacionService.class',
+        'com/cargafacturas/application/util/ByteArrayMultipartFile.class'
+]
+
+jacocoTestReport {
+    dependsOn test // primero ejecuta los tests
+    reports {
+        xml.required = true
+        csv.required = false
+        html.required = true // genera reporte navegable
+        html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
+    }
+    afterEvaluate {
+        classDirectories.setFrom(
+                files(classDirectories.files.collect {
+                    fileTree(dir: it, exclude: jacocoExcludes)
+                })
+        )
+    }
+}
+
+jacocoTestCoverageVerification {
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: jacocoExcludes)
+        }))
+    }
+    violationRules {
+        rule {
+            enabled = true
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.85
+            }
+        }
+        rule {
+            enabled = true
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.80
+            }
+        }
+
+    }
+}
+jacocoTestReport {
+    dependsOn test
+}

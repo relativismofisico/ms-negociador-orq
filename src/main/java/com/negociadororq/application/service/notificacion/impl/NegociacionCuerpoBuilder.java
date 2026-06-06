@@ -22,3 +22,4 @@ public class NegociacionCuerpoBuilder implements CuerpoNotificacionBuilder<Negoc
                 "Por favor ingrese a la plataforma para revisar.";
     }
 }
+

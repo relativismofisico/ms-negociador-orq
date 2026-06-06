@@ -1,9 +1,9 @@
 package com.negociadororq.infrastructure.persistence.repository;
 
 import com.negociadororq.domain.model.ActorFactura;
-import com.negociadororq.domain.model.Factura;
-import com.negociadororq.enums.EstadoFactura;
-import com.negociadororq.enums.EstadoFirma;
+import com.negociadororq.domain.enums.EstadoFactura;
+import com.negociadororq.domain.enums.EstadoFirma;
+import com.negociadororq.infrastructure.persistence.entity.FacturaDocument;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -32,7 +32,7 @@ public class FacturaPatchRepository {
                 .set("estadoCreacionEndoso", true)
                 .currentDate("fechaActualizacion");
 
-        mongoTemplate.updateFirst(query, update, Factura.class);
+        mongoTemplate.updateFirst(query, update, FacturaDocument.class);
     }
 
     public void marcarComoNegociada(String facturaId, EstadoFirma estadoFirma, List<ActorFactura> actores) {
@@ -44,7 +44,7 @@ public class FacturaPatchRepository {
                 .set("actores", actores)
                 .set("fechaNegociacionFactura", LocalDateTime.now());
 
-        mongoTemplate.updateFirst(query, update, Factura.class);
+        mongoTemplate.updateFirst(query, update, FacturaDocument.class);
     }
 
     public void actualizarEstadoFirmaPorNoFactura(String numeroFactura, EstadoFirma estadoFirma) {
@@ -56,9 +56,7 @@ public class FacturaPatchRepository {
                 .set("estadoFirma", estadoFirma.name())
                 .set("fechaUltimaActualizacion", LocalDateTime.now());
 
-        mongoTemplate.updateFirst(query, update, Factura.class);
+        mongoTemplate.updateFirst(query, update, FacturaDocument.class);
     }
-
-
-
 }
+

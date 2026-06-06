@@ -1,30 +1,40 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.domain.model.*;
-import com.negociadororq.enums.EstadoEndoso;
-import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.infrastructure.persistence.repository.*;
+import com.negociadororq.domain.model.Company;
+import com.negociadororq.domain.model.Factura;
+import com.negociadororq.domain.model.FacturaNegociada;
+import com.negociadororq.domain.model.FondeadorAsignacion;
+import com.negociadororq.domain.model.Negociacion;
+import com.negociadororq.domain.model.User;
+import com.negociadororq.domain.enums.EstadoEndoso;
+import com.negociadororq.domain.enums.EstadoFirma;
+import com.negociadororq.application.port.output.CompanyOutputPort;
+import com.negociadororq.application.port.output.EndosoPatchOutputPort;
+import com.negociadororq.application.port.output.FacturaPatchOutputPort;
+import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.NegociacionOutputPort;
+import com.negociadororq.application.port.output.UserOutputPort;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 
-@Slf4j
+@Log
 @Service
 @RequiredArgsConstructor
 public class ReversionCuposServiceImpl
         implements ReversionCuposService {
 
-    private final NegociacionRepository negociacionRepository;
-    private final FacturaRepository facturaRepository;
-    private final FacturaPatchRepository facturaPatchRepository;
-    private final EndosoPatchRepository endosoPatchRepository;
+    private final NegociacionOutputPort negociacionPort;
+    private final FacturaOutputPort facturaPort;
+    private final FacturaPatchOutputPort facturaPatchPort;
+    private final EndosoPatchOutputPort endosoPatchPort;
 
     private final CupoReversionService cupoReversionService;
-    private final UserRepository userRepository;
-    private final CompanyRepository companyRepository;
+    private final UserOutputPort userPort;
+    private final CompanyOutputPort companyPort;
 
     private final NotificacionService notificacionService;
 
@@ -40,7 +50,7 @@ public class ReversionCuposServiceImpl
         // ==========================================
 
         Factura factura =
-                facturaRepository
+                facturaPort
                         .findByNumeroFactura(numeroFactura)
                         .orElseThrow(() ->
                                 new RuntimeException(
@@ -51,7 +61,7 @@ public class ReversionCuposServiceImpl
         // ==========================================
 
         Negociacion negociacion =
-                negociacionRepository
+                negociacionPort
                         .findByNumeroFactura(numeroFactura)
                         .orElseThrow(() ->
                                 new RuntimeException(
@@ -91,7 +101,7 @@ public class ReversionCuposServiceImpl
         // ==========================================
 
         Long userId =
-                userRepository
+                userPort
                         .findByUsername(actorId)
                         .map(User::getIdeUser)
                         .orElseThrow(() ->
@@ -107,7 +117,7 @@ public class ReversionCuposServiceImpl
         // ==========================================
 
         Long companyId =
-                companyRepository
+                companyPort
                         .findByNit(negociacion.getRutEmpresa())
                         .map(Company::getIdeCompany)
                         .orElseThrow(() ->
@@ -128,7 +138,7 @@ public class ReversionCuposServiceImpl
                     facturaNegociada.getFondeadores()) {
 
                 Long funderId =
-                        companyRepository
+                        companyPort
                                 .findByNit(fon.getRutFondeador())
                                 .map(Company::getIdeCompany)
                                 .orElseThrow(() ->
@@ -142,7 +152,7 @@ public class ReversionCuposServiceImpl
                 if ("FACTORING".equals(tipoOperacion)) {
 
                     Long supplierId =
-                            companyRepository
+                            companyPort
                                     .findByNit(
                                             factura.getRutProveedor())
                                     .map(Company::getIdeCompany)
@@ -164,7 +174,7 @@ public class ReversionCuposServiceImpl
                 if ("CONFIRMING".equals(tipoOperacion)) {
 
                     Long payerId =
-                            companyRepository
+                            companyPort
                                     .findByNit(
                                             factura.getRutPagador())
                                     .map(Company::getIdeCompany)
@@ -185,12 +195,12 @@ public class ReversionCuposServiceImpl
         // ACTUALIZAR ESTADOS
         // ==========================================
 
-        facturaPatchRepository
+        facturaPatchPort
                 .actualizarEstadoFirmaPorNoFactura(
                         numeroFactura,
                         EstadoFirma.RECHAZADA);
 
-        endosoPatchRepository
+        endosoPatchPort
                 .actualizarEstadoEndosoPorNoFactura(
                         negociacion.getId(),
                         numeroFactura,
@@ -200,10 +210,7 @@ public class ReversionCuposServiceImpl
         // LOG
         // ==========================================
 
-        log.info(
-                "Cupos revertidos factura={} motivo={}",
-                numeroFactura,
-                motivo);
+        log.info(String.format("Cupos revertidos factura=%s motivo=%s", numeroFactura, motivo));
 
         // ==========================================
         // NOTIFICACIÓN
@@ -213,8 +220,7 @@ public class ReversionCuposServiceImpl
                 negociacion,
                 motivo);
 
-        log.info(
-                "Notificación enviada negociación={}",
-                negociacion.getId());
+        log.info(String.format("Notificacion enviada negociacion=%s", negociacion.getId()));
     }
 }
+

@@ -1,8 +1,8 @@
 package com.negociadororq.domain.model;
 
-import com.negociadororq.enums.EstadoEndoso;
-import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.enums.EstadoNegociacion;
+import com.negociadororq.domain.enums.EstadoEndoso;
+import com.negociadororq.domain.enums.EstadoFirma;
+import com.negociadororq.domain.enums.EstadoNegociacion;
 import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,7 +11,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.ArrayList;
 
 
 @Data
@@ -43,3 +42,4 @@ public class FacturaNegociada {
     private LocalDateTime fechaOtp;
 
 }
+

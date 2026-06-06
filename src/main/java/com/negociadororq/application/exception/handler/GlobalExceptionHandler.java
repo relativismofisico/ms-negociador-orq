@@ -3,7 +3,7 @@ package com.negociadororq.application.exception.handler;
 import com.negociadororq.application.exception.NegociadorException;
 import com.negociadororq.application.exception.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.java.Log;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
  *   MethodArgumentTypeMismatch → 400 (path variable con tipo incorrecto)
  *   Exception               → 500 (fallback — nunca exponer detalles internos)
  */
-@Slf4j
+@Log
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -50,7 +50,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleNegociadorException(
             NegociadorException ex, HttpServletRequest request) {
 
-        log.warn("Excepción de dominio [{}] en {}: {}", ex.getCodigo(), request.getRequestURI(), ex.getMessage());
+        log.warning(String.format("Excepcion de dominio [%s] en %s: %s", ex.getCodigo(), request.getRequestURI(), ex.getMessage()));
 
         return ResponseEntity
                 .status(ex.getStatus())
@@ -72,7 +72,7 @@ public class GlobalExceptionHandler {
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .collect(Collectors.toList());
 
-        log.warn("Validación fallida en {}: {}", request.getRequestURI(), detalles);
+        log.warning(String.format("Validacion fallida en %s: %s", request.getRequestURI(), detalles));
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
@@ -91,7 +91,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMessageNotReadable(
             HttpMessageNotReadableException ex, HttpServletRequest request) {
 
-        log.warn("Cuerpo de petición inválido en {}: {}", request.getRequestURI(), ex.getMessage());
+        log.warning(String.format("Cuerpo de peticion invalido en %s: %s", request.getRequestURI(), ex.getMessage()));
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
@@ -110,7 +110,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMethodNotSupported(
             HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
 
-        log.warn("Método no soportado {} en {}", ex.getMethod(), request.getRequestURI());
+        log.warning(String.format("Metodo no soportado %s en %s", ex.getMethod(), request.getRequestURI()));
 
         return ResponseEntity
                 .status(HttpStatus.METHOD_NOT_ALLOWED)
@@ -168,7 +168,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex, HttpServletRequest request) {
 
-        log.error("Error inesperado en {}: {}", request.getRequestURI(), ex.getMessage(), ex);
+        log.log(java.util.logging.Level.SEVERE, String.format("Error inesperado en %s: %s", request.getRequestURI(), ex.getMessage()), ex);
 
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -197,3 +197,4 @@ public class GlobalExceptionHandler {
                 .build();
     }
 }
+

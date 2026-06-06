@@ -1,0 +1,9 @@
+package com.negociadororq.domain.enums;
+
+public enum TipoNotificacion {
+    NEGOCIACION_CREADA,
+    ENDOSO_CREADO,
+    ENDOSO_FIRMADO,
+    OTP,
+    LIQUIDACION_FALLIDA
+}

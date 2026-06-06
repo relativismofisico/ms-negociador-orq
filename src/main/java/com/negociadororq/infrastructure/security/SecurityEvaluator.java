@@ -46,6 +46,8 @@ public class SecurityEvaluator {
 
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
+                .map(String::toUpperCase)
                 .anyMatch(rolesPermitidos::contains);
     }
 }
+

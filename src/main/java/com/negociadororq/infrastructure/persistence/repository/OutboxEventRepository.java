@@ -9,3 +9,4 @@ public interface OutboxEventRepository extends MongoRepository<OutboxEventEntity
 
     List<OutboxEventEntity> findTop50ByEnviadoFalseOrderByFechaCreacionAsc();
 }
+

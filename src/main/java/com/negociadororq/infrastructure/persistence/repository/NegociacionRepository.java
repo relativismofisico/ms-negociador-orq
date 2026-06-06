@@ -1,7 +1,6 @@
 package com.negociadororq.infrastructure.persistence.repository;
 
-import com.negociadororq.domain.model.Negociacion;
-
+import com.negociadororq.infrastructure.persistence.entity.NegociacionDocument;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -9,7 +8,8 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 @Repository
-public interface NegociacionRepository extends MongoRepository<Negociacion, String> {
+public interface NegociacionRepository extends MongoRepository<NegociacionDocument, String> {
     @Query("{ 'facturas.numeroFactura' : ?0 }")
-    Optional<Negociacion> findByNumeroFactura(String numeroFactura);
+    Optional<NegociacionDocument> findByNumeroFactura(String numeroFactura);
 }
+

@@ -1,0 +1,176 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  Configuración Checkstyle empresarial para ms-negociador-orq
+  Compatible con Java 17, Spring Boot 3, Lombok.
+-->
+<module name="Checker">
+    <property name="severity" value="error"/>
+    <property name="fileExtensions" value="java"/>
+    <property name="charset" value="UTF-8"/>
+
+    <!-- Permite suprimir reglas con @SuppressWarnings -->
+    <module name="SuppressWarningsFilter"/>
+
+    <!-- Archivo de supresiones específicas (opcional) -->
+    <module name="SuppressionFilter">
+        <property name="file" value="${config_loc}/suppressions.xml" default=""/>
+        <property name="optional" value="true"/>
+    </module>
+
+    <!-- Toda clase Java debe terminar con una línea nueva -->
+    <module name="NewlineAtEndOfFile">
+        <property name="lineSeparator" value="lf_cr_crlf"/>
+    </module>
+
+    <!-- Longitud máxima de archivo -->
+    <module name="FileLength">
+        <property name="max" value="600"/>
+    </module>
+
+    <!-- Longitud máxima de línea (nivel Checker en Checkstyle 10.x) -->
+    <module name="LineLength">
+        <property name="max" value="150"/>
+        <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
+    </module>
+
+    <module name="TreeWalker">
+
+        <!-- Permite usar @SuppressWarnings("checkstyle:...") -->
+        <module name="SuppressWarningsHolder"/>
+
+        <!-- =============================================================
+             IMPORTS
+        ============================================================== -->
+
+        <!-- Prohíbe importaciones comodín (import paquete.*) -->
+        <module name="AvoidStarImport"/>
+
+        <!-- Detecta importaciones no utilizadas -->
+        <module name="UnusedImports"/>
+
+        <!-- Detecta importaciones duplicadas -->
+        <module name="RedundantImport"/>
+
+        <!-- Prohíbe el uso de APIs internas del JDK o contenedores -->
+        <module name="IllegalImport">
+            <property name="illegalPkgs" value="org.apache.tomcat, sun, com.sun"/>
+        </module>
+
+        <!-- =============================================================
+             CONVENCIONES DE NOMBRES
+        ============================================================== -->
+
+        <module name="PackageName">
+            <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+        </module>
+
+        <!-- Tipos (clases, interfaces, enums, records): PascalCase -->
+        <module name="TypeName"/>
+
+        <!-- Constantes: UPPER_SNAKE_CASE -->
+        <module name="ConstantName"/>
+
+        <!-- Variables locales: camelCase -->
+        <module name="LocalVariableName"/>
+
+        <!-- Campos de instancia: camelCase -->
+        <module name="MemberName"/>
+
+        <!-- Métodos: camelCase -->
+        <module name="MethodName"/>
+
+        <!-- Parámetros: camelCase -->
+        <module name="ParameterName"/>
+
+        <!-- Variables estáticas no constantes: camelCase -->
+        <module name="StaticVariableName"/>
+
+        <!-- Variables en bloques catch: camelCase de una sola letra permitida -->
+        <module name="CatchParameterName"/>
+
+        <!-- =============================================================
+             TAMAÑOS
+        ============================================================== -->
+
+        <!-- Longitud máxima de método -->
+        <module name="MethodLength">
+            <property name="max" value="200"/>
+        </module>
+
+        <!-- Máximo de parámetros por método -->
+        <module name="ParameterNumber">
+            <property name="max" value="15"/>
+        </module>
+
+        <!-- =============================================================
+             ESPACIOS EN BLANCO
+        ============================================================== -->
+
+        <!-- Verifica espaciado correcto en genéricos -->
+        <module name="GenericWhitespace"/>
+
+        <!-- Espacio requerido después de: COMMA, SEMI, TYPECAST, IF, ELSE, WHILE, DO, FOR -->
+        <module name="WhitespaceAfter"/>
+
+        <!-- Sin espacio antes de: punto, coma, punto y coma -->
+        <module name="NoWhitespaceBefore"/>
+
+        <!-- Sin espacio después de: operadores unarios, punto, índice de array -->
+        <module name="NoWhitespaceAfter"/>
+
+        <!-- Sin padding dentro de paréntesis: f(a) no f( a ) -->
+        <module name="ParenPad"/>
+
+        <!-- =============================================================
+             BLOQUES
+        ============================================================== -->
+
+        <!-- Prohíbe bloques anidados innecesarios -->
+        <module name="AvoidNestedBlocks"/>
+
+        <!-- Bloques vacíos deben contener al menos un comentario -->
+        <module name="EmptyBlock">
+            <property name="option" value="text"/>
+        </module>
+
+        <!-- Llave de apertura al final de la línea -->
+        <module name="LeftCurly"/>
+
+        <!-- Todo if/else/for/while/do debe tener llaves -->
+        <module name="NeedBraces"/>
+
+        <!-- } else / } catch / } finally en la misma línea que la llave -->
+        <module name="RightCurly"/>
+
+        <!-- =============================================================
+             CODIFICACIÓN
+        ============================================================== -->
+
+        <!-- Sin punto y coma vacío (sentencia vacía) -->
+        <module name="EmptyStatement"/>
+
+        <!-- equals() y hashCode() deben implementarse juntos -->
+        <module name="EqualsHashCode"/>
+
+        <!-- Comparación de literales String con == no permitida -->
+        <module name="StringLiteralEquality"/>
+
+        <!-- Declaración de arrays: String[] args, no String args[] -->
+        <module name="ArrayTypeStyle"/>
+
+        <!-- Literales long deben usar L mayúscula, no l minúscula -->
+        <module name="UpperEll"/>
+
+        <!-- =============================================================
+             MODIFICADORES
+        ============================================================== -->
+
+        <!-- Orden correcto: public protected private abstract static final... -->
+        <module name="ModifierOrder"/>
+
+    </module>
+</module>
