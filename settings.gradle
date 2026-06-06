@@ -1,1 +1,3 @@
 rootProject.name = 'ms-negociador-orq'
+
+include 'config'
