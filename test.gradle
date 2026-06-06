@@ -1,0 +1,88 @@
+/*
+ * Copyright (c). Todos los derechos reservados.
+ */
+
+sourceSets {
+   /* automatedTest {
+        java {
+            srcDirs = ['src/automated-test/java']
+            compileClasspath += sourceSets.main.output + sourceSets.test.output
+            runtimeClasspath += sourceSets.main.output + sourceSets.test.output
+        }
+        resources {
+            srcDirs = ['src/automated-test/resources']
+        }
+    }
+*/
+    architectureTest {
+        java {
+            compileClasspath += main.output
+            runtimeClasspath += main.output
+            srcDir file('src/architecture-test/java')
+        }
+        resources.srcDir file('src/architecture-test/resources')
+    }
+}
+/*
+task automatedTest(type: Test) {
+
+    description = 'Runs Karate acceptance tests'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.automatedTest.output.classesDirs
+    classpath = sourceSets.automatedTest.runtimeClasspath
+
+    useJUnitPlatform()
+
+    outputs.upToDateWhen { false }
+
+    finalizedBy jacocoTestReport
+}
+
+test {
+    jvmArgs "-Xms128m", "-Xmx512m", "-XX:+DisableExplicitGC"
+    finalizedBy jacocoTestReport
+}
+*/
+tasks.register('architectureTest', Test) {
+    useJUnitPlatform()
+    description = 'Runs architecture tests.'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.architectureTest.output.classesDirs
+    classpath = sourceSets.architectureTest.runtimeClasspath
+}
+checkstyle {
+    final String checkstyleConfigFile = System.getenv('CHECKSTYLE_CONFIG_FILE') != null
+            ? System.getenv('CHECKSTYLE_CONFIG_FILE')
+            : "${rootProject.projectDir}/config/checkstyle/checkstyle.xml"
+
+    configFile = file(checkstyleConfigFile)
+    toolVersion = '10.17.0'
+    sourceSets = [sourceSets.main]
+    ignoreFailures = false
+    maxWarnings = 0
+}
+
+pmd {
+    toolVersion = '7.3.0'
+    ruleSetFiles = files("${rootProject.projectDir}/config/pmd/ruleset.xml")
+    ruleSets = []
+    sourceSets = [sourceSets.main]
+    ignoreFailures = false
+    consoleOutput = true
+}
+
+spotbugs {
+    toolVersion = '4.8.6'
+    excludeFilter = file("${rootProject.projectDir}/config/spotbugs/exclude.xml")
+    ignoreFailures = false
+}
+
+spotbugsMain {
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
