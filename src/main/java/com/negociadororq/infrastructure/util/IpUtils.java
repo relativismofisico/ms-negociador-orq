@@ -4,6 +4,9 @@ import jakarta.servlet.http.HttpServletRequest;
 
 public class IpUtils {
 
+    private IpUtils() {
+    }
+
     public static String obtenerIp(HttpServletRequest request) {
 
         String header = request.getHeader("X-Forwarded-For");

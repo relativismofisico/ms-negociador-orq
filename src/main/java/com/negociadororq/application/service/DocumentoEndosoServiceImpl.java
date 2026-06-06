@@ -7,7 +7,7 @@ import com.negociadororq.domain.model.Negociacion;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tomcat.util.http.fileupload.ByteArrayOutputStream;
+import java.io.ByteArrayOutputStream;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;

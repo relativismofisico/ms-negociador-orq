@@ -39,7 +39,7 @@ public class OutboxEventPublisher {
         String topic = topicMap.get(event.getClass());
 
         if (topic == null) {
-            throw new RuntimeException("No se encontró topic para evento " + event.getClass());
+            throw new IllegalStateException("No se encontró topic registrado para evento: " + event.getClass().getName());
         }
 
         log.info("Publicando evento en topic {} -> {}", topic, event);

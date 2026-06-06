@@ -1,5 +1,6 @@
 package com.negociadororq.application.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.negociadororq.infrastructure.persistence.entity.OutboxEventEntity;
 import com.negociadororq.infrastructure.persistence.repository.OutboxEventRepository;
@@ -36,8 +37,8 @@ public class OutboxService {
 
             repository.save(entity);
 
-        } catch (Exception e) {
-            throw new RuntimeException("Error guardando evento en outbox", e);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Error serializando evento en outbox", e);
         }
     }
 }

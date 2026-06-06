@@ -2,11 +2,8 @@ package com.negociadororq.application.service;
 
 import com.negociadororq.application.controller.dto.NegociacionRequestDto;
 import com.negociadororq.application.controller.dto.NegociacionResponseDto;
-import com.negociadororq.application.controller.dto.ValidacionFacturaResponseDto;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
-import com.negociadororq.domain.event.OtpRequestEvent;
 import com.negociadororq.domain.model.*;
-import com.negociadororq.enums.EstadoFirma;
 import com.negociadororq.enums.EstadoNegociacion;
 import com.negociadororq.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -27,8 +24,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final FacturaRepository facturaRepository;
     private final NegociacionRepository negociacionRepository;
     private final UserRepository userRepository;
-    private final CompanyRepository companyRepository;
-    private final FondeadorQuotaRepository fondeadorQuotaRepository;
     private final NotificacionService notificacionService;
     private final ProcesarFacturaNegociacionService procesarFacturaNegociacionService;
 
@@ -49,9 +44,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         List<FacturaNegociada> facturasAceptadas = new ArrayList<>();
         List<String> facturasRechazadas = new ArrayList<>();
 
-        // obtener userId del operador (lanzará excepción si no existe)
-        Long userId = userRepository.findByUsername(request.getRutOperador())
-                .map(User::getIdeUser)
+        // validar que el operador existe (lanzará excepción si no existe)
+        userRepository.findByUsername(request.getRutOperador())
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "No existe operador con username " + request.getRutOperador(), "OPERADOR_NO_ENCONTRADO"));
 
@@ -70,22 +64,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                     .computeIfAbsent(factura.getRutPagador(), k -> new ArrayList<>())
                     .add(fn);
         }
-
-        // cache para companyId por NIT
-        Map<String, Long> companyIdByNit = new HashMap<>();
-        java.util.function.Function<String, Long> resolveCompanyId = nit -> {
-            if (nit == null) return null;
-            if (companyIdByNit.containsKey(nit)) return companyIdByNit.get(nit);
-            Long id = companyRepository.findByNit(nit)
-                    .map(Company::getIdeCompany)
-                    .orElseThrow(() -> new RecursoNoEncontradoException(
-                            "No existe company con NIT " + nit, "EMPRESA_NO_ENCONTRADA"));
-            companyIdByNit.put(nit, id);
-            return id;
-        };
-
-        // Recorremos factura a factura y procesamos (validación por factura)
-        List<NegociacionResponseDto> negociacionesCreadas = new ArrayList<>();
 
         for (FacturaNegociada facturaReq : request.getFacturas()) {
 
@@ -162,23 +140,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         response.setRutEmpresa(request.getRutEmpresa());
         response.setTipoOperacion(request.getTipoOperacion());
         response.setFacturas(facturasAceptadas);
-        if (pagadores.size() == 1) {
-            negociacion.setRutPagador(pagadores.iterator().next());
-            negociacion.setRutPagadores(null);
-        } else {
-            negociacion.setRutPagador(null);
-            negociacion.setRutPagadores(new ArrayList<>(pagadores));
-        }
-
-
-        if ("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa())) {
-            rutProveedor = request.getRutEmpresa();
-        } else {
-            rutProveedor = facturasAceptadas.isEmpty()
-                    ? null
-                    : facturasAceptadas.get(0).getRutProveedor();
-        }
-        negociacion.setRutProveedor(rutProveedor);
         response.setFondeadoresAsignados(negociacion.getRutFondeadores().stream()
                 .map(r -> FondeadorAsignacion.builder().rutFondeador(r).nombreFondeador("DESCONOCIDO").build())
                 .collect(Collectors.toList()));
@@ -187,125 +148,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         response.setErrores(allErrores);
 
         return response;
-    }
-
-    private EstadoFirma calcularEstadoFirma(String tipoOperacion) {
-        if (tipoOperacion == null) return EstadoFirma.SIN_CESION;
-
-        return switch (tipoOperacion.toUpperCase()) {
-            case "FACTORING" -> EstadoFirma.SIN_CESION;
-            case "CONFIRMING" -> EstadoFirma.SIN_DESCUENTO;
-            default -> EstadoFirma.SIN_CESION;
-        };
-    }
-
-    private void validarPermisoOperacion(String tipoOperacion,
-                                         String rutEmpresaRequest,
-                                         Factura factura) {
-
-        if (tipoOperacion == null) {
-            throw new RuntimeException("Tipo de operación no informado");
-        }
-
-        String tipo = tipoOperacion.toUpperCase();
-
-        String rutEmpresa = normalizarNit(rutEmpresaRequest);
-
-        if ("FACTORING".equals(tipo)) {
-
-            String rutProveedor = normalizarNit(factura.getRutProveedor());
-
-            if (!rutEmpresa.equals(rutProveedor)) {
-
-                throw new RuntimeException(
-                        "Operación FACTORING solo puede ser realizada por el proveedor de la factura. " +
-                                "Empresa solicitante: " + rutEmpresaRequest +
-                                ", proveedor factura: " + factura.getRutProveedor()
-                );
-            }
-
-        } else if ("CONFIRMING".equals(tipo)) {
-
-            String rutPagador = normalizarNit(factura.getRutPagador());
-
-            if (!rutEmpresa.equals(rutPagador)) {
-
-                throw new RuntimeException(
-                        "Operación CONFIRMING solo puede ser realizada por el pagador de la factura. " +
-                                "Empresa solicitante: " + rutEmpresaRequest +
-                                ", pagador factura: " + factura.getRutPagador()
-                );
-            }
-
-        } else {
-            throw new RuntimeException("Tipo de operación no soportado: " + tipo);
-        }
-    }
-
-
-    private Optional<FondeadorQuota> obtenerQuotaPorOperacion(String tipoOperacion, Long funderId,
-                                                              Long supplierId, Long payerId) {
-
-        if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
-            return fondeadorQuotaRepository
-                    .findByFunderIdAndSupplierId(funderId, supplierId);
-        }
-
-        if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
-            return fondeadorQuotaRepository
-                    .findByFunderIdAndPayerId(funderId, payerId);
-        }
-        throw new RuntimeException("Tipo operación no soportado: " + tipoOperacion);
-    }
-
-    private BigDecimal obtenerCupoDisponiblePorOperacion(String tipoOperacion, FondeadorQuota quota) {
-
-        if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
-            return quota.getSupplierCurrentQuota() == null ? BigDecimal.ZERO : quota.getSupplierCurrentQuota();
-        }
-
-        if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
-            return quota.getPayerCurrentQuota() == null ? BigDecimal.ZERO : quota.getPayerCurrentQuota();
-        }
-        return BigDecimal.ZERO;
-    }
-
-    private void descontarCupoFondeador(String tipoOperacion, FondeadorQuota quota, BigDecimal valorFactura) {
-        if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
-
-            BigDecimal actual = quota.getSupplierCurrentQuota();
-
-            if (actual == null) {
-                actual = BigDecimal.ZERO;
-            }
-
-            quota.setSupplierCurrentQuota(actual.subtract(valorFactura).max(BigDecimal.ZERO));
-
-            return;
-        }
-
-        if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
-
-            BigDecimal actual = quota.getPayerCurrentQuota();
-
-            if (actual == null) {
-                actual = BigDecimal.ZERO;
-            }
-
-            quota.setPayerCurrentQuota(actual.subtract(valorFactura).max(BigDecimal.ZERO));
-        }
-    }
-
-    private String normalizarNit(String nit) {
-        if (nit == null) {
-            return "";
-        }
-
-        return nit.replace(".", "")
-                .replace("-", "")
-                .replace(" ", "")
-                .trim()
-                .toUpperCase();
     }
 
 }
