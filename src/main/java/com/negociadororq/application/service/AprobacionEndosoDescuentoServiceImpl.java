@@ -1,6 +1,9 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.controller.dto.*;
+import com.negociadororq.application.controller.dto.AprobacionFacturaRequestDto;
+import com.negociadororq.application.controller.dto.AprobacionRequestDto;
+import com.negociadororq.application.controller.dto.AprobacionResponseDto;
+import com.negociadororq.application.controller.dto.ConfirmacionOtpRequestDto;
 import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
@@ -8,16 +11,31 @@ import com.negociadororq.application.mapper.OperacionMapper;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
 import com.negociadororq.domain.event.OtpRequestEvent;
 import com.negociadororq.domain.event.OtpValidateRequestEvent;
-import com.negociadororq.domain.model.*;
+import com.negociadororq.domain.model.AprobacionActorDto;
+import com.negociadororq.domain.model.Company;
+import com.negociadororq.domain.model.Factura;
+import com.negociadororq.domain.model.FacturaNegociada;
+import com.negociadororq.domain.model.FondeadorAsignacion;
+import com.negociadororq.domain.model.Negociacion;
+import com.negociadororq.domain.model.Operacion;
+import com.negociadororq.domain.model.PendingOtp;
+import com.negociadororq.domain.model.User;
 import com.negociadororq.enums.EstadoEndoso;
 import com.negociadororq.enums.EstadoFirma;
 import com.negociadororq.enums.EstadoNegociacion;
 import com.negociadororq.enums.RolActor;
 import com.negociadororq.infrastructure.pdf.PdfFirmaService;
-import com.negociadororq.infrastructure.persistence.repository.*;
+import com.negociadororq.infrastructure.persistence.repository.CompanyRepository;
+import com.negociadororq.infrastructure.persistence.repository.EndosoPatchRepository;
+import com.negociadororq.infrastructure.persistence.repository.EndosoRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
+import com.negociadororq.infrastructure.persistence.repository.FondeadorQuotaRepository;
+import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
+import com.negociadororq.infrastructure.persistence.repository.PendingOtpRepository;
+import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.bson.types.Binary;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -25,7 +43,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 
@@ -37,7 +59,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
     private final NegociacionRepository negociacionRepository;
     private final FacturaPatchRepository facturaPatchRepository;
-    private  final EndosoPatchRepository endosoPatchRepository;
+    private final EndosoPatchRepository endosoPatchRepository;
     private final OperacionMapper operacionMapper;
     private final OutboxService outboxService;
 
@@ -162,7 +184,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     aprobacion
             );
 
-            actualizarEstadosFacturaEndosoNegociacion( negociacion, negociacion.getId(), factura, negociacion.getTipoOperacion(), request.getRutOperador());
+            actualizarEstadosFacturaEndosoNegociacion(
+                    negociacion, negociacion.getId(), factura,
+                    negociacion.getTipoOperacion(), request.getRutOperador());
         }
 
         notificacionService.notificarFirmaEndoso(request);
@@ -343,7 +367,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         BigDecimal valorFactura = Optional.ofNullable(facturaDb.getValorNetoFactura())
                 .orElse(facturaDb.getValorFactura());
 
-        if (valorFactura == null) valorFactura = BigDecimal.ZERO;
+        if (valorFactura == null) {
+            valorFactura = BigDecimal.ZERO;
+        }
 
         // 1️⃣ Usuario
         Long userId = userRepository.findByUsername(rutOperador)
@@ -360,10 +386,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         cupoReversionService.revertirCupoEmpresa(companyId, valorFactura);
 
 
-        // 3️⃣ Revertir cupo fondeadores
-        final BigDecimal valorFinal = valorFactura;
-
-        // 3️⃣ Revertir cupo fondeadores
+        // 3. Revertir cupo fondeadores
         if (factura.getFondeadores() != null &&
                 !factura.getFondeadores().isEmpty()) {
 

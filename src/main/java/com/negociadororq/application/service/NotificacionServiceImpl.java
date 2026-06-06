@@ -6,7 +6,6 @@ import com.negociadororq.application.service.notificacion.DestinatarioResolver;
 import com.negociadororq.domain.event.DestinatarioEmail;
 import com.negociadororq.domain.event.NotificacionEmailEvent;
 import com.negociadororq.domain.model.Endoso;
-import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.enums.TipoNotificacion;
 import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
@@ -15,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -35,8 +35,6 @@ public class NotificacionServiceImpl implements NotificacionService {
     public void notificarCreacionNegociacion(Negociacion negociacion) {
         List<DestinatarioEmail> destinatarios =
                 destinatarioResolver.resolverParaCreacionNegociacion(negociacion);
-
-        String cuerpo = cuerpoFactory.construir(negociacion);
 
         Map<String, Object> data = safeMap(
                 "id", negociacion.getId(),
@@ -157,7 +155,7 @@ public class NotificacionServiceImpl implements NotificacionService {
         if (values.length % 2 != 0) {
             throw new IllegalArgumentException("La cantidad de argumentos debe ser par");
         }
-        Map<String, Object> map = new java.util.HashMap<>();
+        Map<String, Object> map = new HashMap<>();
         for (int i = 0; i < values.length; i += 2) {
             map.put(String.valueOf(values[i]), values[i + 1]);
         }

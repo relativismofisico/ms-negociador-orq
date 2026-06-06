@@ -1,9 +1,19 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.domain.model.*;
+import com.negociadororq.domain.model.Company;
+import com.negociadororq.domain.model.Factura;
+import com.negociadororq.domain.model.FacturaNegociada;
+import com.negociadororq.domain.model.FondeadorAsignacion;
+import com.negociadororq.domain.model.Negociacion;
+import com.negociadororq.domain.model.User;
 import com.negociadororq.enums.EstadoEndoso;
 import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.infrastructure.persistence.repository.*;
+import com.negociadororq.infrastructure.persistence.repository.CompanyRepository;
+import com.negociadororq.infrastructure.persistence.repository.EndosoPatchRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
+import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
+import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

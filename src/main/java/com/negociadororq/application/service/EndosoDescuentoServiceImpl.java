@@ -10,7 +10,11 @@ import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.enums.EstadoEndoso;
 import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.infrastructure.persistence.repository.*;
+import com.negociadororq.infrastructure.persistence.repository.EndosoRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
+import com.negociadororq.infrastructure.persistence.repository.NegociacionPatchRepository;
+import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
 
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;

@@ -2,6 +2,11 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.3.4'
     id 'io.spring.dependency-management' version '1.1.6'
+    id 'checkstyle'
+    id 'pmd'
+    id 'com.github.spotbugs' version '6.0.26'
+    id 'jacoco'
+    id 'org.sonarqube' version '5.1.0.4882'
 }
 
 group = 'com.negociadororq'
@@ -45,8 +50,139 @@ dependencies {
     // Tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+
+    // SpotBugs annotations (for @SuppressWarnings integration)
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
 }
 
+// =====================================================================
+// CHECKSTYLE
+// =====================================================================
+checkstyle {
+    toolVersion = '10.17.0'
+    configFile = file("${rootDir}/config/checkstyle/checkstyle.xml")
+    ignoreFailures = false
+    showViolations = true
+    maxErrors = 0
+    maxWarnings = 0
+}
+
+checkstyleMain {
+    source = fileTree('src/main/java')
+}
+
+checkstyleTest {
+    source = fileTree('src/test/java')
+}
+
+// =====================================================================
+// PMD
+// =====================================================================
+pmd {
+    toolVersion = '7.5.0'
+    ruleSetFiles = files("${rootDir}/config/pmd/ruleset.xml")
+    ruleSets = []
+    ignoreFailures = false
+    consoleOutput = true
+}
+
+// =====================================================================
+// SPOTBUGS
+// =====================================================================
+spotbugs {
+    toolVersion = '4.8.6'
+    excludeFilter = file("${rootDir}/config/spotbugs/exclude.xml")
+    ignoreFailures = false
+}
+
+spotbugsMain {
+    reports {
+        create('html') {
+            enabled = true
+            outputLocation = layout.buildDirectory.file('reports/spotbugs/main.html')
+        }
+        create('xml') {
+            enabled = true
+            outputLocation = layout.buildDirectory.file('reports/spotbugs/main.xml')
+        }
+    }
+}
+
+spotbugsTest {
+    reports {
+        create('html') {
+            enabled = true
+            outputLocation = layout.buildDirectory.file('reports/spotbugs/test.html')
+        }
+        create('xml') {
+            enabled = false
+        }
+    }
+}
+
+// =====================================================================
+// JACOCO
+// =====================================================================
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/dto/**',
+                '**/enums/**',
+                '**/domain/model/**',
+                '**/domain/event/**',
+                '**/MsNegociadorOrqApplication.class'
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.20
+            }
+        }
+    }
+}
+
+// =====================================================================
+// SONARQUBE
+// =====================================================================
+sonarqube {
+    properties {
+        property 'sonar.projectKey', 'ms-negociador-orq'
+        property 'sonar.projectName', 'ms-negociador-orq'
+        property 'sonar.projectVersion', version
+        property 'sonar.java.source', '17'
+        property 'sonar.sources', 'src/main/java'
+        property 'sonar.tests', 'src/test/java'
+        property 'sonar.java.binaries', 'build/classes/java/main'
+        property 'sonar.java.test.binaries', 'build/classes/java/test'
+        property 'sonar.coverage.jacoco.xmlReportPaths', 'build/reports/jacoco/test/jacocoTestReport.xml'
+        property 'sonar.checkstyle.reportPaths', 'build/reports/checkstyle/main.xml'
+        property 'sonar.pmd.reportPaths', 'build/reports/pmd/main.xml'
+        property 'sonar.java.spotbugs.reportPaths', 'build/reports/spotbugs/main.xml'
+        property 'sonar.exclusions', '**/dto/**, **/enums/**, **/domain/model/**, **/domain/event/**'
+    }
+}
+
+// =====================================================================
+// TEST
+// =====================================================================
 tasks.named('test') {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport
 }
