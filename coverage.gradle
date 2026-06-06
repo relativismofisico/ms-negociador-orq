@@ -2,12 +2,25 @@
  * Copyright (c). Todos los derechos reservados.
  */
 def jacocoExcludes = [
-        'com/cargafacturas/domain/**',
-        'com/cargafacturas/infrastructure/**',
-        'com/cargafacturas/web/controller/**',
-        'com/cargafacturas/MsCargaFacturasNegApplication.class',
-        'com/cargafacturas/application/service/ProveedorFacturacionService.class',
-        'com/cargafacturas/application/util/ByteArrayMultipartFile.class'
+        // Capa de infraestructura — adaptadores JPA, MongoDB, Kafka, security config, scheduler, PDF
+        'com/negociadororq/infrastructure/**',
+        // Clase principal de Spring Boot
+        'com/negociadororq/MsNegociadorOrqApplication.class',
+        // DTOs — código generado por Lombok (equals/hashCode/builder producen branches vacíos)
+        'com/negociadororq/application/dto/**',
+        // Eventos de dominio — solo portadores de datos Lombok
+        'com/negociadororq/domain/event/**',
+        // Modelos de dominio — portadores de datos Lombok (800+ branches en equals/hashCode)
+        'com/negociadororq/domain/model/**',
+        // Enums de dominio — constantes sin lógica ramificable
+        'com/negociadororq/domain/enums/**',
+        // Mappers — sin lógica de negocio propia
+        'com/negociadororq/application/mapper/**',
+        // Puertos hexagonales — interfaces de contrato sin implementación propia
+        'com/negociadororq/application/port/**',
+        // Interfaces de servicio puras (JaCoCo registra branches artefactuales en interfaces)
+        'com/negociadororq/application/service/FirmaEndosoService.class',
+        'com/negociadororq/application/service/NegociacionFactoringComfirmingService.class',
 ]
 
 jacocoTestReport {
