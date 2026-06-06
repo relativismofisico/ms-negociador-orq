@@ -38,7 +38,7 @@ public class SecurityConfig {
     private final CustomAccessDeniedHandler accessDeniedHandler;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
         http
             // Sin estado — JWT es el único mecanismo de sesión
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -64,7 +64,7 @@ public class SecurityConfig {
             // OAuth2 Resource Server — valida el JWT en cada petición
             .oauth2ResourceServer(oauth2 -> oauth2
                 .jwt(jwt -> jwt
-                    .decoder(jwtDecoder())
+                    .decoder(jwtDecoder)
                     .jwtAuthenticationConverter(jwtRolConverter)
                 )
                 .authenticationEntryPoint(authenticationEntryPoint)
@@ -74,14 +74,8 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /**
-     * Decoder basado en jjwt — garantiza compatibilidad con ms-security.
-     * Reutiliza la misma clave y librería que el generador del token.
-     */
     @Bean
-    public JwtDecoder jwtDecoder() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.findAndRegisterModules();
-        return new JjwtDecoder(securityProperties.getJwt().getSecret(), mapper);
+    public JwtDecoder jwtDecoder(ObjectMapper objectMapper) {
+        return new JjwtDecoder(securityProperties.getJwt().getSecret(), objectMapper);
     }
 }
