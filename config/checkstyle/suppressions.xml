@@ -33,4 +33,11 @@
     <suppress checks="VisibilityModifier"
               files=".*Test\.java"/>
 
+    <!--
+      Nombres de métodos de test usan guion bajo para separar
+      escenario_resultado (estilo BDD). Es el patrón estándar en JUnit 5.
+    -->
+    <suppress checks="MethodName"
+              files=".*Test\.java"/>
+
 </suppressions>
