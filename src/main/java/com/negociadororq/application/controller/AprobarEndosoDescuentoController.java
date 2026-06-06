@@ -25,7 +25,7 @@ public class AprobarEndosoDescuentoController {
     @PostMapping("/solicitar-otp")
     public ResponseEntity<String> solicitarOtp(@RequestBody AprobacionRequestDto request) {
         service.solicitarOtp(request);
-        return ResponseEntity.ok("OTP solicitado");
+        return ResponseEntity.accepted().body("OTP solicitado");
     }
 
     // Roles autorizados configurados en application.yml → security.roles.otp
@@ -37,6 +37,6 @@ public class AprobarEndosoDescuentoController {
         String ip = IpUtils.obtenerIp(httpRequest);
         request.setIpAprobacion(ip);
         service.confirmarOtp(request);
-        return ResponseEntity.ok("Validando OTP...");
+        return ResponseEntity.accepted().body("Validando OTP...");
     }
 }

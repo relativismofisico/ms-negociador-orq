@@ -3,6 +3,7 @@ package com.negociadororq.application.service;
 import com.negociadororq.application.controller.dto.NegociacionRequestDto;
 import com.negociadororq.application.controller.dto.NegociacionResponseDto;
 import com.negociadororq.application.controller.dto.ValidacionFacturaResponseDto;
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.domain.event.OtpRequestEvent;
 import com.negociadororq.domain.model.*;
 import com.negociadororq.enums.EstadoFirma;
@@ -51,7 +52,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         // obtener userId del operador (lanzará excepción si no existe)
         Long userId = userRepository.findByUsername(request.getRutOperador())
                 .map(User::getIdeUser)
-                .orElseThrow(() -> new RuntimeException("No existe operador con username " + request.getRutOperador()));
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No existe operador con username " + request.getRutOperador(), "OPERADOR_NO_ENCONTRADO"));
 
         /* ======================================================
            1. Agrupar facturas por pagador SOLO en CONFIRMING
@@ -61,7 +63,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         for (FacturaNegociada fn : request.getFacturas()) {
 
             Factura factura = facturaRepository.findByNumeroFactura(fn.getNumeroFactura())
-                    .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + fn.getNumeroFactura()));
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
+                            "Factura no encontrada: " + fn.getNumeroFactura(), "FACTURA_NO_ENCONTRADA"));
 
             facturasPorPagador
                     .computeIfAbsent(factura.getRutPagador(), k -> new ArrayList<>())
@@ -75,7 +78,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             if (companyIdByNit.containsKey(nit)) return companyIdByNit.get(nit);
             Long id = companyRepository.findByNit(nit)
                     .map(Company::getIdeCompany)
-                    .orElseThrow(() -> new RuntimeException("No existe company con NIT " + nit));
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
+                            "No existe company con NIT " + nit, "EMPRESA_NO_ENCONTRADA"));
             companyIdByNit.put(nit, id);
             return id;
         };
