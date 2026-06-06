@@ -1,11 +1,8 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.domain.model.MessageTemplate;
-import com.negociadororq.infrastructure.persistence.repository.MessageTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 

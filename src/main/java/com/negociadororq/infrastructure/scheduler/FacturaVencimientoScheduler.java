@@ -13,17 +13,10 @@ public class FacturaVencimientoScheduler {
 
     private final FacturaVencimientoService facturaVencimientoService;
 
-    /**
-     * Todos los días a la 1:00 AM
-     */
-    //@Scheduled(cron = "${facturas.vencimiento.cron}")
-    //TEST
-    @Scheduled(cron = "*/10 * * * * *")
+    @Scheduled(cron = "${facturas.vencimiento.cron}")
     public void ejecutarProcesoNocturno() {
 
-        log.info(
-                "🌙 Ejecutando scheduler de vencimiento facturas"
-        );
+        log.info("Ejecutando scheduler de vencimiento facturas");
 
         facturaVencimientoService
                 .actualizarFacturasVencidas();
