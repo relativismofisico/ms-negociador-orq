@@ -1,0 +1,17 @@
+# ─────────────────────────────────────────────────────────────
+# Perfil DEV — desarrollo local
+# ─────────────────────────────────────────────────────────────
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/dbcompany?useSSL=false&serverTimezone=UTC
+    username: root
+    password: root
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/DB_Facturas
+      database: DB_Facturas
+  kafka:
+    bootstrap-servers: localhost:9092
+
+# Swagger accesible sin token en desarrollo (SecurityConfig permite /swagger-ui/**)
+# Para forzar JWT también en swagger, eliminar los matchers permitAll en SecurityConfig

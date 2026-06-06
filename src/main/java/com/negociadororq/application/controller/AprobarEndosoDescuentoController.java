@@ -7,6 +7,7 @@ import com.negociadororq.infrastructure.util.IpUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,18 +20,16 @@ public class AprobarEndosoDescuentoController {
 
     private final AprobacionEndosoDescuentoService service;
 
-    // 202 ACCEPTED: operación asíncrona — solo encola el evento OTP en Kafka/Outbox,
-    // no garantiza procesamiento inmediato. El cliente debe consultar el estado.
-    // ⚠ RIESGO DE COMPATIBILIDAD: clientes que esperan 200 deben actualizarse a aceptar 202
+    // Roles autorizados configurados en application.yml → security.roles.otp
+    @PreAuthorize("@sec.tieneRol(authentication, 'otp')")
     @PostMapping("/solicitar-otp")
     public ResponseEntity<String> solicitarOtp(@RequestBody AprobacionRequestDto request) {
         service.solicitarOtp(request);
         return ResponseEntity.accepted().body("OTP solicitado");
     }
 
-    // 202 ACCEPTED: operación asíncrona — publica evento de validación a Kafka/Outbox.
-    // La respuesta de validación llega por el consumer OtpValidatedListener.
-    // ⚠ RIESGO DE COMPATIBILIDAD: clientes que esperan 200 deben actualizarse a aceptar 202
+    // Roles autorizados configurados en application.yml → security.roles.otp
+    @PreAuthorize("@sec.tieneRol(authentication, 'otp')")
     @PostMapping("/confirmar-otp")
     public ResponseEntity<String> confirmarOtp(
             @RequestBody ConfirmacionOtpRequestDto request,

@@ -1,6 +1,6 @@
 package com.negociadororq.infrastructure.kafka.consumer;
 
-import com.negociadororq.application.service.AprobacionEndosoDescuentoService;
+import com.negociadororq.application.service.AprobacionInternaService;
 import com.negociadororq.domain.event.OtpValidatedEvent;
 import com.negociadororq.domain.model.PendingOtp;
 import com.negociadororq.infrastructure.persistence.repository.PendingOtpRepository;
@@ -17,7 +17,7 @@ import static org.apache.kafka.common.requests.DeleteAclsResponse.log;
 public class OtpValidatedListener {
 
     private final PendingOtpRepository pendingOtpRepository;
-    private final AprobacionEndosoDescuentoService service;
+    private final AprobacionInternaService service;
 
     @KafkaListener(topics ="${topics.otp-validate-response}",
             groupId = "ms-negociador-orq",

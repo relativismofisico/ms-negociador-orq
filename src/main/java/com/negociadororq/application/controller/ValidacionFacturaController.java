@@ -5,6 +5,7 @@ import com.negociadororq.application.controller.dto.ValidacionFacturaResponseDto
 import com.negociadororq.application.service.ValidacionFacturaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,7 +18,8 @@ public class ValidacionFacturaController {
 
     private final ValidacionFacturaService validacionFacturaService;
 
-    // 200 OK: operación de consulta/validación — no crea recurso, devuelve resultado del análisis
+    // Roles autorizados configurados en application.yml → security.roles.validacion
+    @PreAuthorize("@sec.tieneRol(authentication, 'validacion')")
     @PostMapping("/vencimiento")
     public ResponseEntity<ValidacionFacturaResponseDto> validarFacturaVencida(
             @RequestBody ValidacionFacturaRequestDto request) {

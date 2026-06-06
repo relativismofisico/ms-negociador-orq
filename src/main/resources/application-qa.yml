@@ -1,0 +1,36 @@
+# ─────────────────────────────────────────────────────────────
+# Perfil QA — ambiente de pruebas
+# ─────────────────────────────────────────────────────────────
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST:dbcompany-qa.rds.amazonaws.com}:3306/dbcompany?useSSL=true&serverTimezone=UTC
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/DB_Facturas_QA}
+      database: ${MONGO_DB:DB_Facturas_QA}
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+  roles:
+    negociacion:
+      - ADMINISTRADOR
+      - EMPRESA
+      - OPERARIO
+    endoso:
+      - ADMINISTRADOR
+      - EMPRESA
+      - FONDEADOR
+    otp:
+      - ADMINISTRADOR
+      - EMPRESA
+      - FONDEADOR
+    validacion:
+      - ADMINISTRADOR
+      - OPERARIO
+      - EMPRESA
+      - FONDEADOR

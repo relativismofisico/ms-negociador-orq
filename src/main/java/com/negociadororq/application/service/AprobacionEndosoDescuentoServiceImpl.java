@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDescuentoService {
+public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDescuentoService, AprobacionInternaService {
 
     private final NegociacionRepository negociacionRepository;
     private final FacturaPatchRepository facturaPatchRepository;
@@ -42,7 +42,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final OutboxService outboxService;
 
     @Lazy
-    private final OperadorService operadorService;
+    private final CupoReversionService cupoReversionService;
     private final CompanyRepository companyRepository;
     private final FondeadorQuotaRepository fondeadorQuotaRepository;
     private final FacturaRepository facturaRepository;
@@ -350,14 +350,14 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 .map(User::getIdeUser)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        operadorService.revertirCupoUsuario(userId, valorFactura);
+        cupoReversionService.revertirCupoUsuario(userId, valorFactura);
 
         // 2 Empresa
         Long companyId = companyRepository.findByNit(rutEmpresa)
                 .map(Company::getIdeCompany)
                 .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
 
-        operadorService.revertirCupoEmpresa(companyId, valorFactura);
+        cupoReversionService.revertirCupoEmpresa(companyId, valorFactura);
 
 
         // 3️⃣ Revertir cupo fondeadores
@@ -389,7 +389,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                                     new RuntimeException(
                                             "Proveedor no encontrado"));
 
-                    operadorService.revertirCupoFondeadorFactoring(
+                    cupoReversionService.revertirCupoFondeadorFactoring(
                             funderId,
                             supplierId,
                             valorFactura);
@@ -408,7 +408,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                                     new RuntimeException(
                                             "Pagador no encontrado"));
 
-                    operadorService.revertirCupoFondeadorConfirming(
+                    cupoReversionService.revertirCupoFondeadorConfirming(
                             funderId,
                             payerId,
                             valorFactura);

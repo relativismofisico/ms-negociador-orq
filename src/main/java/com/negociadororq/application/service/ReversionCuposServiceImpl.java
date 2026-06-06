@@ -22,7 +22,7 @@ public class ReversionCuposServiceImpl
     private final FacturaPatchRepository facturaPatchRepository;
     private final EndosoPatchRepository endosoPatchRepository;
 
-    private final OperadorService operadorService;
+    private final CupoReversionService cupoReversionService;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
 
@@ -98,7 +98,7 @@ public class ReversionCuposServiceImpl
                                 new RuntimeException(
                                         "Usuario no encontrado"));
 
-        operadorService.revertirCupoUsuario(
+        cupoReversionService.revertirCupoUsuario(
                 userId,
                 valor);
 
@@ -114,7 +114,7 @@ public class ReversionCuposServiceImpl
                                 new RuntimeException(
                                         "Empresa no encontrada"));
 
-        operadorService.revertirCupoEmpresa(
+        cupoReversionService.revertirCupoEmpresa(
                 companyId,
                 valor);
 
@@ -150,7 +150,7 @@ public class ReversionCuposServiceImpl
                                             new RuntimeException(
                                                     "Proveedor no encontrado"));
 
-                    operadorService
+                    cupoReversionService
                             .revertirCupoFondeadorFactoring(
                                     funderId,
                                     supplierId,
@@ -172,7 +172,7 @@ public class ReversionCuposServiceImpl
                                             new RuntimeException(
                                                     "Pagador no encontrado"));
 
-                    operadorService
+                    cupoReversionService
                             .revertirCupoFondeadorConfirming(
                                     funderId,
                                     payerId,
