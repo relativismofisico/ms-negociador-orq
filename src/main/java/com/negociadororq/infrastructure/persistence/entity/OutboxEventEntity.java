@@ -40,3 +40,4 @@ public class OutboxEventEntity {
 
     private Integer intentos = 0;
 }
+

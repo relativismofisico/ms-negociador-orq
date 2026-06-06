@@ -20,3 +20,4 @@ public class FacturaCuerpoBuilder implements CuerpoNotificacionBuilder<Factura> 
                 "Valor: " + factura.getValorFactura() + "\n";
     }
 }
+

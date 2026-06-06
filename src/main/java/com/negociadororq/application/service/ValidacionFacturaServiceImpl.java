@@ -1,23 +1,23 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.controller.dto.ValidacionFacturaResponseDto;
+import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.domain.model.Factura;
-import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
+import com.negociadororq.application.port.output.FacturaOutputPort;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.java.Log;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 
-@Slf4j
+@Log
 @Service
 @RequiredArgsConstructor
 public class ValidacionFacturaServiceImpl implements ValidacionFacturaService {
 
-    private final FacturaRepository facturaRepository;
+    private final FacturaOutputPort facturaPort;
 
     @Value("${negociacion.dias-minimos-vencimiento:10}")
     private long diasMinimosVencimiento;
@@ -27,7 +27,7 @@ public class ValidacionFacturaServiceImpl implements ValidacionFacturaService {
 
         LocalDate fechaValidacion = fechaProceso != null ? fechaProceso : LocalDate.now();
 
-        Factura factura = facturaRepository
+        Factura factura = facturaPort
                 .findByNumeroFactura(numeroFactura)
                 .orElseThrow(() ->
                         new RecursoNoEncontradoException("Factura no encontrada: " + numeroFactura, "FACTURA_NO_ENCONTRADA"));
@@ -64,3 +64,4 @@ public class ValidacionFacturaServiceImpl implements ValidacionFacturaService {
                 .build();
     }
 }
+

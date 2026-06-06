@@ -9,3 +9,4 @@ public interface CupoReversionService {
     void revertirCupoFondeadorConfirming(Long funderId, Long payerId, BigDecimal valor);
     void revertirCupoFondeadorFactoring(Long funderId, Long supplierId, BigDecimal valor);
 }
+

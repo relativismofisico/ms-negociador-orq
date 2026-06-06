@@ -32,3 +32,4 @@ public interface FacturaService {
     boolean existenFacturasDePagador(List<String> numerosFacturas, String rutPagador);
 }
 
+

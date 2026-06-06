@@ -1,21 +1,21 @@
 package com.negociadororq.application.service;
 
 import com.negociadororq.domain.model.Factura;
-import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
+import com.negociadororq.application.port.output.FacturaOutputPort;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
-@Slf4j
+@Log
 @Service
 @RequiredArgsConstructor
 public class FacturaVencimientoService {
 
-    private final FacturaRepository facturaRepository;
+    private final FacturaOutputPort facturaPort;
 
     /**
      * Marca facturas como VENCIDA
@@ -23,9 +23,9 @@ public class FacturaVencimientoService {
      */
     public void actualizarFacturasVencidas() {
 
-        log.info("⏳ Iniciando validación nocturna de vencimientos");
+        log.info("Iniciando validacion nocturna de vencimientos");
 
-        List<Factura> facturas = facturaRepository.findFacturasPendientesVencimiento();
+        List<Factura> facturas = facturaPort.findFacturasPendientesVencimiento();
 
         int actualizadas = 0;
 
@@ -53,31 +53,21 @@ public class FacturaVencimientoService {
 
                     factura.setEstadoNegociacion("VENCIDA");
 
-                    facturaRepository.save(factura);
+                    facturaPort.save(factura);
 
                     actualizadas++;
 
-                    log.info(
-                            "⚠ Factura {} marcada como VENCIDA. Dias restantes={}",
-                            factura.getNumeroFactura(),
-                            dias
-                    );
+                    log.info(String.format("Factura %s marcada como VENCIDA. Dias restantes=%d", factura.getNumeroFactura(), dias));
                 }
 
             } catch (Exception ex) {
 
-                log.error(
-                        "Error validando factura {}",
-                        factura.getNumeroFactura(),
-                        ex
-                );
+                log.log(java.util.logging.Level.SEVERE, String.format("Error validando factura %s", factura.getNumeroFactura()), ex);
             }
         }
 
-        log.info(
-                "✅ Proceso finalizado. Facturas vencidas actualizadas={}",
-                actualizadas
-        );
+        log.info(String.format("Proceso finalizado. Facturas vencidas actualizadas=%d", actualizadas));
     }
 
 }
+

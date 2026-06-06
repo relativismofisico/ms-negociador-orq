@@ -16,3 +16,4 @@ public class DestinatarioEmail {
     private String rutActor;
     private String tipoActor;
 }
+

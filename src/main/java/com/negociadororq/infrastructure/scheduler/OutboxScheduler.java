@@ -1,7 +1,7 @@
 package com.negociadororq.infrastructure.scheduler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.negociadororq.application.service.OutboxEventPublisher;
+import com.negociadororq.infrastructure.kafka.producer.OutboxEventPublisher;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
 import com.negociadororq.domain.event.NotificacionEmailEvent;
 import com.negociadororq.domain.event.OtpRequestEvent;
@@ -151,3 +151,4 @@ public class OutboxScheduler {
 
 
 }
+

@@ -29,3 +29,4 @@ public abstract class NegociadorException extends RuntimeException {
         return codigo;
     }
 }
+

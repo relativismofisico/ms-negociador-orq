@@ -1,5 +1,6 @@
 package com.negociadororq.infrastructure.pdf;
 
+import com.negociadororq.application.port.output.PdfFirmaOutputPort;
 import com.negociadororq.domain.model.FirmaOtpMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -14,7 +15,7 @@ import java.util.List;
 
 @Slf4j
 @Service
-public class PdfFirmaServiceImpl implements PdfFirmaService {
+public class PdfFirmaServiceImpl implements PdfFirmaOutputPort {
 
     @Override
     public byte[] agregarFirma(byte[] pdfBytes, FirmaOtpMetadata firma, int indexFirma) {
@@ -33,16 +34,15 @@ public class PdfFirmaServiceImpl implements PdfFirmaService {
             contentStream.setFont(PDType1Font.HELVETICA_BOLD, 8);
 
             float x = 50;
-            float y = 100 + (indexFirma * 60); // 🔥 más espacio porque ahora es multilinea
+            float y = 100 + (indexFirma * 60);
 
             contentStream.newLineAtOffset(x, y);
 
-            // 🔥 TEXTO MULTILINEA
             List<String> lineas = construirLineasFirma(firma);
 
             for (String linea : lineas) {
                 contentStream.showText(linea);
-                contentStream.newLineAtOffset(0, -10); // salto de línea
+                contentStream.newLineAtOffset(0, -10);
             }
 
             contentStream.endText();
@@ -60,7 +60,6 @@ public class PdfFirmaServiceImpl implements PdfFirmaService {
     }
 
     private List<String> construirLineasFirma(FirmaOtpMetadata firma) {
-
         return List.of(
                 "===== FIRMA ELECTRONICA =====",
                 "Actor: " + firma.getRolActor(),

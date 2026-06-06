@@ -20,3 +20,4 @@ public class PersonaCuerpoBuilder implements CuerpoNotificacionBuilder<User> {
                 "Identificación: " + user.getIdeUser() + "\n";
     }
 }
+

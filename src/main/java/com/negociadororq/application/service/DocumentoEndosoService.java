@@ -9,3 +9,4 @@ public interface DocumentoEndosoService {
 
     void generarDocumentoFormal(Endoso endoso, Negociacion negociacion, Factura factura, FacturaNegociada facturaNegociada);
 }
+

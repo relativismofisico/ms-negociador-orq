@@ -1,24 +1,24 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.controller.dto.EndosoRequestDto;
-import com.negociadororq.application.controller.dto.EndosoResponseDto;
+import com.negociadororq.application.dto.EndosoRequestDto;
+import com.negociadororq.application.dto.EndosoResponseDto;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
-import com.negociadororq.enums.EstadoEndoso;
-import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.infrastructure.persistence.repository.EndosoRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
-import com.negociadororq.infrastructure.persistence.repository.NegociacionPatchRepository;
-import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
+import com.negociadororq.domain.enums.EstadoEndoso;
+import com.negociadororq.domain.enums.EstadoFirma;
+import com.negociadororq.application.port.output.EndosoOutputPort;
+import com.negociadororq.application.port.output.FacturaPatchOutputPort;
+import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.NegociacionPatchOutputPort;
+import com.negociadororq.application.port.output.NegociacionOutputPort;
 
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,16 +28,16 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@Log
 public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
-    private final NegociacionRepository negociacionRepository;
-    private final EndosoRepository endosoRepository;
-    private final FacturaRepository facturaRepository;
+    private final NegociacionOutputPort negociacionPort;
+    private final EndosoOutputPort endosoPort;
+    private final FacturaOutputPort facturaPort;
     private final NotificacionService notificacionService;
-    private final FacturaPatchRepository facturaPatchRepository;
+    private final FacturaPatchOutputPort facturaPatchPort;
     private final DocumentoEndosoService documentoEndosoService;
-    private final NegociacionPatchRepository negociacionPatchRepository;
+    private final NegociacionPatchOutputPort negociacionPatchPort;
 
 
 
@@ -45,7 +45,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     @Transactional
     public EndosoResponseDto registrarEndoso(EndosoRequestDto request) {
 
-        Negociacion negociacion = negociacionRepository.findById(request.getIdNegociacion())
+        Negociacion negociacion = negociacionPort.findById(request.getIdNegociacion())
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "Negociación no encontrada: " + request.getIdNegociacion(), "NEGOCIACION_NO_ENCONTRADA"));
 
@@ -84,8 +84,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                 continue;
             }
 
-            // 🔹 Obtener la factura REAL desde Mongo
-            Factura factura = facturaRepository.findByNumeroFactura(numeroFactura)
+            Factura factura = facturaPort.findByNumeroFactura(numeroFactura)
                     .orElse(null);
 
             if (factura == null) {
@@ -93,8 +92,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                 continue;
             }
 
-            // 🔹 Evitar doble endoso
-            boolean facturaYaEndosada = endosoRepository.existsByNegociacionIdAndNumeroFactura(
+            boolean facturaYaEndosada = endosoPort.existsByNegociacionIdAndNumeroFactura(
                             request.getIdNegociacion(),
                             factura.getNumeroFactura());
 
@@ -117,18 +115,17 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                     .fechaActualizacion(LocalDateTime.now())
                     .build();
 
-            // 🔹 Generar documento formal antes de guardar
             documentoEndosoService.generarDocumentoFormal(endoso, negociacion, factura, facturaNegociada);
 
-            endosoRepository.save(endoso);
+            endosoPort.save(endoso);
 
             notificacionService.notificarEndoso(endoso);
 
             facturasCreadas.add(numeroFactura);
 
-            facturaPatchRepository.actualizarEstadoPorId(factura.getId(), EstadoFirma.EN_REVISION);
+            facturaPatchPort.actualizarEstadoPorId(factura.getId(), EstadoFirma.EN_REVISION);
 
-            negociacionPatchRepository.actualizarEstadoEndosoPorId(negociacion.getId(), factura.getNumeroFactura(), true);
+            negociacionPatchPort.actualizarEstadoEndosoPorId(negociacion.getId(), factura.getNumeroFactura(), true);
 
         }
 
@@ -160,3 +157,4 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     }
 
 }
+

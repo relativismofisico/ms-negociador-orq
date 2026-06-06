@@ -89,3 +89,4 @@ public class LiquidacionKafkaConsumerConfig {
         return factory;
     }
 }
+

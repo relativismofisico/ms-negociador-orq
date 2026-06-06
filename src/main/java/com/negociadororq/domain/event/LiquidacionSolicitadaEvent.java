@@ -18,3 +18,4 @@ public class LiquidacionSolicitadaEvent {
     private Operacion tipoOperacion;
     private LocalDateTime fecha;
 }
+

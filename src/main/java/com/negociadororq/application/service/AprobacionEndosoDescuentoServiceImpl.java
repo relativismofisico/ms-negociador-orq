@@ -1,17 +1,26 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.controller.dto.AprobacionFacturaRequestDto;
-import com.negociadororq.application.controller.dto.AprobacionRequestDto;
-import com.negociadororq.application.controller.dto.AprobacionResponseDto;
-import com.negociadororq.application.controller.dto.ConfirmacionOtpRequestDto;
+import com.negociadororq.application.dto.AprobacionRequestDto;
+import com.negociadororq.application.dto.AprobacionResponseDto;
+import com.negociadororq.application.dto.ConfirmacionOtpRequestDto;
 import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
-import com.negociadororq.application.mapper.OperacionMapper;
+import com.negociadororq.application.port.output.CompanyOutputPort;
+import com.negociadororq.application.port.output.EndosoPatchOutputPort;
+import com.negociadororq.application.port.output.EndosoOutputPort;
+import com.negociadororq.application.port.output.FacturaPatchOutputPort;
+import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
+import com.negociadororq.application.port.output.NegociacionOutputPort;
+import com.negociadororq.application.port.output.PendingOtpOutputPort;
+import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
 import com.negociadororq.domain.event.OtpRequestEvent;
 import com.negociadororq.domain.event.OtpValidateRequestEvent;
 import com.negociadororq.domain.model.AprobacionActorDto;
+import com.negociadororq.domain.model.AprobacionFacturaRequest;
+import com.negociadororq.domain.model.AprobacionRequest;
 import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
@@ -20,24 +29,13 @@ import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.model.Operacion;
 import com.negociadororq.domain.model.PendingOtp;
 import com.negociadororq.domain.model.User;
-import com.negociadororq.enums.EstadoEndoso;
-import com.negociadororq.enums.EstadoFirma;
-import com.negociadororq.enums.EstadoNegociacion;
-import com.negociadororq.enums.RolActor;
-import com.negociadororq.infrastructure.pdf.PdfFirmaService;
-import com.negociadororq.infrastructure.persistence.repository.CompanyRepository;
-import com.negociadororq.infrastructure.persistence.repository.EndosoPatchRepository;
-import com.negociadororq.infrastructure.persistence.repository.EndosoRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
-import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
-import com.negociadororq.infrastructure.persistence.repository.FondeadorQuotaRepository;
-import com.negociadororq.infrastructure.persistence.repository.NegociacionRepository;
-import com.negociadororq.infrastructure.persistence.repository.PendingOtpRepository;
-import com.negociadororq.infrastructure.persistence.repository.UserRepository;
+import com.negociadororq.domain.enums.EstadoEndoso;
+import com.negociadororq.domain.enums.EstadoFirma;
+import com.negociadororq.domain.enums.EstadoNegociacion;
+import com.negociadororq.domain.enums.RolActor;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.java.Log;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,29 +48,24 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-
-
-@Slf4j
+@Log
 @Service
 @RequiredArgsConstructor
 public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDescuentoService, AprobacionInternaService {
 
-    private final NegociacionRepository negociacionRepository;
-    private final FacturaPatchRepository facturaPatchRepository;
-    private final EndosoPatchRepository endosoPatchRepository;
-    private final OperacionMapper operacionMapper;
+    private final NegociacionOutputPort negociacionPort;
+    private final FacturaPatchOutputPort facturaPatchPort;
+    private final EndosoPatchOutputPort endosoPatchPort;
     private final OutboxService outboxService;
-
-    @Lazy
     private final CupoReversionService cupoReversionService;
-    private final CompanyRepository companyRepository;
-    private final FondeadorQuotaRepository fondeadorQuotaRepository;
-    private final FacturaRepository facturaRepository;
-    private final UserRepository userRepository;
-    private final PendingOtpRepository pendingOtpRepository;
+    private final CompanyOutputPort companyPort;
+    private final FondeadorQuotaOutputPort fondeadorQuotaPort;
+    private final FacturaOutputPort facturaPort;
+    private final UserOutputPort userPort;
+    private final PendingOtpOutputPort pendingOtpPort;
     private final FirmaEndosoService firmaEndosoService;
     private final NotificacionService notificacionService;
-    private final EndosoRepository endosoRepository;
+    private final EndosoOutputPort endosoPort;
 
     @Value("${topics.otp-request}")
     private String topicRequestOtp;
@@ -83,21 +76,20 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     @Value("${topics.liquidacion}")
     private String topicLiquidacionSolicitada;
 
-
     @Override
     public void solicitarOtp(AprobacionRequestDto request) {
 
-        // Guardamos request temporal
+        AprobacionRequest domainRequest = mapToDomainRequest(request);
+
         PendingOtp pending = PendingOtp.builder()
                 .idNegociacion(request.getIdNegociacion())
                 .rutEmpresa(request.getRutEmpresa())
                 .rolActor(request.getRolActor())
-                .request(request)
+                .request(domainRequest)
                 .build();
 
-        pendingOtpRepository.save(pending);
+        pendingOtpPort.save(pending);
 
-        // Publicamos evento
         outboxService.guardarEvento(
                 request.getIdNegociacion(),
                 topicRequestOtp,
@@ -111,9 +103,25 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         );
     }
 
+    private AprobacionRequest mapToDomainRequest(AprobacionRequestDto dto) {
+        List<AprobacionFacturaRequest> facturas = dto.getFacturas() == null
+                ? new ArrayList<>()
+                : dto.getFacturas().stream()
+                        .map(f -> new AprobacionFacturaRequest(f.getNumeroFactura(), f.isAprobado(), f.getObservacion()))
+                        .collect(Collectors.toList());
+
+        return new AprobacionRequest(
+                dto.getIdNegociacion(),
+                dto.getRutOperador(),
+                dto.getRutEmpresa(),
+                dto.getRolActor(),
+                facturas,
+                dto.getObservacion()
+        );
+    }
+
     @Override
     public void confirmarOtp(ConfirmacionOtpRequestDto request) {
-
         outboxService.guardarEvento(
                 request.getIdNegociacion(),
                 topicValidateOtp,
@@ -130,15 +138,15 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     @Transactional
     public AprobacionResponseDto aprobarInterno(PendingOtp pending) {
 
-        AprobacionRequestDto request = pending.getRequest();
+        AprobacionRequest request = pending.getRequest();
 
-        Negociacion negociacion = negociacionRepository.findById(request.getIdNegociacion())
+        Negociacion negociacion = negociacionPort.findById(request.getIdNegociacion())
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "Negociación no encontrada: " + request.getIdNegociacion(), "NEGOCIACION_NO_ENCONTRADA"));
 
         List<String> errores = new ArrayList<>();
 
-        for (AprobacionFacturaRequestDto factReq : request.getFacturas()) {
+        for (AprobacionFacturaRequest factReq : request.getFacturas()) {
             Optional<FacturaNegociada> optFactura = negociacion.getFacturas().stream()
                     .filter(f -> f.getNumeroFactura().equals(factReq.getNumeroFactura()))
                     .findFirst();
@@ -154,7 +162,6 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 factura.setAprobaciones(new ArrayList<>());
             }
 
-            // 🔐 VALIDACIÓN: NO PERMITIR DOBLE ENDOSO
             boolean yaEndoso = factura.getAprobaciones().stream()
                     .anyMatch(a -> a.getRutActor().equals(request.getRutEmpresa()));
 
@@ -171,18 +178,13 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     request.getRutEmpresa(), rolActor, factReq.isAprobado(),
                     request.getObservacion(), LocalDateTime.now());
 
-
             firmaEndosoService.firmarPdfEndoso(
                     request.getIdNegociacion(), factura, pending, request.getRutEmpresa(),
                     request.getRutOperador(), rolActor, factReq.isAprobado(), request.getObservacion());
 
             factura.getAprobaciones().removeIf(a -> a.getRutActor().equals(request.getRutEmpresa()));
             factura.getAprobaciones().add(aprobacion);
-            actualizarAprobacionEndoso(
-                    negociacion.getId(),
-                    factura,
-                    aprobacion
-            );
+            actualizarAprobacionEndoso(negociacion.getId(), factura, aprobacion);
 
             actualizarEstadosFacturaEndosoNegociacion(
                     negociacion, negociacion.getId(), factura,
@@ -191,12 +193,10 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
         notificacionService.notificarFirmaEndoso(request);
 
-
-        //Actualizamos los campos de la negociacion
-        EstadoNegociacion  estadoGlobal = calcularEstadoNegociacion(negociacion);
+        EstadoNegociacion estadoGlobal = calcularEstadoNegociacion(negociacion);
         negociacion.setEstado(estadoGlobal.name());
         negociacion.setFechaUltimaActualizacion(LocalDateTime.now());
-        negociacionRepository.save(negociacion);
+        negociacionPort.save(negociacion);
 
         AprobacionResponseDto response = new AprobacionResponseDto();
         response.setIdNegociacion(negociacion.getId());
@@ -204,7 +204,6 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         response.setFacturas(negociacion.getFacturas());
         response.setErrores(errores);
         return response;
-
     }
 
     private void actualizarEstadosFacturaEndosoNegociacion(Negociacion negociacion,
@@ -213,30 +212,22 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                                                            Operacion tipoOperacion,
                                                            String rutOperador) {
 
-        // 1. Si hay rechazo → RECHAZADA
         boolean hayRechazo = factura.getAprobaciones().stream().anyMatch(a -> !a.isAprobado());
 
         if (hayRechazo) {
+            log.info(String.format("Reversando cupos por rechazo de factura %s", factura.getNumeroFactura()));
+            String motivoError = "La factura " + factura.getNumeroFactura()
+                    + " fue rechazada durante el proceso de aprobación/endoso";
 
-            log.info("Reversando cupos por rechazo de factura {}", factura.getNumeroFactura());
-
-            String motivoError =
-                    "La factura "
-                            + factura.getNumeroFactura()
-                            + " fue rechazada durante el proceso de aprobación/endoso";
-
-            // Reversar cupos
             revertirCupos(factura, tipoOperacion, factura.getRutProveedor(), rutOperador);
             notificacionService.notificarLiquidacionFallida(negociacion, motivoError);
-            facturaPatchRepository.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), EstadoFirma.RECHAZADA);
-            endosoPatchRepository.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), EstadoEndoso.RECHAZADO);
+            facturaPatchPort.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), EstadoFirma.RECHAZADA);
+            endosoPatchPort.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), EstadoEndoso.RECHAZADO);
             return;
         }
 
-        // 2. Actores requeridos
         Set<RolActor> actoresRequeridos = obtenerActoresRequeridos(tipoOperacion.getTipo());
 
-        // 3. Actores que aprobaron
         Set<RolActor> rolesQueAprobaron = factura.getAprobaciones().stream()
                 .filter(AprobacionActorDto::isAprobado)
                 .map(AprobacionActorDto::getRolActor)
@@ -245,15 +236,12 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         boolean todosAprobaron = rolesQueAprobaron.containsAll(actoresRequeridos);
         boolean alguienAprobo = rolesQueAprobaron.stream().anyMatch(actoresRequeridos::contains);
 
-
-        // 4. Estado final
         EstadoFirma estadoFactura;
         EstadoEndoso estadoEndoso;
 
         if (todosAprobaron) {
             estadoFactura = "FACTORING".equalsIgnoreCase(tipoOperacion.getTipo())
                     ? EstadoFirma.CESION : EstadoFirma.DESCUENTO;
-
             estadoEndoso = EstadoEndoso.ACEPTADO;
 
             Operacion operacion = Operacion.builder()
@@ -261,16 +249,10 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     .clase(tipoOperacion.getClase())
                     .build();
 
-            LiquidacionSolicitadaEvent event =
-                    new LiquidacionSolicitadaEvent(
-                            idNegociacion,
-                            rutOperador,
-                            factura.getNumeroFactura(),
-                            operacion,
-                            LocalDateTime.now());
+            LiquidacionSolicitadaEvent event = new LiquidacionSolicitadaEvent(
+                    idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, LocalDateTime.now());
 
             outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
-
         } else if (alguienAprobo) {
             estadoFactura = EstadoFirma.EN_APROBACION;
             estadoEndoso = EstadoEndoso.PENDIENTE;
@@ -279,12 +261,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             estadoEndoso = EstadoEndoso.EN_REVISION;
         }
 
-        // 5️⃣ PATCH ATÓMICO
-        facturaPatchRepository.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), estadoFactura);
-        endosoPatchRepository.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), estadoEndoso);
-
+        facturaPatchPort.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), estadoFactura);
+        endosoPatchPort.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), estadoEndoso);
     }
-
 
     private EstadoNegociacion calcularEstadoNegociacion(Negociacion negociacion) {
         List<FacturaNegociada> facturas = negociacion.getFacturas();
@@ -293,12 +272,10 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 EstadoFirma.EN_APROBACION.name().equals(f.getEstadoFirma()) ||
                         EstadoFirma.EN_REVISION.name().equals(f.getEstadoFirma())
         );
-
         boolean hayAprobadas = facturas.stream().anyMatch(f ->
                 EstadoFirma.CESION.name().equals(f.getEstadoFirma()) ||
                         EstadoFirma.DESCUENTO.name().equals(f.getEstadoFirma())
         );
-
         boolean hayRechazadas = facturas.stream().anyMatch(f ->
                 EstadoFirma.RECHAZADA.name().equals(f.getEstadoFirma())
         );
@@ -306,42 +283,32 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         if (hayPendientes) {
             return EstadoNegociacion.EN_APROBACION;
         }
-
         if (hayAprobadas && hayRechazadas) {
             return EstadoNegociacion.PARCIAL;
         }
-
         if (hayAprobadas) {
             return EstadoNegociacion.APROBADA;
         }
-
         return EstadoNegociacion.EN_APROBACION;
     }
 
     private Set<RolActor> obtenerActoresRequeridos(String tipoOperacion) {
-
         if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
             return Set.of(RolActor.PAGADOR, RolActor.FONDEADOR);
         }
-
         if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
             return Set.of(RolActor.PROVEEDOR);
         }
-
         return Set.of();
     }
 
-
     private RolActor resolverRolActor(String rutActor, FacturaNegociada factura) {
-
         if (rutActor.equals(factura.getRutPagador())) {
             return RolActor.PAGADOR;
         }
-
         if (rutActor.equals(factura.getRutProveedor())) {
             return RolActor.PROVEEDOR;
         }
-
         boolean esFondeador = Optional.ofNullable(factura.getFondeadores())
                 .orElse(Collections.emptyList())
                 .stream()
@@ -360,8 +327,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     @Transactional
     public void revertirCupos(FacturaNegociada factura, Operacion tipoOperacion, String rutEmpresa, String rutOperador) {
 
-        // Obtener factura completa
-        Factura facturaDb = facturaRepository.findByNumeroFactura(factura.getNumeroFactura())
+        Factura facturaDb = facturaPort.findByNumeroFactura(factura.getNumeroFactura())
                 .orElseThrow(() -> new RuntimeException("Factura no encontrada para reversión"));
 
         BigDecimal valorFactura = Optional.ofNullable(facturaDb.getValorNetoFactura())
@@ -371,85 +337,43 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             valorFactura = BigDecimal.ZERO;
         }
 
-        // 1️⃣ Usuario
-        Long userId = userRepository.findByUsername(rutOperador)
+        Long userId = userPort.findByUsername(rutOperador)
                 .map(User::getIdeUser)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
         cupoReversionService.revertirCupoUsuario(userId, valorFactura);
 
-        // 2 Empresa
-        Long companyId = companyRepository.findByNit(rutEmpresa)
+        Long companyId = companyPort.findByNit(rutEmpresa)
                 .map(Company::getIdeCompany)
                 .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
 
         cupoReversionService.revertirCupoEmpresa(companyId, valorFactura);
 
-
-        // 3. Revertir cupo fondeadores
-        if (factura.getFondeadores() != null &&
-                !factura.getFondeadores().isEmpty()) {
-
+        if (factura.getFondeadores() != null && !factura.getFondeadores().isEmpty()) {
             for (FondeadorAsignacion fon : factura.getFondeadores()) {
-
-                Long funderId = companyRepository.findByNit(fon.getRutFondeador())
+                Long funderId = companyPort.findByNit(fon.getRutFondeador())
                         .map(Company::getIdeCompany)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Fondeador no encontrado: "
-                                                + fon.getRutFondeador()));
-
-                // =========================================
-                // FACTORING
-                // =========================================
+                        .orElseThrow(() -> new RuntimeException("Fondeador no encontrado: " + fon.getRutFondeador()));
 
                 if ("FACTORING".equalsIgnoreCase(tipoOperacion.getTipo())) {
-
-                    Long supplierId = companyRepository
-                            .findByNit(facturaDb.getRutProveedor())
+                    Long supplierId = companyPort.findByNit(facturaDb.getRutProveedor())
                             .map(Company::getIdeCompany)
-                            .orElseThrow(() ->
-                                    new RuntimeException(
-                                            "Proveedor no encontrado"));
-
-                    cupoReversionService.revertirCupoFondeadorFactoring(
-                            funderId,
-                            supplierId,
-                            valorFactura);
+                            .orElseThrow(() -> new RuntimeException("Proveedor no encontrado"));
+                    cupoReversionService.revertirCupoFondeadorFactoring(funderId, supplierId, valorFactura);
                 }
 
-                // =========================================
-                // CONFIRMING
-                // =========================================
-
                 if ("CONFIRMING".equalsIgnoreCase(tipoOperacion.getTipo())) {
-
-                    Long payerId = companyRepository
-                            .findByNit(facturaDb.getRutPagador())
+                    Long payerId = companyPort.findByNit(facturaDb.getRutPagador())
                             .map(Company::getIdeCompany)
-                            .orElseThrow(() ->
-                                    new RuntimeException(
-                                            "Pagador no encontrado"));
-
-                    cupoReversionService.revertirCupoFondeadorConfirming(
-                            funderId,
-                            payerId,
-                            valorFactura);
+                            .orElseThrow(() -> new RuntimeException("Pagador no encontrado"));
+                    cupoReversionService.revertirCupoFondeadorConfirming(funderId, payerId, valorFactura);
                 }
             }
         }
     }
 
-
-    private void actualizarAprobacionEndoso(
-            String idNegociacion, FacturaNegociada factura, AprobacionActorDto aprobacion) {
-
+    private void actualizarAprobacionEndoso(String idNegociacion, FacturaNegociada factura, AprobacionActorDto aprobacion) {
         EstadoEndoso estado = aprobacion.isAprobado() ? EstadoEndoso.PENDIENTE : EstadoEndoso.RECHAZADO;
-
-        endosoPatchRepository.registrarAprobacionActor(
-                idNegociacion, factura.getNumeroFactura(),
-                aprobacion, estado);
+        endosoPatchPort.registrarAprobacionActor(idNegociacion, factura.getNumeroFactura(), aprobacion, estado);
     }
-
 }
-

@@ -17,3 +17,4 @@ public class OtpValidateRequestEvent {
     private String otp;
     private String ipAprobacion;
 }
+

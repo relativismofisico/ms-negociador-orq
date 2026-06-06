@@ -12,3 +12,4 @@ public class ActorFactura {
     private String rutEmpresa;
     private String rolEmpresaFactura;
 }
+
