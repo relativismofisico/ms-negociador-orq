@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class OperadorServiceImpl implements OperadorService{
+public class OperadorServiceImpl implements CupoConsumidorService, CupoReversionService {
 
     private final UserQuotaRepository userQuotaRepository;
     private final EmpresaQuotaRepository empresaQuotaRepository;

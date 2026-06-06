@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNegociacionService {
 
     private final FacturaRepository facturaRepository;
-    private final OperadorService operadorService;
+    private final CupoConsumidorService cupoConsumidorService;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
     private final EmpresaQuotaRepository empresaQuotaRepository;
@@ -90,7 +90,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         // VALIDAR CUPO OPERADOR
         // ==========================================
 
-        BigDecimal cupoOperador = operadorService.obtenerCupoDisponible(userId);
+        BigDecimal cupoOperador = cupoConsumidorService.obtenerCupoDisponible(userId);
 
         if (cupoOperador.compareTo(valorFactura) < 0) {
             throw new RuntimeException(
@@ -128,7 +128,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         // DESCONTAR CUPOS
         // ==========================================
 
-        operadorService.descontarCupo(userId, valorFactura);
+        cupoConsumidorService.descontarCupo(userId, valorFactura);
 
         empresaQuota.setCurrentQuota(empresaQuota.getCurrentQuota().subtract(valorFactura));
 

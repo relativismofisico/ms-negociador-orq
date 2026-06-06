@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,8 +29,8 @@ public class CrearNegociacionFactoringComfirmingController {
      *
      * */
     @Operation(summary = "Permite negociar las facturas disponibles en el sistema por tipo de operacion")
-    // 201 CREATED: se persiste un nuevo recurso Negociacion en MongoDB
-    // ⚠ RIESGO DE COMPATIBILIDAD: clientes que esperan 200 deben actualizarse a aceptar 201
+    // Roles autorizados configurados en application.yml → security.roles.negociacion
+    @PreAuthorize("@sec.tieneRol(authentication, 'negociacion')")
     @PostMapping("/factura")
     public ResponseEntity<NegociacionResponseDto> crearNegociacion(
             @RequestBody NegociacionRequestDto request) {
