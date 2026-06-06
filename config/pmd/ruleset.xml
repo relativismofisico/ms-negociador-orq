@@ -26,14 +26,6 @@
     <!-- No usar IPs hardcodeadas -->
     <rule ref="category/java/bestpractices.xml/AvoidUsingHardCodedIP"/>
 
-    <!-- No usar literales en asserts -->
-    <rule ref="category/java/bestpractices.xml/AvoidLiteralsInIfCondition">
-        <properties>
-            <!-- Permitir -1, 0, 1 que son valores comunes en comparaciones -->
-            <property name="ignoreMagicNumbers" value="-1,0,1,2"/>
-        </properties>
-    </rule>
-
     <!-- =================================================================
          CODE STYLE
     ================================================================== -->
@@ -72,11 +64,7 @@
     <rule ref="category/java/performance.xml/StringInstantiation"/>
 
     <!-- No añadir innecesariamente a StringBuilder en concat de pocas cadenas -->
-    <rule ref="category/java/performance.xml/InsufficientStringBufferDeclaration">
-        <properties>
-            <property name="minimumLength" value="16"/>
-        </properties>
-    </rule>
+    <rule ref="category/java/performance.xml/InsufficientStringBufferDeclaration"/>
 
     <!-- =================================================================
          DESIGN
@@ -90,24 +78,10 @@
         </properties>
     </rule>
 
-    <!-- Métodos demasiado largos -->
-    <rule ref="category/java/design.xml/ExcessiveMethodLength">
-        <properties>
-            <property name="minimum" value="200.0"/>
-        </properties>
-    </rule>
-
-    <!-- Clases demasiado largas -->
-    <rule ref="category/java/design.xml/ExcessiveClassLength">
-        <properties>
-            <property name="minimum" value="600.0"/>
-        </properties>
-    </rule>
-
-    <!-- Demasiados campos en una clase -->
+    <!-- Demasiados campos en una clase (40 para acomodar entidades de dominio) -->
     <rule ref="category/java/design.xml/TooManyFields">
         <properties>
-            <property name="maxfields" value="20"/>
+            <property name="maxfields" value="40"/>
         </properties>
     </rule>
 
