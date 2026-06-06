@@ -5,6 +5,7 @@ import com.negociadororq.application.controller.dto.EndosoResponseDto;
 import com.negociadororq.application.service.EndosoDescuentoService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,6 +38,6 @@ public class CrearEndosoDescuentoController {
 
         request.setIdNegociacion(idNegociacion);
         EndosoResponseDto response = endosoDescuentoService.registrarEndoso(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }
