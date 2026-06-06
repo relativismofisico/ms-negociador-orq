@@ -6,12 +6,10 @@ import com.negociadororq.domain.model.PendingOtp;
 import com.negociadororq.infrastructure.persistence.repository.PendingOtpRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
-import static org.apache.kafka.common.requests.DeleteAclsResponse.log;
-
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OtpValidatedListener {

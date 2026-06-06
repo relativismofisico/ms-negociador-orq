@@ -33,7 +33,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     private final NotificacionService notificacionService;
     private final FacturaPatchRepository facturaPatchRepository;
     private final DocumentoEndosoService documentoEndosoService;
-    private final NegociacionPatchRepository negociacionPatchRepository;;
+    private final NegociacionPatchRepository negociacionPatchRepository;
 
 
 
