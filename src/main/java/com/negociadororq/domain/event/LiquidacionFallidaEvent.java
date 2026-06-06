@@ -18,3 +18,4 @@ public class LiquidacionFallidaEvent {
     private String rutOperador;
     private LocalDateTime fecha;
 }
+

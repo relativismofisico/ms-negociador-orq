@@ -1,6 +1,10 @@
 package com.negociadororq.domain.event;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
 @Setter
@@ -12,3 +16,4 @@ public class DestinatarioEmail {
     private String rutActor;
     private String tipoActor;
 }
+

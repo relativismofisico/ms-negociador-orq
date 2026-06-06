@@ -111,8 +111,14 @@ class SecurityEvaluatorTest {
 
     private Authentication buildAuth(String rol) {
         return new AbstractAuthenticationToken(List.of(new SimpleGrantedAuthority(rol))) {
-            @Override public Object getCredentials() { return null; }
-            @Override public Object getPrincipal() { return "usuario-test"; }
+            @Override
+            public Object getCredentials() {
+                return null;
+            }
+            @Override
+            public Object getPrincipal() {
+                return "usuario-test";
+            }
             { setAuthenticated(true); }
         };
     }

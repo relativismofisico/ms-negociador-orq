@@ -1,0 +1,121 @@
+<?xml version="1.0"?>
+<ruleset name="ms-negociador-orq PMD Rules"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+             https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>
+        Reglas PMD para ms-negociador-orq.
+        Compatible con Java 17 y Spring Boot 3. No modifica lógica de negocio.
+    </description>
+
+    <!-- =================================================================
+         BEST PRACTICES
+    ================================================================== -->
+
+    <!-- Variables locales sin usar -->
+    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
+
+    <!-- Campos privados sin usar -->
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+
+    <!-- No usar System.out / System.err -->
+    <rule ref="category/java/bestpractices.xml/SystemPrintln"/>
+
+    <!-- No usar IPs hardcodeadas -->
+    <rule ref="category/java/bestpractices.xml/AvoidUsingHardCodedIP"/>
+
+    <!-- No usar literales en asserts -->
+    <rule ref="category/java/bestpractices.xml/AvoidLiteralsInIfCondition">
+        <properties>
+            <!-- Permitir -1, 0, 1 que son valores comunes en comparaciones -->
+            <property name="ignoreMagicNumbers" value="-1,0,1,2"/>
+        </properties>
+    </rule>
+
+    <!-- =================================================================
+         CODE STYLE
+    ================================================================== -->
+
+    <!-- Nombres de tipos completamente calificados innecesarios -->
+    <rule ref="category/java/codestyle.xml/UnnecessaryFullyQualifiedName"/>
+
+    <!-- Return innecesario al final de métodos void -->
+    <rule ref="category/java/codestyle.xml/UnnecessaryReturn"/>
+
+    <!-- No extender Object explícitamente -->
+    <rule ref="category/java/codestyle.xml/ExtendsObject"/>
+
+    <!-- =================================================================
+         ERROR PRONE
+    ================================================================== -->
+
+    <!-- Bloques catch vacíos (excepto con comentario explicativo) -->
+    <rule ref="category/java/errorprone.xml/EmptyCatchBlock">
+        <properties>
+            <property name="allowCommentedBlocks" value="true"/>
+        </properties>
+    </rule>
+
+    <!-- Operaciones inútiles en objetos inmutables (String, BigDecimal) -->
+    <rule ref="category/java/errorprone.xml/UselessOperationOnImmutable"/>
+
+    <!-- Comparación de boolean con == true/false -->
+    <rule ref="category/java/errorprone.xml/BrokenNullCheck"/>
+
+    <!-- =================================================================
+         PERFORMANCE
+    ================================================================== -->
+
+    <!-- No instanciar String con new String("literal") -->
+    <rule ref="category/java/performance.xml/StringInstantiation"/>
+
+    <!-- No añadir innecesariamente a StringBuilder en concat de pocas cadenas -->
+    <rule ref="category/java/performance.xml/InsufficientStringBufferDeclaration">
+        <properties>
+            <property name="minimumLength" value="16"/>
+        </properties>
+    </rule>
+
+    <!-- =================================================================
+         DESIGN
+    ================================================================== -->
+
+    <!-- Complejidad ciclomática por método (umbral alto para no tocar lógica) -->
+    <rule ref="category/java/design.xml/CyclomaticComplexity">
+        <properties>
+            <property name="classReportLevel" value="80"/>
+            <property name="methodReportLevel" value="20"/>
+        </properties>
+    </rule>
+
+    <!-- Métodos demasiado largos -->
+    <rule ref="category/java/design.xml/ExcessiveMethodLength">
+        <properties>
+            <property name="minimum" value="200.0"/>
+        </properties>
+    </rule>
+
+    <!-- Clases demasiado largas -->
+    <rule ref="category/java/design.xml/ExcessiveClassLength">
+        <properties>
+            <property name="minimum" value="600.0"/>
+        </properties>
+    </rule>
+
+    <!-- Demasiados campos en una clase -->
+    <rule ref="category/java/design.xml/TooManyFields">
+        <properties>
+            <property name="maxfields" value="20"/>
+        </properties>
+    </rule>
+
+    <!-- Demasiados métodos en una clase -->
+    <rule ref="category/java/design.xml/TooManyMethods">
+        <properties>
+            <property name="maxmethods" value="25"/>
+        </properties>
+    </rule>
+
+</ruleset>

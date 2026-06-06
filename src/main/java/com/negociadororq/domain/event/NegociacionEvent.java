@@ -18,3 +18,4 @@ public class NegociacionEvent {
         private String estado;
 }
 
+

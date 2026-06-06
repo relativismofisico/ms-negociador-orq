@@ -24,3 +24,4 @@ public class SecurityErrorResponse {
     private final String path;
     private final List<String> detalles;
 }
+

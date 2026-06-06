@@ -22,3 +22,4 @@ public class AccionNoPermitidaException extends NegociadorException {
         super(mensaje, HttpStatus.FORBIDDEN, codigo);
     }
 }
+

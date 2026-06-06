@@ -14,3 +14,4 @@ public class Aprobacion {
     private boolean aprobado;
     private LocalDateTime fecha;
 }
+

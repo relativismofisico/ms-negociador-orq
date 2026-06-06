@@ -1,6 +1,6 @@
 package com.negociadororq.application.mapper;
 
-import com.negociadororq.application.controller.dto.OperacionDto;
+import com.negociadororq.application.dto.OperacionDto;
 import com.negociadororq.domain.model.Operacion;
 import org.springframework.stereotype.Component;
 
@@ -19,3 +19,4 @@ public class OperacionMapper {
         return dto;
     }
 }
+

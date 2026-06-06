@@ -6,3 +6,4 @@ public interface CuerpoNotificacionBuilder<T> {
 
     String construir(T objeto);
 }
+

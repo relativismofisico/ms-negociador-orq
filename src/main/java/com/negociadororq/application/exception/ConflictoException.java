@@ -21,3 +21,4 @@ public class ConflictoException extends NegociadorException {
         super(mensaje, HttpStatus.CONFLICT, codigo);
     }
 }
+

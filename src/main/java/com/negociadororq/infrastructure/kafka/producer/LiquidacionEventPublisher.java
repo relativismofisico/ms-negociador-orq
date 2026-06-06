@@ -1,6 +1,6 @@
 package com.negociadororq.infrastructure.kafka.producer;
 
-import com.negociadororq.application.controller.dto.OperacionRequest;
+import com.negociadororq.application.dto.OperacionRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,3 +27,4 @@ public class LiquidacionEventPublisher {
         kafkaTemplate.send(topic, operaciones);
     }
 }
+

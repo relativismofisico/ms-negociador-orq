@@ -1,29 +1,40 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.controller.dto.NegociacionRequestDto;
-import com.negociadororq.application.controller.dto.NegociacionResponseDto;
+import com.negociadororq.application.dto.NegociacionRequestDto;
+import com.negociadororq.application.dto.NegociacionResponseDto;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
-import com.negociadororq.domain.model.*;
-import com.negociadororq.enums.EstadoNegociacion;
-import com.negociadororq.infrastructure.persistence.repository.*;
+import com.negociadororq.domain.model.Factura;
+import com.negociadororq.domain.model.FacturaNegociada;
+import com.negociadororq.domain.model.FondeadorAsignacion;
+import com.negociadororq.domain.model.Negociacion;
+import com.negociadororq.domain.enums.EstadoNegociacion;
+import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.NegociacionOutputPort;
+import com.negociadororq.application.port.output.UserOutputPort;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-@Slf4j
+@Log
 @Service
 @RequiredArgsConstructor
 public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFactoringComfirmingService {
 
-    private final FacturaRepository facturaRepository;
-    private final NegociacionRepository negociacionRepository;
-    private final UserRepository userRepository;
+    private final FacturaOutputPort facturaPort;
+    private final NegociacionOutputPort negociacionPort;
+    private final UserOutputPort userPort;
     private final NotificacionService notificacionService;
     private final ProcesarFacturaNegociacionService procesarFacturaNegociacionService;
 
@@ -44,8 +55,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         List<FacturaNegociada> facturasAceptadas = new ArrayList<>();
         List<String> facturasRechazadas = new ArrayList<>();
 
-        // validar que el operador existe (lanzará excepción si no existe)
-        userRepository.findByUsername(request.getRutOperador())
+        userPort.findByUsername(request.getRutOperador())
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "No existe operador con username " + request.getRutOperador(), "OPERADOR_NO_ENCONTRADO"));
 
@@ -56,7 +66,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
         for (FacturaNegociada fn : request.getFacturas()) {
 
-            Factura factura = facturaRepository.findByNumeroFactura(fn.getNumeroFactura())
+            Factura factura = facturaPort.findByNumeroFactura(fn.getNumeroFactura())
                     .orElseThrow(() -> new RecursoNoEncontradoException(
                             "Factura no encontrada: " + fn.getNumeroFactura(), "FACTURA_NO_ENCONTRADA"));
 
@@ -72,7 +82,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                 facturasAceptadas.add(procesada);
 
             } catch (Exception e) {
-                log.error("Error procesando factura {}", facturaReq.getNumeroFactura(), e);
+                log.log(java.util.logging.Level.SEVERE, String.format("Error procesando factura %s", facturaReq.getNumeroFactura()), e);
 
                 errores.add(e.getMessage());
                 facturasRechazadas.add(facturaReq.getNumeroFactura() + " -> " + e.getMessage());
@@ -119,9 +129,13 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         negociacion.setTotalNegociado(totalAceptado);
 
         String estado;
-        if (facturasAceptadas.isEmpty()) estado = EstadoNegociacion.RECHAZADA.name();
-        else if (!facturasRechazadas.isEmpty()) estado = EstadoNegociacion.PENDIENTE.name();
-        else estado =EstadoNegociacion.PENDIENTE.name();
+        if (facturasAceptadas.isEmpty()) {
+            estado = EstadoNegociacion.RECHAZADA.name();
+        } else if (!facturasRechazadas.isEmpty()) {
+            estado = EstadoNegociacion.PENDIENTE.name();
+        } else {
+            estado = EstadoNegociacion.PENDIENTE.name();
+        }
 
         negociacion.setEstado(estado);
         List<String> allErrores = new ArrayList<>(errores);
@@ -130,7 +144,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         negociacion.setErrores(allErrores);
         negociacion.setFechaCreacion(LocalDateTime.now());
         negociacion.setFechaUltimaActualizacion(LocalDateTime.now());
-        negociacionRepository.save(negociacion);
+        negociacionPort.save(negociacion);
 
         notificacionService.notificarCreacionNegociacion(negociacion);
 
@@ -151,4 +165,5 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     }
 
 }
+
 

@@ -3,39 +3,37 @@ package com.negociadororq.application.service;
 import com.negociadororq.domain.model.EmpresaQuota;
 import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.domain.model.UserQuota;
-import com.negociadororq.infrastructure.persistence.repository.EmpresaQuotaRepository;
-import com.negociadororq.infrastructure.persistence.repository.FondeadorQuotaRepository;
-import com.negociadororq.infrastructure.persistence.repository.UserQuotaRepository;
-import com.negociadororq.infrastructure.persistence.repository.UserRepository;
+import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
+import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
+import com.negociadororq.application.port.output.UserQuotaOutputPort;
 import java.math.BigDecimal;
 import java.util.Optional;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
+@Log
 @Service
 @RequiredArgsConstructor
 public class OperadorServiceImpl implements CupoConsumidorService, CupoReversionService {
 
-    private final UserQuotaRepository userQuotaRepository;
-    private final EmpresaQuotaRepository empresaQuotaRepository;
-    private final FondeadorQuotaRepository fondeadorQuotaRepository;
+    private final UserQuotaOutputPort userQuotaPort;
+    private final EmpresaQuotaOutputPort empresaQuotaPort;
+    private final FondeadorQuotaOutputPort fondeadorQuotaPort;
 
     @Override
     public BigDecimal obtenerCupoDisponible(Long userId) {
-        return userQuotaRepository.findByUser_IdeUser(userId)
+        return userQuotaPort.findByUserId(userId)
                 .map(UserQuota::getCurrentQuota)
                 .orElseThrow(() -> new RuntimeException("No existe operador para el usuario ID " + userId));
-
     }
 
     @Override
     public void descontarCupo(Long userId, BigDecimal monto) {
-        UserQuota cuota = userQuotaRepository.findByUser_IdeUser(userId)
+        UserQuota cuota = userQuotaPort.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("No existe operador para el usuario ID " + userId));
 
         if (cuota.getCurrentQuota().compareTo(monto) < 0) {
@@ -43,42 +41,40 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
         }
 
         cuota.setCurrentQuota(cuota.getCurrentQuota().subtract(monto));
-        userQuotaRepository.save(cuota);
+        userQuotaPort.save(cuota);
     }
 
     @Transactional
     @Override
     public void revertirCupo(Long userId, BigDecimal valor) {
-        UserQuota cuota = userQuotaRepository.findByUser_IdeUser(userId)
+        UserQuota cuota = userQuotaPort.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("No existe operador para el usuario ID " + userId));
 
         cuota.setCurrentQuota(cuota.getCurrentQuota().add(valor));
-        userQuotaRepository.save(cuota);
+        userQuotaPort.save(cuota);
     }
 
     @Override
     @Transactional
     public void revertirCupoUsuario(Long userId, BigDecimal valor) {
-
-        userQuotaRepository.findByUser_IdeUser(userId)
+        userQuotaPort.findByUserId(userId)
                 .ifPresent(uq -> {
                     uq.setCurrentQuota(
                             uq.getCurrentQuota()
                                     .add(valor)
-                                    .max(BigDecimal.ZERO));});
+                                    .max(BigDecimal.ZERO));
+                    userQuotaPort.save(uq);
+                });
     }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void revertirCupoEmpresa(Long companyId,
-                                    BigDecimal valor) {
-
-        EmpresaQuota empresaQuota = empresaQuotaRepository.findByCompanyId(companyId).orElseThrow();
+    public void revertirCupoEmpresa(Long companyId, BigDecimal valor) {
+        EmpresaQuota empresaQuota = empresaQuotaPort.findByCompanyId(companyId).orElseThrow();
 
         valor = valor.abs();
 
         BigDecimal actual = empresaQuota.getCurrentQuota();
-
         BigDecimal nuevo = actual.add(valor);
 
         if (nuevo.compareTo(empresaQuota.getQuota()) > 0) {
@@ -86,72 +82,48 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
         }
         empresaQuota.setCurrentQuota(nuevo);
 
-        empresaQuotaRepository.saveAndFlush(empresaQuota);
-
+        empresaQuotaPort.saveAndFlush(empresaQuota);
     }
 
     @Override
     @Transactional
     public void revertirCupoFondeadorConfirming(Long funderId, Long payerId, BigDecimal valor) {
+        FondeadorQuota quota = fondeadorQuotaPort.findByFunderIdAndPayerId(funderId, payerId)
+                .orElseThrow(() -> new RuntimeException(
+                        "No existe cupo confirming para funderId=" + funderId + " payerId=" + payerId));
 
-        FondeadorQuota quota = fondeadorQuotaRepository.findByFunderIdAndPayerId(funderId, payerId)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "No existe cupo confirming para funderId="
-                                                + funderId
-                                                + " payerId="
-                                                + payerId));
-
-        BigDecimal actual =
-                Optional.ofNullable(quota.getPayerCurrentQuota())
-                        .orElse(BigDecimal.ZERO);
-
+        BigDecimal actual = Optional.ofNullable(quota.getPayerCurrentQuota()).orElse(BigDecimal.ZERO);
         BigDecimal nuevo = actual.add(valor.abs());
 
-        if (quota.getPayerQuota() != null
-                && nuevo.compareTo(quota.getPayerQuota()) > 0) {
-
+        if (quota.getPayerQuota() != null && nuevo.compareTo(quota.getPayerQuota()) > 0) {
             nuevo = quota.getPayerQuota();
         }
 
         quota.setPayerCurrentQuota(nuevo);
+        fondeadorQuotaPort.save(quota);
 
-        fondeadorQuotaRepository.save(quota);
-
-        log.info("Cupo confirming revertido funderId={} payerId={} valor={}", funderId, payerId, valor);
+        log.info(String.format("Cupo confirming revertido funderId=%s payerId=%s valor=%s", funderId, payerId, valor));
     }
 
     @Override
     @Transactional
     public void revertirCupoFondeadorFactoring(Long funderId, Long supplierId, BigDecimal valor) {
+        FondeadorQuota quota = fondeadorQuotaPort.findByFunderIdAndSupplierId(funderId, supplierId)
+                .orElseThrow(() -> new RuntimeException(
+                        "No existe cupo factoring para funderId=" + funderId + " supplierId=" + supplierId));
 
-        FondeadorQuota quota =
-                fondeadorQuotaRepository
-                        .findByFunderIdAndSupplierId(funderId, supplierId)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "No existe cupo factoring para funderId="
-                                                + funderId
-                                                + " supplierId="
-                                                + supplierId));
-
-        BigDecimal actual =
-                Optional.ofNullable(quota.getSupplierCurrentQuota())
-                        .orElse(BigDecimal.ZERO);
-
+        BigDecimal actual = Optional.ofNullable(quota.getSupplierCurrentQuota()).orElse(BigDecimal.ZERO);
         BigDecimal nuevo = actual.add(valor.abs());
 
-        if (quota.getSupplierQuota() != null
-                && nuevo.compareTo(quota.getSupplierQuota()) > 0) {
-
+        if (quota.getSupplierQuota() != null && nuevo.compareTo(quota.getSupplierQuota()) > 0) {
             nuevo = quota.getSupplierQuota();
         }
 
         quota.setSupplierCurrentQuota(nuevo);
+        fondeadorQuotaPort.save(quota);
 
-        fondeadorQuotaRepository.save(quota);
-
-        log.info("Cupo factoring revertido funderId={} supplierId={} valor={}", funderId, supplierId, valor);
+        log.info(String.format("Cupo factoring revertido funderId=%s supplierId=%s valor=%s", funderId, supplierId, valor));
     }
 
 }
+

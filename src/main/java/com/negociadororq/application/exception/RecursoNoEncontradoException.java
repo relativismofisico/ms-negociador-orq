@@ -21,3 +21,4 @@ public class RecursoNoEncontradoException extends NegociadorException {
         super(mensaje, HttpStatus.NOT_FOUND, codigo);
     }
 }
+
