@@ -1,17 +1,26 @@
 plugins {
+    id 'pmd'
     id 'java'
+    id 'jacoco'
+    id 'checkstyle'
+    id 'org.sonarqube' version '5.1.0.4882'
+    id 'com.github.spotbugs' version '6.0.26'
     id 'org.springframework.boot' version '3.3.4'
     id 'io.spring.dependency-management' version '1.1.6'
-    id 'checkstyle'
-    id 'pmd'
-    id 'com.github.spotbugs' version '6.0.26'
-    id 'jacoco'
-    id 'org.sonarqube' version '5.1.0.4882'
 }
 
-group = 'com.negociadororq'
+
 version = '1.0.0'
+group = 'com.negociadororq'
 sourceCompatibility = '17'
+
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+repositories {
+    mavenCentral()
+}
 
 configurations {
     automatedTestImplementation.extendsFrom testImplementation
@@ -19,16 +28,6 @@ configurations {
     architectureTestImplementation.extendsFrom testImplementation
     architectureTestRuntimeOnly.extendsFrom testRuntimeOnly
 }
-
-
-
-repositories {
-    mavenCentral()
-}
-
-
-apply from: "${rootProject.projectDir}/test.gradle"
-
 
 dependencies {
     // Web
@@ -69,20 +68,29 @@ dependencies {
 
     // ArchUnit — pruebas de arquitectura
     architectureTestImplementation 'com.tngtech.archunit:archunit-junit5:1.3.0'
+
+    // Karate — pruebas funcionales automatizadas
+    automatedTestImplementation 'com.intuit.karate:karate-junit5:1.4.0'
+    // JJWT explícito para JwtTestHelper (jjwt-api está en implementation pero no en automatedTest classpath)
+    automatedTestImplementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    automatedTestRuntimeOnly    'io.jsonwebtoken:jjwt-impl:0.12.6'
+    automatedTestRuntimeOnly    'io.jsonwebtoken:jjwt-jackson:0.12.6'
 }
 
-// =====================================================================
-// JACOCO
-// =====================================================================
-jacoco {
-    toolVersion = '0.8.12'
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:2025.0.0"	}
 }
 
-
+tasks.named('test') {
+    useJUnitPlatform()
+}
 
 test {
     useJUnitPlatform()
     finalizedBy jacocoTestReport // siempre genera reporte después de los tests
 
 }
+
+apply from: "${rootProject.projectDir}/test.gradle"
 apply from: "${rootProject.projectDir}/coverage.gradle"
