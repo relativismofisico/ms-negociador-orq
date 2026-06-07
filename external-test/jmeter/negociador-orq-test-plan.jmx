@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         Plan de rendimiento — ms-negociador-orq
+         Uso:
+           jmeter -n -t negociador-orq-test-plan.jmx -q desarrollo.properties
+           jmeter -n -t negociador-orq-test-plan.jmx -q qa.properties
+           jmeter -n -t negociador-orq-test-plan.jmx -q produccion.properties
+           jmeter -n -t negociador-orq-test-plan.jmx -q qa.properties -Jthreads=100 -Jrampup=30 -Jloops=10
+    ═══════════════════════════════════════════════════════════════ -->
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan"
+              testname="ms-negociador-orq — Plan de Rendimiento" enabled="true">
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+
+      <!--
+        Todas las variables se resuelven desde propiedades externas.
+        Prioridad: -J (CLI) > -q (archivo .properties) > valor por defecto aquí.
+        NUNCA modificar este archivo para cambiar el ambiente o carga.
+      -->
+      <elementProp name="TestPlan.user_defined_variables"
+                   elementType="Arguments" guiclass="ArgumentsPanel"
+                   testclass="Arguments" testname="Variables de Entorno" enabled="true">
+        <collectionProp name="Arguments.arguments">
+
+          <elementProp name="env" elementType="Argument">
+            <stringProp name="Argument.name">env</stringProp>
+            <stringProp name="Argument.value">${__P(env,desarrollo)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+          <elementProp name="protocol" elementType="Argument">
+            <stringProp name="Argument.name">protocol</stringProp>
+            <stringProp name="Argument.value">${__P(protocol,http)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+          <elementProp name="host" elementType="Argument">
+            <stringProp name="Argument.name">host</stringProp>
+            <stringProp name="Argument.value">${__P(host,localhost)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+          <elementProp name="port" elementType="Argument">
+            <stringProp name="Argument.name">port</stringProp>
+            <stringProp name="Argument.value">${__P(port,8083)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+          <elementProp name="basePath" elementType="Argument">
+            <stringProp name="Argument.name">basePath</stringProp>
+            <stringProp name="Argument.value">${__P(basePath,)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+          <elementProp name="timeout" elementType="Argument">
+            <stringProp name="Argument.name">timeout</stringProp>
+            <stringProp name="Argument.value">${__P(timeout,5000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+          <elementProp name="token" elementType="Argument">
+            <stringProp name="Argument.name">token</stringProp>
+            <stringProp name="Argument.value">${__P(token,REEMPLAZAR_JWT)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+          <!-- Datos de prueba: deben existir en el ambiente destino -->
+          <elementProp name="facturaId" elementType="Argument">
+            <stringProp name="Argument.name">facturaId</stringProp>
+            <stringProp name="Argument.value">${__P(facturaId,F-PERF-001)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+          <elementProp name="rutEmpresa" elementType="Argument">
+            <stringProp name="Argument.name">rutEmpresa</stringProp>
+            <stringProp name="Argument.value">${__P(rutEmpresa,12345678-9)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+          <elementProp name="rutOperador" elementType="Argument">
+            <stringProp name="Argument.name">rutOperador</stringProp>
+            <stringProp name="Argument.value">${__P(rutOperador,98765432-1)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+          <elementProp name="fechaProceso" elementType="Argument">
+            <stringProp name="Argument.name">fechaProceso</stringProp>
+            <stringProp name="Argument.value">${__P(fechaProceso,2026-06-07)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+        </collectionProp>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           Thread Group
+           threads / rampup / loops vienen de -J o del archivo .properties
+           Ejemplos sin modificar el .jmx:
+             -Jthreads=1    → smoke test
+             -Jthreads=10   → carga moderada
+             -Jthreads=100  → carga alta
+      ═══════════════════════════════════════════════════════════════ -->
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup"
+                   testname="Thread Group" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller"
+                     elementType="LoopController" guiclass="LoopControlPanel"
+                     testclass="LoopController" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">${__P(loops,1)}</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">${__P(threads,1)}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${__P(rampup,1)}</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+      </ThreadGroup>
+      <hashTree>
+
+        <!-- ── Configuración HTTP compartida (host / puerto / protocolo / timeout) ── -->
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement"
+                           testname="HTTP Request Defaults" enabled="true">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${host}</stringProp>
+          <stringProp name="HTTPSampler.port">${port}</stringProp>
+          <stringProp name="HTTPSampler.protocol">${protocol}</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <stringProp name="HTTPSampler.path"></stringProp>
+          <boolProp name="HTTPSampler.image_parser">false</boolProp>
+          <boolProp name="HTTPSampler.concurrentDwn">false</boolProp>
+          <stringProp name="HTTPSampler.connect_timeout">${timeout}</stringProp>
+          <stringProp name="HTTPSampler.response_timeout">${timeout}</stringProp>
+        </ConfigTestElement>
+        <hashTree/>
+
+        <!-- ── Headers compartidos por todos los samplers ── -->
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager"
+                       testname="HTTP Header Manager" enabled="true">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="Content-Type" elementType="Header">
+              <stringProp name="Header.name">Content-Type</stringProp>
+              <stringProp name="Header.value">application/json</stringProp>
+            </elementProp>
+            <elementProp name="Authorization" elementType="Header">
+              <stringProp name="Header.name">Authorization</stringProp>
+              <stringProp name="Header.value">Bearer ${token}</stringProp>
+            </elementProp>
+          </collectionProp>
+        </HeaderManager>
+        <hashTree/>
+
+        <!-- ════════════════════════════════════════════════════════
+             LECTURA — ejecutado en todos los ambientes incluido producción
+             Endpoint: POST /validaciones/facturas/vencimiento
+             Naturaleza: consulta pura, no modifica estado
+        ════════════════════════════════════════════════════════ -->
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy"
+                          testname="[READ] POST /validaciones/facturas/vencimiento" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{
+  "numeroFactura": "${facturaId}",
+  "fechaProceso": "${fechaProceso}"
+}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">${basePath}/validaciones/facturas/vencimiento</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+
+        <!-- ════════════════════════════════════════════════════════
+             ESCRITURA — omitido cuando env=produccion
+             Condición evaluada como JS: "${env}" != "produccion"
+             Prereq: la factura ${facturaId} debe existir en BD con estado PENDIENTE
+             Rollback: las facturas de prueba deben resetearse entre ejecuciones
+                       (script SQL o fixture de datos en el ambiente)
+        ════════════════════════════════════════════════════════ -->
+        <IfController guiclass="IfControllerPanel" testclass="IfController"
+                      testname="Solo ambientes no productivos [desarrollo | qa]" enabled="true">
+          <stringProp name="IfController.condition">"${env}" != "produccion"</stringProp>
+          <boolProp name="IfController.evaluateAll">false</boolProp>
+          <boolProp name="IfController.useExpression">false</boolProp>
+        </IfController>
+        <hashTree>
+
+          <!-- POST /negociar/factura -->
+          <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy"
+                            testname="[WRITE] POST /negociar/factura" enabled="true">
+            <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+            <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+              <collectionProp name="Arguments.arguments">
+                <elementProp name="" elementType="HTTPArgument">
+                  <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                  <stringProp name="Argument.value">{
+  "rutEmpresa": "${rutEmpresa}",
+  "rolEmpresa": "EMPRESA",
+  "tipoOperacion": "FACTORING",
+  "facturas": [
+    {
+      "numeroFactura": "${facturaId}",
+      "monto": 1000000
+    }
+  ],
+  "rutOperador": "${rutOperador}"
+}</stringProp>
+                  <stringProp name="Argument.metadata">=</stringProp>
+                </elementProp>
+              </collectionProp>
+            </elementProp>
+            <stringProp name="HTTPSampler.path">${basePath}/negociar/factura</stringProp>
+            <stringProp name="HTTPSampler.method">POST</stringProp>
+            <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+            <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+            <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          </HTTPSamplerProxy>
+          <hashTree>
+            <!--
+              Extrae el idNegociacion de la respuesta 201 para encadenarlo al endoso.
+              Si la negociación falla, el defaultValues mantiene el valor de la propiedad
+              negociacionId, permitiendo que el siguiente sampler continúe sin romper el hilo.
+            -->
+            <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor"
+                               testname="Extraer idNegociacion de respuesta" enabled="true">
+              <stringProp name="JSONPostProcessor.referenceNames">idNegociacionDinamico</stringProp>
+              <stringProp name="JSONPostProcessor.jsonPathExprs">$.idNegociacion</stringProp>
+              <stringProp name="JSONPostProcessor.match_numbers">0</stringProp>
+              <stringProp name="JSONPostProcessor.defaultValues">${__P(negociacionId,NEG-PERF-001)}</stringProp>
+            </JSONPostProcessor>
+          </hashTree>
+
+          <!-- POST /negociaciones/{id}/endosos -->
+          <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy"
+                            testname="[WRITE] POST /negociaciones/{id}/endosos" enabled="true">
+            <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+            <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+              <collectionProp name="Arguments.arguments">
+                <elementProp name="" elementType="HTTPArgument">
+                  <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                  <stringProp name="Argument.value">{
+  "rutActor": "${rutEmpresa}",
+  "numerosFactura": ["${facturaId}"]
+}</stringProp>
+                  <stringProp name="Argument.metadata">=</stringProp>
+                </elementProp>
+              </collectionProp>
+            </elementProp>
+            <stringProp name="HTTPSampler.path">${basePath}/negociaciones/${idNegociacionDinamico}/endosos</stringProp>
+            <stringProp name="HTTPSampler.method">POST</stringProp>
+            <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+            <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+            <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          </HTTPSamplerProxy>
+          <hashTree/>
+
+          <!--
+            OPERACIONES EXCLUIDAS DEL PLAN DE CARGA — razones:
+            - POST /negociaciones/solicitar-otp:
+                Dispara un evento Kafka (otp.requested) en cada llamada.
+                Bajo 100 hilos genera mensajes reales en el broker. Testar en
+                flujo funcional (Karate / Postman), no bajo carga.
+            - POST /negociaciones/confirmar-otp:
+                Requiere el OTP generado asincrónamente por el paso anterior.
+                No es automatizable de forma determinística en un loop de carga.
+          -->
+
+        </hashTree>
+
+      </hashTree>
+
+      <!-- ════════════════════════════════════════════════════════
+           Listeners
+      ════════════════════════════════════════════════════════ -->
+      <ResultCollector guiclass="SummaryReport" testclass="ResultCollector"
+                       testname="Summary Report" enabled="true">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename">results.csv</stringProp>
+      </ResultCollector>
+      <hashTree/>
+
+      <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector"
+                       testname="View Results Tree" enabled="true">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename"></stringProp>
+      </ResultCollector>
+      <hashTree/>
+
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>
