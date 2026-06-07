@@ -36,7 +36,7 @@ public class ArchitectureTest {
         ArchRule rule = classes()
                 .that().resideInAPackage("..application..")
                 .should().onlyDependOnClassesThat()
-                .resideInAnyPackage("..application..", "..domain..", "java..", "javax..", "jakarta..", "org.springframework..");
+                .resideInAnyPackage("..application..", "..domain..", "java..", "javax..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..");
 
         rule.check(classes);
     }
@@ -46,7 +46,7 @@ public class ArchitectureTest {
         ArchRule rule = classes()
                 .that().resideInAPackage("..infraestrutura..")
                 .should().onlyDependOnClassesThat()
-                .resideInAnyPackage("..infraestrutura..", "..application..", "..domain..", "java..", "javax..", "jakarta..", "org.springframework..")
+                .resideInAnyPackage("..infraestrutura..", "..application..", "..domain..", "java..", "javax..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..")
                 .allowEmptyShould(true);
 
         rule.check(classes);
@@ -57,7 +57,7 @@ public class ArchitectureTest {
         ArchRule rule = classes()
                 .that().resideInAPackage("..web..")
                 .should().onlyDependOnClassesThat()
-                .resideInAnyPackage("..web..", "..application..", "..domain..", "java..", "jakarta..", "org.springframework..");
+                .resideInAnyPackage("..web..", "..application..", "..domain..", "java..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..");
 
         rule.check(classes);
     }
