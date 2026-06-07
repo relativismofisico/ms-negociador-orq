@@ -44,5 +44,8 @@ security:
       - EMPRESA
       - FONDEADOR
 
-# En producción se recomienda bloquear swagger:
-# Eliminar los matchers permitAll de SecurityConfig o agregar un perfil condicional
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
