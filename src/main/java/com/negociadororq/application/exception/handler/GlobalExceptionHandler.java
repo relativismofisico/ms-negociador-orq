@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -99,6 +100,25 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST,
                         "CUERPO_INVALIDO",
                         "El cuerpo de la petición no es válido o está mal formado",
+                        request.getRequestURI(),
+                        null));
+    }
+
+    /**
+     * Content-Type no soportado por el endpoint (ej: text/plain en vez de application/json)
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(
+            HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
+
+        log.warning(String.format("Content-Type no soportado en %s: %s", request.getRequestURI(), ex.getContentType()));
+
+        return ResponseEntity
+                .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(buildError(
+                        HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                        "TIPO_CONTENIDO_NO_SOPORTADO",
+                        "Content-Type '" + ex.getContentType() + "' no está soportado para este endpoint",
                         request.getRequestURI(),
                         null));
     }
