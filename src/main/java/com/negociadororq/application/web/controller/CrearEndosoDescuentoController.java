@@ -35,7 +35,7 @@ public class CrearEndosoDescuentoController {
         summary = "Registrar endoso de descuento",
         description = "Registra un endoso de descuento sobre las facturas indicadas de una negociación existente. "
             + "Genera el documento HTML del endoso para su posterior firma digital.\n\n"
-            + "**Roles requeridos:** `ADMINISTRADOR`, `EMPRESA`, `FONDEADOR`",
+            + "**Roles requeridos:** `ADMINISTRADOR`, `EMPRESA`, `OPERARIO`",
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses({

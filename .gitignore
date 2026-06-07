@@ -54,6 +54,4 @@ external-test/jmeter/temp/
 external-test/jmeter/jmeter.log
 external-test/jmeter/*.jtl
 
-### JMeter — propiedades de entorno (contienen tokens) ###
-external-test/jmeter/qa.properties
-external-test/jmeter/produccion.properties
+

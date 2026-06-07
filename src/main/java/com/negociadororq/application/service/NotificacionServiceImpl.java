@@ -65,7 +65,7 @@ public class NotificacionServiceImpl implements NotificacionService {
         List<DestinatarioEmail> destinatarios =
                 destinatarioResolver.resolverParaEndoso(endoso);
 
-        Map<String, Object> data = Map.of(
+        Map<String, Object> data = safeMap(
                 "idEndoso", endoso.getId(),
                 "numeroFactura", endoso.getNumeroFactura(),
                 "tipoOperacion", endoso.getTipoOperacion().getTipo(),
