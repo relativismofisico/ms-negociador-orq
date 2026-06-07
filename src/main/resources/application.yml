@@ -94,12 +94,12 @@ security:
     endoso:
       - ADMINISTRADOR
       - EMPRESA
-      - FONDEADOR
+      - OPERARIO
     # POST /negociaciones/solicitar-otp  y  POST /negociaciones/confirmar-otp
     otp:
       - ADMINISTRADOR
       - EMPRESA
-      - FONDEADOR
+      - OPERARIO
     # POST /validaciones/facturas/vencimiento
     validacion:
       - ADMINISTRADOR
