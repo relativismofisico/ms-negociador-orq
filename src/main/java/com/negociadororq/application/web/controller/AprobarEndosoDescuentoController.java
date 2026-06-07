@@ -35,7 +35,7 @@ public class AprobarEndosoDescuentoController {
         description = "Dispara el envío de un código OTP al actor responsable de aprobar el endoso. "
             + "El OTP se entrega por el canal configurado (generalmente Kafka → notificación). "
             + "La respuesta es **202 Accepted** indicando que la solicitud fue recibida y está en procesamiento asíncrono.\n\n"
-            + "**Roles requeridos:** `ADMINISTRADOR`, `EMPRESA`, `FONDEADOR`",
+            + "**Roles requeridos:** `ADMINISTRADOR`, `EMPRESA`, `OPERARIO`",
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses({
@@ -70,7 +70,7 @@ public class AprobarEndosoDescuentoController {
         description = "Valida el código OTP recibido y, si es correcto, aprueba el endoso de descuento. "
             + "La IP del cliente se captura automáticamente para auditoría. "
             + "La respuesta es **202 Accepted**: la validación final ocurre de forma asíncrona vía Kafka.\n\n"
-            + "**Roles requeridos:** `ADMINISTRADOR`, `EMPRESA`, `FONDEADOR`",
+            + "**Roles requeridos:** `ADMINISTRADOR`, `EMPRESA`, `OPERARIO`",
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses({
