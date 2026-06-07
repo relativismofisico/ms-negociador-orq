@@ -3,7 +3,7 @@
  */
 
 sourceSets {
-   /* automatedTest {
+    automatedTest {
         java {
             srcDirs = ['src/automated-test/java']
             compileClasspath += sourceSets.main.output + sourceSets.test.output
@@ -13,7 +13,7 @@ sourceSets {
             srcDirs = ['src/automated-test/resources']
         }
     }
-*/
+
     architectureTest {
         java {
             compileClasspath += main.output
@@ -23,35 +23,133 @@ sourceSets {
         resources.srcDir file('src/architecture-test/resources')
     }
 }
-/*
-task automatedTest(type: Test) {
 
-    description = 'Runs Karate acceptance tests'
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: resuelve el ambiente activo.
+// Prioridad: variable de entorno AMBIENTE_PIPE > propiedad Gradle -Penv > 'dev'
+// ─────────────────────────────────────────────────────────────────────────────
+def resolverAmbiente = {
+    def envPipe = System.getenv('AMBIENTE_PIPE')
+    if (envPipe && !envPipe.isBlank()) return envPipe.trim()
+    def propEnv = project.findProperty('env')
+    if (propEnv) return propEnv.toString().trim()
+    return 'dev'
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// task: automatedTest — Suite COMPLETA (@full). Task principal de CI/CD.
+// Uso: ./gradlew automatedTest [-Penv=qa]
+//      AMBIENTE_PIPE=qa ./gradlew automatedTest
+// ─────────────────────────────────────────────────────────────────────────────
+task automatedTest(type: Test) {
+    description = 'Runs Karate acceptance tests — suite completa (@full)'
     group = 'verification'
 
     testClassesDirs = sourceSets.automatedTest.output.classesDirs
-    classpath = sourceSets.automatedTest.runtimeClasspath
+    classpath       = sourceSets.automatedTest.runtimeClasspath
 
     useJUnitPlatform()
+    filter {
+        includeTestsMatching '*.runner.FullRunner'
+    }
+
+    systemProperty 'karate.env', resolverAmbiente()
 
     outputs.upToDateWhen { false }
-
     finalizedBy jacocoTestReport
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// task: smokeTest — Auth + contratos HTTP (@smoke). Sin datos en BD. Rápido.
+// Uso: ./gradlew smokeTest
+// ─────────────────────────────────────────────────────────────────────────────
+task smokeTest(type: Test) {
+    description = 'Runs Karate smoke tests (@smoke) — auth y contratos básicos'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.automatedTest.output.classesDirs
+    classpath       = sourceSets.automatedTest.runtimeClasspath
+
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching '*.runner.SmokeRunner'
+    }
+
+    systemProperty 'karate.env', resolverAmbiente()
+    outputs.upToDateWhen { false }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// task: regressionTest — Flujos de negocio completos (@regression).
+// Uso: AMBIENTE_PIPE=qa ./gradlew regressionTest
+// ─────────────────────────────────────────────────────────────────────────────
+task regressionTest(type: Test) {
+    description = 'Runs Karate regression tests (@regression) — flujos de negocio'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.automatedTest.output.classesDirs
+    classpath       = sourceSets.automatedTest.runtimeClasspath
+
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching '*.runner.RegressionRunner'
+    }
+
+    systemProperty 'karate.env', resolverAmbiente()
+    outputs.upToDateWhen { false }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// task: prodTest — Solo pruebas @production-safe (lectura, sin efectos).
+// Fuerza karate.env=prod. Requiere BASE_URL y tokens pre-obtenidos como env vars.
+// Uso: AMBIENTE_PIPE=prod BASE_URL=https://api.prod.com TEST_TOKEN_ADMIN=... ./gradlew prodTest
+// ─────────────────────────────────────────────────────────────────────────────
+task prodTest(type: Test) {
+    description = 'Runs production-safe Karate tests (@production-safe) — solo lectura'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.automatedTest.output.classesDirs
+    classpath       = sourceSets.automatedTest.runtimeClasspath
+
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching '*.runner.ProdRunner'
+    }
+
+    systemProperty 'karate.env', 'prod'
+
+    doFirst {
+        if (!System.getenv('BASE_URL')) {
+            throw new GradleException(
+                'prodTest requiere BASE_URL apuntando al ambiente de producción.\n' +
+                'Ejemplo: BASE_URL=https://api.prod.com ./gradlew prodTest'
+            )
+        }
+    }
+
+    outputs.upToDateWhen { false }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests unitarios y de arquitectura (sin cambios)
+// ─────────────────────────────────────────────────────────────────────────────
 test {
     jvmArgs "-Xms128m", "-Xmx512m", "-XX:+DisableExplicitGC"
     finalizedBy jacocoTestReport
 }
-*/
+
 tasks.register('architectureTest', Test) {
     useJUnitPlatform()
     description = 'Runs architecture tests.'
-    group = 'verification'
+    group       = 'verification'
 
     testClassesDirs = sourceSets.architectureTest.output.classesDirs
-    classpath = sourceSets.architectureTest.runtimeClasspath
+    classpath       = sourceSets.architectureTest.runtimeClasspath
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Herramientas de análisis estático (sin cambios)
+// ─────────────────────────────────────────────────────────────────────────────
 checkstyle {
     final String checkstyleConfigFile = System.getenv('CHECKSTYLE_CONFIG_FILE') != null
             ? System.getenv('CHECKSTYLE_CONFIG_FILE')
@@ -85,4 +183,3 @@ spotbugsMain {
         html.required = true
     }
 }
-
