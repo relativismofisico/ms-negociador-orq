@@ -32,6 +32,7 @@ configurations {
 dependencies {
     // Web
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
     // MongoDB (quita JPA/Postgres/MySQL)
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'

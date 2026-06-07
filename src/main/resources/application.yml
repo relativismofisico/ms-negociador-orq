@@ -65,6 +65,22 @@ facturas:
 # ─────────────────────────────────────────────────────────────
 # Seguridad corporativa — modificar roles aquí sin recompilar
 # ─────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
 security:
   jwt:
     secret: AF84F1FGllNpNnLG055fdg5hGHJK4KGG5VH5TR5J05JFGGDFDGXVV545J4505G666JFGF2mMY95y
