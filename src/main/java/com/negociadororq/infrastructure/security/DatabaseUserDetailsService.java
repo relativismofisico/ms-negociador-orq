@@ -9,15 +9,14 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 
 /**
  * UserDetailsService que consulta la tabla de usuarios de la base de datos.
  * Se usa para autenticación Basic Auth con operarios (usando rutOperador como username).
+ * Delegado por CompositeUserDetailsService.
  */
-@Service
 @RequiredArgsConstructor
 @Log
 public class DatabaseUserDetailsService implements UserDetailsService {
