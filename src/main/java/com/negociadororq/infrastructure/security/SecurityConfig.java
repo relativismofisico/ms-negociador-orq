@@ -45,11 +45,8 @@ public class SecurityConfig {
     private final CustomAccessDeniedHandler accessDeniedHandler;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, JwtDecoder jwtDecoder, AuthenticationManager authenticationManager) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
         http
-            // Usar el AuthenticationManager que contiene DaoAuthenticationProvider para Basic Auth
-            .authenticationManager(authenticationManager)
-
             // Sin estado — JWT es el único mecanismo de sesión
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
