@@ -18,6 +18,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 
 /**
  * Configuración central de Spring Security 6 para ms-negociador-orq.
@@ -93,6 +94,18 @@ public class SecurityConfig {
     @Bean
     public BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public DatabaseUserDetailsService databaseUserDetailsService(UserRepository userRepository) {
+        return new DatabaseUserDetailsService(userRepository);
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService(
+            SecurityProperties securityProperties,
+            DatabaseUserDetailsService databaseUserDetailsService) {
+        return new CompositeUserDetailsService(securityProperties, databaseUserDetailsService);
     }
 
     @Bean
