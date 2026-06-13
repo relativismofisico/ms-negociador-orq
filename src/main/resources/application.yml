@@ -84,6 +84,10 @@ management:
 security:
   jwt:
     secret: AF84F1FGllNpNnLG055fdg5hGHJK4KGG5VH5TR5J05JFGGDFDGXVV545J4505G666JFGF2mMY95y
+  service-credentials:
+    ms-liquidador-neg:
+      username: ms-liquidador-neg
+      password: $2a$10$slPvTTm1S5hy8zyL0X8Ige5h1KwHTvG4/Hln6Yx2vU8TZ5PBMqKha
   roles:
     # POST /negociar/factura
     negociacion:

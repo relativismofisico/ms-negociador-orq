@@ -212,9 +212,13 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                                                            Operacion tipoOperacion,
                                                            String rutOperador) {
 
-        boolean hayRechazo = factura.getAprobaciones().stream().anyMatch(a -> !a.isAprobado());
+        Set<RolActor> actoresRequeridos = obtenerActoresRequeridos(tipoOperacion.getTipo());
 
-        if (hayRechazo) {
+        boolean hayRechazoEnActoresRequeridos = factura.getAprobaciones().stream()
+                .filter(a -> actoresRequeridos.contains(a.getRolActor()))
+                .anyMatch(a -> !a.isAprobado());
+
+        if (hayRechazoEnActoresRequeridos) {
             log.info(String.format("Reversando cupos por rechazo de factura %s", factura.getNumeroFactura()));
             String motivoError = "La factura " + factura.getNumeroFactura()
                     + " fue rechazada durante el proceso de aprobación/endoso";
@@ -225,8 +229,6 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             endosoPatchPort.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), EstadoEndoso.RECHAZADO);
             return;
         }
-
-        Set<RolActor> actoresRequeridos = obtenerActoresRequeridos(tipoOperacion.getTipo());
 
         Set<RolActor> rolesQueAprobaron = factura.getAprobaciones().stream()
                 .filter(AprobacionActorDto::isAprobado)

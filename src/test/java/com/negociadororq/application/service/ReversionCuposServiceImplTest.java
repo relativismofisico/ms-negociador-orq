@@ -31,6 +31,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -221,7 +222,7 @@ class ReversionCuposServiceImplTest {
     // ─── Actualización de estados ─────────────────────────────────
 
     @Test
-    @DisplayName("Actualiza estado de firma de factura a RECHAZADA y endoso a RECHAZADO")
+    @DisplayName("Actualiza estado de firma de factura a RECHAZADA (no modifica endoso)")
     void actualizaEstados_correctamente() {
         Factura factura = buildFactura("FAC-001", "800PROV", "900PAG");
         Negociacion neg = buildNegociacion("FACTORING", "FAC-001", new BigDecimal("1000"),
@@ -237,7 +238,7 @@ class ReversionCuposServiceImplTest {
         service.revertirPorFactura("FAC-001", "actor", "test");
 
         verify(facturaPatchPort).actualizarEstadoFirmaPorNoFactura("FAC-001", EstadoFirma.RECHAZADA);
-        verify(endosoPatchPort).actualizarEstadoEndosoPorNoFactura("NEG-001", "FAC-001", EstadoEndoso.RECHAZADO);
+        verify(endosoPatchPort, never()).actualizarEstadoEndosoPorNoFactura(anyString(), anyString(), any());
     }
 
     @Test

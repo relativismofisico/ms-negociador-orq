@@ -6,7 +6,6 @@ import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.model.User;
-import com.negociadororq.domain.enums.EstadoEndoso;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.EndosoPatchOutputPort;
@@ -199,12 +198,6 @@ public class ReversionCuposServiceImpl
                 .actualizarEstadoFirmaPorNoFactura(
                         numeroFactura,
                         EstadoFirma.RECHAZADA);
-
-        endosoPatchPort
-                .actualizarEstadoEndosoPorNoFactura(
-                        negociacion.getId(),
-                        numeroFactura,
-                        EstadoEndoso.RECHAZADO);
 
         // ==========================================
         // LOG

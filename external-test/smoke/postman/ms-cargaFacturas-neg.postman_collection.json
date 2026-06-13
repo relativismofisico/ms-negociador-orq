@@ -1,133 +1,388 @@
 {
-	"info": {
-		"_postman_id": "1f63b724-6cb1-46b5-88b8-8733278cb265",
-		"name": "ms-negociador-orq",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "28222766",
-		"_collection_link": "https://facturas-8785.postman.co/workspace/Facturas~0f056199-548d-4012-9603-37b9d8a4b5e1/collection/28222766-1f63b724-6cb1-46b5-88b8-8733278cb265?action=share&source=collection_link&creator=28222766"
-	},
-	"item": [
-		{
-			"name": "Negociar Facturas",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"rutEmpresa\": \"900266102\",\n  \"rolEmpresa\": \"PROVEEDOR\",\n  \"tipoOperacion\": { \n    \"tipo\": \"FACTORING\",\n    \"clase\": \"SIN DESCUENTO\"\n    },\n  \"facturas\": [\n    {\n         \"numeroFactura\": \"FECI3958\",\n         \"fondeadores\": [\n      ]\n    }\n  ],\n  \"fondeadoresGlobales\": [\n      { \"rutFondeador\": \"900978051\"}\n  ],\n\n   \"rutOperador\": \"1128384790\"\n}"
-				},
-				"url": {
-					"raw": "http://localhost:8083/negociar/factura",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8083",
-					"path": [
-						"negociar",
-						"factura"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Crear Endoso/descuento de Factura",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "idNegociacion",
-						"value": "{{idNegociacion}}",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n  \"rutProveedor\": \"900266102\",\r\n  \"numerosFactura\": [\r\n    \"FECI3958\"\r\n  ]\r\n}\r\n",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:8083/negociaciones/{{idNegociacion}}/endosos",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8083",
-					"path": [
-						"negociaciones",
-						"{{idNegociacion}}",
-						"endosos"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Aprobar Endosos/descuentos (Solicitar Otp)",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"idNegociacion\": \"65f1c2ab1234567890abcd12\",\n  \"rutOperador\": \"900123456\",\n  \"rutEmpresa\": \"800987654\",\n  \"observacion\": \"Aprobación de endoso\",\n  \"facturas\": [\n    {\n      \"numeroFactura\": \"FAC-001\",\n      \"aprueba\": true\n    },\n    {\n      \"numeroFactura\": \"FAC-002\",\n      \"aprueba\": true\n    }\n  ]\n}"
-				},
-				"url": {
-					"raw": "http://localhost:8083/solicitar-otp",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8083",
-					"path": [
-						"solicitar-otp"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Firmar Endoso/Descuento (Confirmar Otp)",
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n  \"idNegociacion\": \"NEG-1001\",\n  \"rutEmpresa\": \"900123456\",\n  \"rutOperador\": \"operador1\",\n  \"otp\": \"123456\"\n}"
-				},
-				"url": {
-					"raw": "http://localhost:8080/aprobaciones/confirmar-otp",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8080",
-					"path": [
-						"aprobaciones",
-						"confirmar-otp"
-					]
-				}
-			},
-			"response": []
-		}
-	]
+  "info": {
+    "_postman_id": "4604f0e1-c71d-4953-a2a4-61c6ab42f0b2",
+    "name": "ms-negociador-orq",
+    "description": "Colección de pruebas smoke para ms-negociador-orq.\n\n## Configuración previa\n1. Obtener un token JWT válido del ms-seguridad.\n2. Establecer la variable `jwtToken` con ese token.\n3. Ejecutar los requests en orden: primero Negociar, luego Endoso, etc.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "28222766",
+    "_collection_link": "https://go.postman.co/collection/28222766-4604f0e1-c71d-4953-a2a4-61c6ab42f0b2?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "1. Validar Vencimiento Factura",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Respuesta contiene campo valida', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json).to.have.property('valida');",
+              "});",
+              "",
+              "pm.test('Content-Type es application/json', function () {",
+              "    pm.response.to.have.header('Content-Type');",
+              "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwtToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"numeroFactura\": \"{{numeroFactura}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/validaciones/facturas/vencimiento",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "validaciones",
+            "facturas",
+            "vencimiento"
+          ]
+        },
+        "description": "Verifica si una factura puede ser negociada según su fecha de vencimiento.\n\n**Respuesta esperada:** 200 OK\n\n**Roles permitidos:** PAGADOR, PROVEEDOR, FONDEADOR, ADMINISTRADOR"
+      },
+      "response": []
+    },
+    {
+      "name": "2. Negociar Facturas",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Respuesta contiene idNegociacion', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json).to.have.property('idNegociacion');",
+              "});",
+              "",
+              "pm.test('Content-Type es application/json', function () {",
+              "    pm.response.to.have.header('Content-Type');",
+              "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+              "});",
+              "",
+              "var json = pm.response.json();",
+              "if (json && json.idNegociacion) {",
+              "    pm.collectionVariables.set('idNegociacion', json.idNegociacion);",
+              "    console.log('idNegociacion guardado: ' + json.idNegociacion);",
+              "}"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJIUzM4NCJ9.eyJlbXAiOjEsInJvbCI6Ik9wZXJhcmlvIiwic3ViIjoiMTEyODM4NDc5MCIsImlhdCI6MTc4MDg2MjYyMCwiZXhwIjoxNzgwOTQ5MDIwfQ.YX2RxAf6o1EC7yjwA456DQ6QHwr20A1nHGnzRKFLWKsyimAxEQnfIWwzQmJpIBDs",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rutEmpresa\": \"900266102\",\n  \"rolEmpresa\": \"PROVEEDOR\",\n  \"tipoOperacion\": {\n    \"tipo\": \"FACTORING\",\n    \"clase\": \"SIN DESCUENTO\"\n  },\n  \"facturas\": [\n    {\n      \"numeroFactura\": \"FECI3566\",\n      \"fondeadores\": []\n    }\n  ],\n  \"fondeadoresGlobales\": [\n    { \"rutFondeador\": \"900978051\" }\n  ],\n  \"rutOperador\": \"1128384790\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/negociar/factura",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "negociar",
+            "factura"
+          ]
+        },
+        "description": "Crea una nueva negociación de facturas (FACTORING o CONFIRMING).\n\n**Respuesta esperada:** 201 Created\n\n**Roles permitidos:** PROVEEDOR, PAGADOR, ADMINISTRADOR\n\n**Nota:** El script de test extrae automáticamente `idNegociacion` de la respuesta y lo guarda como variable de colección para los siguientes requests."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Crear Endoso/Descuento de Factura",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201 Created', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test('Respuesta contiene idNegociacion', function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json).to.have.property('idNegociacion');",
+              "});",
+              "",
+              "pm.test('Content-Type es application/json', function () {",
+              "    pm.response.to.have.header('Content-Type');",
+              "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwtToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rutActor\": \"900266102\",\n  \"numerosFactura\": [\n    \"FECI3566\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/negociaciones/{{idNegociacion}}/endosos",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "negociaciones",
+            "{{idNegociacion}}",
+            "endosos"
+          ]
+        },
+        "description": "Registra el endoso de una o varias facturas dentro de una negociación existente.\n\n**Respuesta esperada:** 201 Created\n\n**Roles permitidos:** PAGADOR, PROVEEDOR, FONDEADOR, ADMINISTRADOR\n\n**Prerequisito:** Ejecutar primero '2. Negociar Facturas' para tener `idNegociacion` disponible."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Solicitar OTP (Aprobación de Endoso)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Respuesta confirma solicitud OTP', function () {",
+              "    pm.expect(pm.response.text()).to.include('OTP solicitado');",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwtToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idNegociacion\": \"6a25ceeff979a315cffd7766\",\n  \"rutOperador\": \"1128384790\",\n  \"rutEmpresa\": \"900341104\",\n  \"rolActor\": \"PAGADOR\",\n  \"observacion\": \"Aprobación de endoso por parte del Pagador\",\n  \"facturas\": [\n    {\n      \"numeroFactura\": \"FECI3566\",\n      \"aprobado\": true,\n      \"observacion\": null\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/negociaciones/solicitar-otp",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "negociaciones",
+            "solicitar-otp"
+          ]
+        },
+        "description": "Inicia el flujo de aprobación de endoso solicitando un OTP al actor.\n\n**Respuesta esperada:** 200 OK\n\n**Roles permitidos:** PAGADOR, PROVEEDOR, FONDEADOR, ADMINISTRADOR\n\n**Campo `rolActor`:** Debe ser el rol del actor que aprueba (PAGADOR, PROVEEDOR o FONDEADOR).\n\n**Campo `aprobado`:** `true` para aprobar, `false` para rechazar."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Confirmar OTP (Firma de Endoso)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Respuesta confirma validacion OTP', function () {",
+              "    pm.expect(pm.response.text()).to.include('Validando OTP');",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwtToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idNegociacion\": \"6a25ceeff979a315cffd7766\",\n  \"rutEmpresa\": \"900341104\",\n  \"rutOperador\": \"1128384790\",\n  \"otp\": \"862413\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/negociaciones/confirmar-otp",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "negociaciones",
+            "confirmar-otp"
+          ]
+        },
+        "description": "Valida el OTP ingresado por el actor y procesa la aprobación o rechazo del endoso.\n\n**Respuesta esperada:** 200 OK\n\n**Roles permitidos:** PAGADOR, PROVEEDOR, FONDEADOR, ADMINISTRADOR\n\n**Nota:** La validación del OTP es asíncrona vía Kafka. El resultado final se refleja en el estado de la negociación."
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwtToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8083",
+      "description": "URL base del microservicio ms-negociador-orq"
+    },
+    {
+      "key": "jwtToken",
+      "value": "<reemplazar-con-token-JWT-valido>",
+      "description": "Token JWT emitido por el ms-seguridad. Roles válidos: PROVEEDOR, PAGADOR, FONDEADOR, ADMINISTRADOR"
+    },
+    {
+      "key": "idNegociacion",
+      "value": "",
+      "description": "Se autocompleta desde la respuesta de 'Negociar Facturas'"
+    },
+    {
+      "key": "numeroFactura",
+      "value": "FECI3958",
+      "description": "Número de factura a negociar"
+    },
+    {
+      "key": "rutEmpresa",
+      "value": "900266102",
+      "description": "RUT de la empresa que realiza la operación"
+    },
+    {
+      "key": "rutOperador",
+      "value": "1128384790",
+      "description": "RUT del operador que ejecuta la negociación"
+    }
+  ]
 }

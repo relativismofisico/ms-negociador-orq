@@ -5,11 +5,17 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -38,19 +44,22 @@ public class SecurityConfig {
     private final CustomAccessDeniedHandler accessDeniedHandler;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, JwtDecoder jwtDecoder, AuthenticationManager authenticationManager) throws Exception {
         http
+            // Usar el AuthenticationManager que contiene DaoAuthenticationProvider para Basic Auth
+            .authenticationManager(authenticationManager)
+
             // Sin estado — JWT es el único mecanismo de sesión
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
             // CSRF innecesario en APIs stateless con JWT
             .csrf(AbstractHttpConfigurer::disable)
 
-            // Form login y basic auth deshabilitados — solo JWT
+            // Form login deshabilitado — JWT + Basic Auth para servicio-a-servicio
             .formLogin(AbstractHttpConfigurer::disable)
-            .httpBasic(AbstractHttpConfigurer::disable)
+            .httpBasic(Customizer.withDefaults())
 
-            .authorizeHttpRequests(auth -> auth
+            .authorizeHttpRequests(authorization -> authorization
                 // Swagger/OpenAPI disponible sin token (ajustar por perfil si se requiere)
                 .requestMatchers(
                     "/swagger-ui/**",
@@ -79,6 +88,30 @@ public class SecurityConfig {
     @Bean
     public JwtDecoder jwtDecoder(ObjectMapper objectMapper) {
         return new JjwtDecoder(securityProperties.getJwt().getSecret(), objectMapper);
+    }
+
+    @Bean
+    public BCryptPasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public DaoAuthenticationProvider daoAuthenticationProvider(
+            UserDetailsService userDetailsService,
+            BCryptPasswordEncoder passwordEncoder) {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        return provider;
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(
+            HttpSecurity http,
+            DaoAuthenticationProvider daoAuthenticationProvider) throws Exception {
+        return http.getSharedObject(AuthenticationManagerBuilder.class)
+            .authenticationProvider(daoAuthenticationProvider)
+            .build();
     }
 }
 

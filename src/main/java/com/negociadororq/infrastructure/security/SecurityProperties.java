@@ -30,6 +30,7 @@ public class SecurityProperties {
 
     private JwtProperties jwt = new JwtProperties();
     private Map<String, List<String>> roles = new HashMap<>();
+    private Map<String, ServiceCredential> serviceCredentials = new HashMap<>();
 
     public List<String> getRolesForGroup(String grupo) {
         return roles.getOrDefault(grupo, Collections.emptyList());
@@ -39,6 +40,13 @@ public class SecurityProperties {
     @Setter
     public static class JwtProperties {
         private String secret;
+    }
+
+    @Getter
+    @Setter
+    public static class ServiceCredential {
+        private String username;
+        private String password;
     }
 }
 
