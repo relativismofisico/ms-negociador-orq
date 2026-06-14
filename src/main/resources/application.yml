@@ -87,7 +87,7 @@ security:
   service-credentials:
     ms-liquidador-neg:
       username: ms-liquidador-neg
-      password: $2a$10$slPvTTm1S5hy8zyL0X8Ige5h1KwHTvG4/Hln6Yx2vU8TZ5PBMqKha
+      password: "$2a$12$QGH/U6x55/WfQ6B.prPvz.9B6tYuSxbxTEW764fQgpEjoIMFG2Ae."
       roles:
         - OPERARIO
   roles:
