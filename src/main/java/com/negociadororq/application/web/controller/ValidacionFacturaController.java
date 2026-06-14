@@ -32,8 +32,14 @@ public class ValidacionFacturaController {
         summary = "Validar vencimiento de una factura",
         description = "Consulta si una factura se considera vencida a una fecha de proceso dada. "
             + "Operación de solo lectura: no modifica el estado de la factura.\n\n"
+            + "**Autenticación soportada:**\n"
+            + "- JWT Bearer token (roles: ADMINISTRADOR, OPERARIO, EMPRESA, FONDEADOR)\n"
+            + "- HTTP Basic Auth con rutOperador (requiere rol OPERARIO)\n\n"
             + "**Roles requeridos:** `ADMINISTRADOR`, `OPERARIO`, `EMPRESA`, `FONDEADOR`",
-        security = @SecurityRequirement(name = "bearerAuth")
+        security = {
+            @SecurityRequirement(name = "bearerAuth"),
+            @SecurityRequirement(name = "basicAuth")
+        }
     )
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Resultado de la validación de vencimiento.",
@@ -42,10 +48,10 @@ public class ValidacionFacturaController {
         @ApiResponse(responseCode = "400", description = "Cuerpo de la petición malformado.",
             content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
                 schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "401", description = "Token JWT ausente, expirado o con firma inválida.",
+        @ApiResponse(responseCode = "401", description = "Autenticación ausente, inválida o expirada (JWT o Basic Auth).",
             content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
                 schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "403", description = "El rol del token no está autorizado para este endpoint.",
+        @ApiResponse(responseCode = "403", description = "El usuario no tiene los roles requeridos para este endpoint.",
             content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
                 schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "404", description = "Factura no encontrada.",
