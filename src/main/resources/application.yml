@@ -88,6 +88,8 @@ security:
     ms-liquidador-neg:
       username: ms-liquidador-neg
       password: $2a$10$slPvTTm1S5hy8zyL0X8Ige5h1KwHTvG4/Hln6Yx2vU8TZ5PBMqKha
+      roles:
+        - OPERARIO
   roles:
     # POST /negociar/factura
     negociacion:

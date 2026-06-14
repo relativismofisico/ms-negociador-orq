@@ -7,7 +7,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
-import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public class ServiceCredentialsUserDetailsService implements UserDetailsService {
@@ -23,12 +24,16 @@ public class ServiceCredentialsUserDetailsService implements UserDetailsService 
             throw new UsernameNotFoundException("Service account not found: " + username);
         }
 
+        List<SimpleGrantedAuthority> authorities = credential.getRoles().stream()
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toList());
+
         // Asignar autoridad con scope del servicio: ms-liquidador-neg -> SCOPE_ms-liquidador-neg
-        String scope = "SCOPE_" + username;
+        //String scope = "SCOPE_" + username;
         return User.builder()
             .username(username)
             .password(credential.getPassword())
-            .authorities(Collections.singleton(new SimpleGrantedAuthority(scope)))
+            .authorities((authorities))
             .accountExpired(false)
             .accountLocked(false)
             .credentialsExpired(false)
