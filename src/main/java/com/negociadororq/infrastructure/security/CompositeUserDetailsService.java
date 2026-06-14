@@ -9,7 +9,8 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Servicio de detalles de usuario compuesto que intenta cargar credenciales en este orden:
@@ -33,17 +34,21 @@ public class CompositeUserDetailsService implements UserDetailsService {
             .get(username);
 
         if (serviceCredential != null) {
-            String scope = "SCOPE_" + username;
             log.fine("Autenticando servicio: " + username);
+
+            List<SimpleGrantedAuthority> authorities = serviceCredential.getRoles().stream()
+                    .map(SimpleGrantedAuthority::new)
+                    .collect(Collectors.toList());
+
             return User.builder()
-                .username(username)
-                .password(serviceCredential.getPassword())
-                .authorities(Collections.singleton(new SimpleGrantedAuthority(scope)))
-                .accountExpired(false)
-                .accountLocked(false)
-                .credentialsExpired(false)
-                .disabled(false)
-                .build();
+                    .username(username)
+                    .password(serviceCredential.getPassword())
+                    .authorities(authorities)
+                    .accountExpired(false)
+                    .accountLocked(false)
+                    .credentialsExpired(false)
+                    .disabled(false)
+                    .build();
         }
 
         // Estrategia 2: Intentar cargar usuario de la base de datos

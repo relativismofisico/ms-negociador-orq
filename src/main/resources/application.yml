@@ -112,5 +112,8 @@ security:
       - OPERARIO
       - EMPRESA
       - FONDEADOR
+logging:
+  level:
+    org.springframework.security: DEBUG
 
 
