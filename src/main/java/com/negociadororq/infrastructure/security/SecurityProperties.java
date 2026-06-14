@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -47,6 +48,7 @@ public class SecurityProperties {
     public static class ServiceCredential {
         private String username;
         private String password;
+        private List<String> roles = new ArrayList<>();
     }
 }
 
