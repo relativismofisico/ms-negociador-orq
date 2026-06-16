@@ -10,8 +10,23 @@ def jacocoExcludes = [
         'com/negociadororq/domain/enums/**',
         'com/negociadororq/application/mapper/**',
         'com/negociadororq/application/port/**',
+        // Interfaces de servicio — sin lógica ejecutable
         'com/negociadororq/application/service/FirmaEndosoService.class',
         'com/negociadororq/application/service/NegociacionFactoringComfirmingService.class',
+        'com/negociadororq/application/service/AprobacionEndosoDescuentoService.class',
+        'com/negociadororq/application/service/AprobacionInternaService.class',
+        'com/negociadororq/application/service/CupoConsumidorService.class',
+        'com/negociadororq/application/service/CupoReversionService.class',
+        'com/negociadororq/application/service/DocumentoEndosoService.class',
+        'com/negociadororq/application/service/EndosoDescuentoService.class',
+        'com/negociadororq/application/service/FacturaService.class',
+        'com/negociadororq/application/service/NotificacionService.class',
+        'com/negociadororq/application/service/OperadorService.class',
+        'com/negociadororq/application/service/ProcesarFacturaNegociacionService.class',
+        'com/negociadororq/application/service/ReversionCuposService.class',
+        'com/negociadororq/application/service/TemplateRenderService.class',
+        'com/negociadororq/application/service/ValidacionFacturaService.class',
+        'com/negociadororq/application/service/notificacion/CuerpoNotificacionBuilder.class',
 ]
 
 jacocoTestReport {
