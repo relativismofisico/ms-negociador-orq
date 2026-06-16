@@ -1,6 +1,7 @@
 plugins {
     id 'pmd'
     id 'java'
+    id 'groovy'
     id 'jacoco'
     id 'checkstyle'
     id 'org.sonarqube' version '5.1.0.4882'
@@ -64,6 +65,15 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
 
+    // Spock Framework — pruebas unitarias en Groovy
+    testImplementation 'org.apache.groovy:groovy-all:4.0.21'
+    testImplementation('org.spockframework:spock-core:2.4-groovy-4.0') {
+        exclude group: 'org.apache.groovy'
+    }
+    testImplementation('org.spockframework:spock-spring:2.4-groovy-4.0') {
+        exclude group: 'org.apache.groovy'
+    }
+
     // SpotBugs annotations (for @SuppressWarnings integration)
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
 
@@ -86,12 +96,12 @@ dependencyManagement {
 tasks.named('test') {
     useJUnitPlatform()
 }
-
 test {
     useJUnitPlatform()
     finalizedBy jacocoTestReport // siempre genera reporte después de los tests
 
 }
+
 
 apply from: "${rootProject.projectDir}/test.gradle"
 apply from: "${rootProject.projectDir}/coverage.gradle"
