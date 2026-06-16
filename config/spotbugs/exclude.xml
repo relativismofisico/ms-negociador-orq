@@ -133,6 +133,18 @@
         <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
     </Match>
 
+    <!-- Spock/Groovy: las closures generadas por el compilador Groovy para
+         bloques then:/when:/where: implementan Serializable pero no pueden
+         declarar serialVersionUID (son clases sintéticas anónimas). -->
+    <Match>
+        <Class name="~.*Spec.*"/>
+        <Bug pattern="SE_NO_SERIALVERSIONID"/>
+    </Match>
+    <Match>
+        <Class name="~.*Spec.*"/>
+        <Bug pattern="SE_NO_SERIALVERSIONUID"/>
+    </Match>
+
     <!-- NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE: en tests que usan el patrón
          (Type) converter.convert(obj) el cast se hace directamente sobre el
          retorno. SpotBugs no sabe que la implementación nunca devuelve null
