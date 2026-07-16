@@ -1,6 +1,7 @@
 package com.negociadororq.infrastructure.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -18,6 +19,9 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 
 /**
@@ -53,9 +57,14 @@ public class SecurityConfig {
             // CSRF innecesario en APIs stateless con JWT
             .csrf(AbstractHttpConfigurer::disable)
 
+            // Habilita el preflight CORS (OPTIONS) antes de la cadena de autenticación,
+            // necesario desde que hay front-ends que llaman a este servicio directamente
+            // desde el navegador (ej: cupo propio de fondeo).
+            .cors(Customizer.withDefaults())
+
             // Form login deshabilitado — JWT + Basic Auth para servicio-a-servicio
             .formLogin(AbstractHttpConfigurer::disable)
-            .httpBasic(Customizer.withDefaults())
+            .httpBasic(basic -> basic.authenticationEntryPoint(authenticationEntryPoint))
 
             .authorizeHttpRequests(authorization -> authorization
                 // Swagger/OpenAPI disponible sin token (ajustar por perfil si se requiere)
@@ -78,6 +87,13 @@ public class SecurityConfig {
                 )
                 .authenticationEntryPoint(authenticationEntryPoint)
                 .accessDeniedHandler(accessDeniedHandler)
+            )
+
+            // ExceptionTranslationFilter usa los mismos handlers para errores 401/403
+            // que no provienen del BearerTokenAuthenticationFilter (ej: sin header, BasicAuth)
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint(authenticationEntryPoint)
+                .accessDeniedHandler(accessDeniedHandler)
             );
 
         return http.build();
@@ -86,6 +102,19 @@ public class SecurityConfig {
     @Bean
     public JwtDecoder jwtDecoder(ObjectMapper objectMapper) {
         return new JjwtDecoder(securityProperties.getJwt().getSecret(), objectMapper);
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of("http://localhost:4700"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
     @Bean

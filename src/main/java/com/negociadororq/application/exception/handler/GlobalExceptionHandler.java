@@ -5,6 +5,7 @@ import com.negociadororq.application.exception.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.java.Log;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -172,6 +173,26 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST,
                         "PARAMETRO_INVALIDO",
                         "El parámetro '" + ex.getName() + "' tiene un valor con formato inválido",
+                        request.getRequestURI(),
+                        null));
+    }
+
+    // =========================================================================
+    // Acceso denegado por rol insuficiente (@PreAuthorize)
+    // =========================================================================
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(
+            AccessDeniedException ex, HttpServletRequest request) {
+
+        log.warning(String.format("Acceso denegado en %s", request.getRequestURI()));
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(buildError(
+                        HttpStatus.FORBIDDEN,
+                        "ACCION_NO_PERMITIDA",
+                        "No tiene permisos para acceder a este recurso.",
                         request.getRequestURI(),
                         null));
     }

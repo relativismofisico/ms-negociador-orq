@@ -2,12 +2,16 @@ package com.negociadororq.application.service;
 
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.NegociacionResponseDto;
+import com.negociadororq.application.exception.AccionNoPermitidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
+import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.enums.EstadoNegociacion;
+import com.negociadororq.application.port.output.CompanyOperationOutputPort;
+import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
@@ -35,6 +39,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final FacturaOutputPort facturaPort;
     private final NegociacionOutputPort negociacionPort;
     private final UserOutputPort userPort;
+    private final CompanyOutputPort companyPort;
+    private final CompanyOperationOutputPort companyOperationPort;
     private final NotificacionService notificacionService;
     private final ProcesarFacturaNegociacionService procesarFacturaNegociacionService;
 
@@ -58,6 +64,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         userPort.findByUsername(request.getRutOperador())
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "No existe operador con username " + request.getRutOperador(), "OPERADOR_NO_ENCONTRADO"));
+
+        validarOperacionHabilitada(request);
 
         /* ======================================================
            1. Agrupar facturas por pagador SOLO en CONFIRMING
@@ -162,6 +170,30 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         response.setErrores(allErrores);
 
         return response;
+    }
+
+    /**
+     * Rechaza toda la solicitud (no factura a factura) si la empresa solicitante no tiene
+     * habilitada la operación (FACTORING/CONFIRMING) que está intentando ejecutar. A diferencia
+     * de validarPermisoOperacion (dentro de ProcesarFacturaNegociacionServiceImpl, que valida
+     * factura a factura y cuyas excepciones se absorben como rechazo individual), esta se lanza
+     * antes del loop para que el fallo sea un error HTTP real, no una factura rechazada silenciosa.
+     */
+    private void validarOperacionHabilitada(NegociacionRequestDto request) {
+        String tipoOperacion = request.getTipoOperacion() != null ? request.getTipoOperacion().getTipo() : null;
+        if (tipoOperacion == null) {
+            return;
+        }
+
+        Company company = companyPort.findByNit(request.getRutEmpresa())
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No existe empresa con NIT " + request.getRutEmpresa(), "EMPRESA_NO_ENCONTRADA"));
+
+        if (!companyOperationPort.isEnabled(company.getIdeCompany(), tipoOperacion.toUpperCase())) {
+            throw new AccionNoPermitidaException(
+                    "La empresa no tiene habilitada la operación " + tipoOperacion + ".",
+                    "OPERACION_NO_HABILITADA");
+        }
     }
 
 }
