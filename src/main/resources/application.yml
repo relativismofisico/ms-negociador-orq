@@ -112,6 +112,10 @@ security:
       - OPERARIO
       - EMPRESA
       - FONDEADOR
+    # GET/PUT /companies/{companyId}/cupo-propio-fondeo
+    cupo-propio:
+      - ADMINISTRADOR
+      - EMPRESA
 logging:
   level:
     org.springframework.security: DEBUG
