@@ -21,4 +21,10 @@ public class ActualizarCupoPropioRequestDto {
     @NotNull
     @PositiveOrZero
     private BigDecimal cupoPropio;
+
+    @Schema(description = "Tasa que la empresa define para sus propias operaciones de Confirming autofondeadas",
+        example = "2.5")
+    @NotNull
+    @PositiveOrZero
+    private BigDecimal tasa;
 }

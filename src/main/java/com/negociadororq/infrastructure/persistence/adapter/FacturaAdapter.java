@@ -91,6 +91,7 @@ public class FacturaAdapter implements FacturaOutputPort {
         f.setCufe(doc.getCufe());
         f.setEstadoNegociacion(doc.getEstadoNegociacion());
         f.setEstadoFirma(doc.getEstadoFirma());
+        f.setNegociacionId(doc.getNegociacionId());
         f.setActores(doc.getActores());
         f.setUsuarioCargaFactura(doc.getUsuarioCargaFactura());
         f.setEmpresaCargaFactura(doc.getEmpresaCargaFactura());
@@ -133,6 +134,7 @@ public class FacturaAdapter implements FacturaOutputPort {
         doc.setCufe(f.getCufe());
         doc.setEstadoNegociacion(f.getEstadoNegociacion());
         doc.setEstadoFirma(f.getEstadoFirma());
+        doc.setNegociacionId(f.getNegociacionId());
         doc.setActores(f.getActores());
         doc.setUsuarioCargaFactura(f.getUsuarioCargaFactura());
         doc.setEmpresaCargaFactura(f.getEmpresaCargaFactura());

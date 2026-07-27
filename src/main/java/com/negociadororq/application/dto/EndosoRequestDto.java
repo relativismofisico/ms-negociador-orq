@@ -22,6 +22,10 @@ public class EndosoRequestDto {
     @Schema(description = "RUT o NIT del actor que realiza el endoso.", example = "900341104")
     private String rutActor;
 
+    @Schema(description = "Username/rut del usuario individual que realiza la solicitud (firmante del "
+        + "documento en Factoring; en Confirming el firmante se resuelve al aprobar).", example = "26028790")
+    private String rutOperador;
+
     @Schema(description = "Números de factura a incluir en el endoso. No puede estar vacía.",
         example = "[\"FECI3566\", \"FECI3567\"]")
     private List<String> numerosFactura;

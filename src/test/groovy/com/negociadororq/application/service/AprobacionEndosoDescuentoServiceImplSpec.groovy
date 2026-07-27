@@ -23,6 +23,7 @@ import com.negociadororq.domain.model.AprobacionActorDto
 import com.negociadororq.domain.model.AprobacionFacturaRequest
 import com.negociadororq.domain.model.AprobacionRequest
 import com.negociadororq.domain.model.Company
+import com.negociadororq.domain.model.Endoso
 import com.negociadororq.domain.model.Factura
 import com.negociadororq.domain.model.FacturaNegociada
 import com.negociadororq.domain.model.FondeadorAsignacion
@@ -50,17 +51,26 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
     FirmaEndosoService firmaEndosoService = Mock()
     NotificacionService notificacionService = Mock()
     EndosoOutputPort endosoPort = Mock()
+    DocumentoEndosoService documentoEndosoService = Mock()
 
     AprobacionEndosoDescuentoServiceImpl service = new AprobacionEndosoDescuentoServiceImpl(
             negociacionPort, facturaPatchPort, endosoPatchPort, outboxService,
             cupoReversionService, companyPort, fondeadorQuotaPort, facturaPort,
-            userPort, pendingOtpPort, firmaEndosoService, notificacionService, endosoPort
+            userPort, pendingOtpPort, firmaEndosoService, notificacionService, endosoPort,
+            documentoEndosoService
     )
 
     def setup() {
         service.topicRequestOtp = "topic-otp-request"
         service.topicValidateOtp = "topic-otp-validate"
         service.topicLiquidacionSolicitada = "topic-liquidacion"
+
+        // Por defecto, cada factura tiene su propio Endoso sin agrupar (comportamiento
+        // previo): así el recálculo de estado grupal de actualizarEstadoEndosoGrupal()
+        // se reduce al caso de una sola factura, igual que antes de esta funcionalidad.
+        endosoPort.findByNegociacionIdAndNumeroFactura(_, _) >> { String idNeg, String numeroFactura ->
+            Optional.of(Endoso.builder().numerosFactura([numeroFactura]).build())
+        }
     }
 
     // ─── solicitarOtp ─────────────────────────────────────────────────────────
@@ -252,7 +262,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         // En este caso fn.aprobaciones tiene FONDEADOR, el actor es PAG-001
         // actoresRequeridos FACTORING = {PAGADOR, FONDEADOR}
         // rolesQueAprobaron = {FONDEADOR} + {PAGADOR} = todosAprobaron = true
-        1 * facturaPatchPort.actualizarEstadoFirmaPorNoFactura("FECI001", EstadoFirma.CESION)
+        1 * facturaPatchPort.actualizarEstadosPorNoFactura("FECI001", EstadoFirma.CESION, EstadoNegociacion.APROBADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.ACEPTADO)
         1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", _)
     }
@@ -287,12 +297,104 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().ideCompany(10L).build())
 
         when:
-        service.aprobarInterno(pending)
+        def resultado = service.aprobarInterno(pending)
 
         then:
-        1 * facturaPatchPort.actualizarEstadoFirmaPorNoFactura("FECI001", EstadoFirma.RECHAZADA)
+        1 * facturaPatchPort.actualizarEstadosPorNoFactura("FECI001", EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.RECHAZADO)
         1 * cupoReversionService.revertirCupoUsuario(1L, _)
+        resultado.estado == EstadoNegociacion.RECHAZADA.name()
+    }
+
+    def "calcularEstadoNegociacion con todas las facturas aprobadas retorna APROBADA"() {
+        given:
+        def fn = buildFacturaNeg("FECI001", "PAG-001", "PROV-001", [])
+
+        def neg = Negociacion.builder()
+                .id("neg-001")
+                .tipoOperacion(new Operacion("CONFIRMING", "DESC"))
+                .facturas([fn])
+                .build()
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        negociacionPort.save(_) >> neg
+        // El proveedor aprueba -> se intenta regenerar el documento con el
+        // firmante; sin factura real que devolver, la regeneración se omite.
+        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+
+        def facturaReq = new AprobacionFacturaRequest("FECI001", true, null)
+        def pending = buildPending("neg-001", "PROV-001", [facturaReq])
+
+        when:
+        def resultado = service.aprobarInterno(pending)
+
+        then:
+        resultado.estado == EstadoNegociacion.APROBADA.name()
+        fn.estadoFirma == EstadoFirma.DESCUENTO
+        fn.estadoNegociacion == EstadoNegociacion.APROBADA
+    }
+
+    def "calcularEstadoNegociacion con una factura aprobada y otra aun sin solicitar (SIN_DESCUENTO) retorna EN_APROBACION"() {
+        given:
+        def fnAprobada = buildFacturaNeg("FECI001", "PAG-001", "PROV-001", [])
+        def fnSinTocar = buildFacturaNeg("FECI002", "PAG-001", "PROV-001", [])
+        fnSinTocar.estadoFirma = EstadoFirma.SIN_DESCUENTO
+
+        def neg = Negociacion.builder()
+                .id("neg-001")
+                .tipoOperacion(new Operacion("CONFIRMING", "DESC"))
+                .facturas([fnAprobada, fnSinTocar])
+                .build()
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        negociacionPort.save(_) >> neg
+        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+
+        def facturaReq = new AprobacionFacturaRequest("FECI001", true, null)
+        def pending = buildPending("neg-001", "PROV-001", [facturaReq])
+
+        when:
+        def resultado = service.aprobarInterno(pending)
+
+        then:
+        // La negociación no puede quedar APROBADA mientras FECI002 ni siquiera
+        // entró al proceso de aprobación (sigue en su estado inicial SIN_DESCUENTO).
+        resultado.estado == EstadoNegociacion.EN_APROBACION.name()
+    }
+
+    def "calcularEstadoNegociacion con una factura aprobada y otra rechazada retorna PARCIAL"() {
+        given:
+        def fnAprobada = buildFacturaNeg("FECI001", "PAG-001", "PROV-001", [])
+        def fnRechazada = buildFacturaNeg("FECI002", "PAG-001", "PROV-001", [])
+
+        def neg = Negociacion.builder()
+                .id("neg-001")
+                .tipoOperacion(new Operacion("CONFIRMING", "DESC"))
+                .facturas([fnAprobada, fnRechazada])
+                .build()
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        negociacionPort.save(_) >> neg
+
+        def facturaDb = new Factura()
+        facturaDb.numeroFactura = "FECI002"
+        facturaDb.rutProveedor = "PROV-001"
+        facturaDb.rutPagador = "PAG-001"
+        facturaDb.valorFactura = new BigDecimal("1000.00")
+        facturaPort.findByNumeroFactura("FECI002") >> Optional.of(facturaDb)
+        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        companyPort.findByNit(_) >> Optional.of(Company.builder().ideCompany(1L).build())
+
+        def reqAprobada = new AprobacionFacturaRequest("FECI001", true, null)
+        def reqRechazada = new AprobacionFacturaRequest("FECI002", false, "Rechazo")
+        def pending = buildPending("neg-001", "PROV-001", [reqAprobada, reqRechazada])
+
+        when:
+        def resultado = service.aprobarInterno(pending)
+
+        then:
+        resultado.estado == EstadoNegociacion.PARCIAL.name()
     }
 
     def "aprobarInterno CONFIRMING proveedor aprueba -> DESCUENTO y evento liquidacion"() {
@@ -307,6 +409,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
 
         negociacionPort.findById("neg-001") >> Optional.of(neg)
         negociacionPort.save(_) >> neg
+        facturaPort.findByNumeroFactura(_) >> Optional.empty()
 
         def facturaReq = new AprobacionFacturaRequest("FECI001", true, null)
         def pending = buildPending("neg-001", "PROV-001", [facturaReq])
@@ -315,7 +418,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         service.aprobarInterno(pending)
 
         then:
-        1 * facturaPatchPort.actualizarEstadoFirmaPorNoFactura("FECI001", EstadoFirma.DESCUENTO)
+        1 * facturaPatchPort.actualizarEstadosPorNoFactura("FECI001", EstadoFirma.DESCUENTO, EstadoNegociacion.APROBADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.ACEPTADO)
         1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", _)
     }

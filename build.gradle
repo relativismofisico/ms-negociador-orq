@@ -45,6 +45,8 @@ dependencies {
 
     // Source: https://mvnrepository.com/artifact/com.openhtmltopdf/openhtmltopdf-pdfbox
     implementation("com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10")
+    // Mustache template engine (plantillas de documentos formales, tabla messages_templates)
+    implementation("com.github.spullara.mustache.java:compiler:0.9.10")
     //Kafka
     implementation 'org.springframework.kafka:spring-kafka'
     // Lombok

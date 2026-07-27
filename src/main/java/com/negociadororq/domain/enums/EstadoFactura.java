@@ -12,5 +12,6 @@ public enum EstadoFactura {
     RECHAZADA,
     VENCIDA,
     BLOQUEADA,
-    VENDIDA
+    VENDIDA,
+    LIQUIDADA
 }

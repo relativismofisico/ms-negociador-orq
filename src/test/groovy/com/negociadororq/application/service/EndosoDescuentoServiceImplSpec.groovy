@@ -3,15 +3,19 @@ package com.negociadororq.application.service
 import com.negociadororq.application.dto.EndosoRequestDto
 import com.negociadororq.application.exception.PeticionInvalidaException
 import com.negociadororq.application.exception.RecursoNoEncontradoException
+import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.EndosoOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
 import com.negociadororq.application.port.output.FacturaPatchOutputPort
+import com.negociadororq.application.port.output.FondeadorQuotaOutputPort
 import com.negociadororq.application.port.output.NegociacionOutputPort
 import com.negociadororq.application.port.output.NegociacionPatchOutputPort
+import com.negociadororq.domain.model.Company
 import com.negociadororq.domain.model.Endoso
 import com.negociadororq.domain.model.Factura
 import com.negociadororq.domain.model.FacturaNegociada
 import com.negociadororq.domain.model.FondeadorAsignacion
+import com.negociadororq.domain.model.FondeadorQuota
 import com.negociadororq.domain.model.Negociacion
 import com.negociadororq.domain.model.Operacion
 import spock.lang.Specification
@@ -27,11 +31,29 @@ class EndosoDescuentoServiceImplSpec extends Specification {
     FacturaPatchOutputPort facturaPatchPort = Mock()
     DocumentoEndosoService documentoEndosoService = Mock()
     NegociacionPatchOutputPort negociacionPatchPort = Mock()
+    CompanyOutputPort companyPort = Mock()
+    FondeadorQuotaOutputPort fondeadorQuotaPort = Mock()
 
     EndosoDescuentoServiceImpl service = new EndosoDescuentoServiceImpl(
             negociacionPort, endosoPort, facturaPort, notificacionService,
-            facturaPatchPort, documentoEndosoService, negociacionPatchPort
+            facturaPatchPort, documentoEndosoService, negociacionPatchPort,
+            companyPort, fondeadorQuotaPort
     )
+
+    // idPorNit vacío por defecto -> companyPort.findByNit devuelve Optional.empty()
+    // -> permiteEndosoGrupal siempre da false (comportamiento previo: un Endoso por
+    // factura). Los tests de agrupamiento completan idPorNit antes de invocar el
+    // servicio. Un único closure dinámico en setup() en vez de un stub distinto por
+    // test: con Spock, la primera interacción declarada sobre un mock gana, no la
+    // última, así que un stub fijo acá bloquearía cualquier valor más específico
+    // declarado luego en el "given:" de cada test.
+    private final Map<String, Long> idPorNit = [:]
+
+    def setup() {
+        companyPort.findByNit(_ as String) >> { String nit ->
+            idPorNit.containsKey(nit) ? Optional.of(Company.builder().ideCompany(idPorNit[nit]).build()) : Optional.empty()
+        }
+    }
 
     def buildNegFactoring(String numero, String rutProveedor) {
         FacturaNegociada.builder()
@@ -56,6 +78,8 @@ class EndosoDescuentoServiceImplSpec extends Specification {
                 .id("neg-001")
                 .tipoOperacion(new Operacion(tipo, "DESC"))
                 .facturas(facturas)
+                .rutProveedor(facturas ? facturas[0].rutProveedor : null)
+                .rutPagador(facturas ? facturas[0].rutPagador : null)
                 .build()
     }
 
@@ -85,9 +109,9 @@ class EndosoDescuentoServiceImplSpec extends Specification {
         resultado.facturasEndosadas.contains("FECI001")
         resultado.facturasRechazadas.isEmpty()
         1 * endosoPort.save(_)
-        1 * documentoEndosoService.generarDocumentoFormal(_, _, _, _)
-        1 * notificacionService.notificarEndoso(_)
-        1 * facturaPatchPort.actualizarEstadoPorId("id-FECI001", _)
+        1 * documentoEndosoService.generarDocumentoFormal(_, _, _, _, _)
+        1 * notificacionService.notificarEndosos({ it.size() == 1 })
+        1 * facturaPatchPort.actualizarEstadoPorId("id-FECI001", _, _)
         1 * negociacionPatchPort.actualizarEstadoEndosoPorId("neg-001", "FECI001", true)
     }
 
@@ -304,5 +328,106 @@ class EndosoDescuentoServiceImplSpec extends Specification {
 
         then:
         resultado.estadoEndoso == "RECHAZADO"
+    }
+
+    // ─── endoso grupal ────────────────────────────────────────────────────────
+
+    def "sin endosoGrupal habilitado, crea un Endoso por factura del mismo fondeador"() {
+        given:
+        def fn1 = buildNegFactoring("FECI010", "RUT-PROV")
+        def fn2 = buildNegFactoring("FECI011", "RUT-PROV")
+        def neg = buildNegociacion("FACTORING", [fn1, fn2])
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        facturaPort.findByNumeroFactura("FECI010") >> Optional.of(buildFactura("FECI010", "RUT-PROV"))
+        facturaPort.findByNumeroFactura("FECI011") >> Optional.of(buildFactura("FECI011", "RUT-PROV"))
+        endosoPort.existsByNegociacionIdAndNumeroFactura(_, _) >> false
+        idPorNit["FOND-001"] = 1L
+        idPorNit["RUT-PROV"] = 2L
+        fondeadorQuotaPort.findByFunderIdAndSupplierId(1L, 2L) >>
+                Optional.of(FondeadorQuota.builder().endosoGrupal(false).build())
+
+        def request = EndosoRequestDto.builder()
+                .idNegociacion("neg-001")
+                .rutActor("RUT-PROV")
+                .numerosFactura(["FECI010", "FECI011"])
+                .build()
+
+        when:
+        def resultado = service.registrarEndoso(request)
+
+        then:
+        resultado.facturasEndosadas.size() == 2
+        2 * endosoPort.save({ it.numerosFactura.size() == 1 })
+    }
+
+    def "con endosoGrupal habilitado, agrupa las facturas del mismo fondeador en un solo Endoso"() {
+        given:
+        def fn1 = buildNegFactoring("FECI012", "RUT-PROV")
+        def fn2 = buildNegFactoring("FECI013", "RUT-PROV")
+        def neg = buildNegociacion("FACTORING", [fn1, fn2])
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        facturaPort.findByNumeroFactura("FECI012") >> Optional.of(buildFactura("FECI012", "RUT-PROV"))
+        facturaPort.findByNumeroFactura("FECI013") >> Optional.of(buildFactura("FECI013", "RUT-PROV"))
+        endosoPort.existsByNegociacionIdAndNumeroFactura(_, _) >> false
+        idPorNit["FOND-001"] = 1L
+        idPorNit["RUT-PROV"] = 2L
+        fondeadorQuotaPort.findByFunderIdAndSupplierId(1L, 2L) >>
+                Optional.of(FondeadorQuota.builder().endosoGrupal(true).build())
+
+        def request = EndosoRequestDto.builder()
+                .idNegociacion("neg-001")
+                .rutActor("RUT-PROV")
+                .numerosFactura(["FECI012", "FECI013"])
+                .build()
+
+        when:
+        def resultado = service.registrarEndoso(request)
+
+        then:
+        resultado.facturasEndosadas.size() == 2
+        1 * endosoPort.save({ (it.numerosFactura as Set) == (["FECI012", "FECI013"] as Set) })
+        1 * notificacionService.notificarEndosos({ it.size() == 1 })
+    }
+
+    def "endosoGrupal en Confirming se consulta por funderId+payerId"() {
+        given:
+        def fn1 = FacturaNegociada.builder()
+                .numeroFactura("FECI014").rutProveedor("RUT-PROV").rutPagador("RUT-PAG")
+                .fondeadores([FondeadorAsignacion.builder().rutFondeador("FOND-001").nombreFondeador("Fondo").build()])
+                .build()
+        def fn2 = FacturaNegociada.builder()
+                .numeroFactura("FECI015").rutProveedor("RUT-PROV").rutPagador("RUT-PAG")
+                .fondeadores([FondeadorAsignacion.builder().rutFondeador("FOND-001").nombreFondeador("Fondo").build()])
+                .build()
+        def neg = buildNegociacion("CONFIRMING", [fn1, fn2])
+
+        def factura1 = buildFactura("FECI014", "RUT-PROV")
+        factura1.rutPagador = "RUT-PAG"
+        def factura2 = buildFactura("FECI015", "RUT-PROV")
+        factura2.rutPagador = "RUT-PAG"
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        facturaPort.findByNumeroFactura("FECI014") >> Optional.of(factura1)
+        facturaPort.findByNumeroFactura("FECI015") >> Optional.of(factura2)
+        endosoPort.existsByNegociacionIdAndNumeroFactura(_, _) >> false
+        idPorNit["FOND-001"] = 1L
+        idPorNit["RUT-PAG"] = 3L
+        fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 3L) >>
+                Optional.of(FondeadorQuota.builder().endosoGrupal(true).build())
+
+        def request = EndosoRequestDto.builder()
+                .idNegociacion("neg-001")
+                .rutActor("RUT-PAG")
+                .numerosFactura(["FECI014", "FECI015"])
+                .build()
+
+        when:
+        def resultado = service.registrarEndoso(request)
+
+        then:
+        resultado.facturasEndosadas.size() == 2
+        1 * endosoPort.save({ (it.numerosFactura as Set) == (["FECI014", "FECI015"] as Set) })
     }
 }

@@ -25,6 +25,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
                 .funderId(1L).payerId(1L)
                 .payerQuota(new BigDecimal("300.00"))
                 .payerCurrentQuota(new BigDecimal("200.00"))
+                .payerRate(new BigDecimal("2.5"))
                 .build()
         def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("1000.00")).build()
         fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
@@ -38,6 +39,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         resultado.cupoPropio == new BigDecimal("300.00")
         resultado.cupoDisponible == new BigDecimal("200.00")
         resultado.cupoMaximoAdministrador == new BigDecimal("1000.00")
+        resultado.tasa == new BigDecimal("2.5")
     }
 
     def "obtenerCupoPropio lanza RecursoNoEncontradoException si la empresa no es fondeadora de sí misma"() {
@@ -79,12 +81,13 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
 
         when:
-        def resultado = service.actualizarCupoPropio(1L, new BigDecimal("500.00"))
+        def resultado = service.actualizarCupoPropio(1L, new BigDecimal("500.00"), new BigDecimal("2.5"))
 
         then:
         1 * fondeadorQuotaPort.save(autofondeo) >> autofondeo
         autofondeo.payerQuota == new BigDecimal("500.00")
         autofondeo.payerCurrentQuota == new BigDecimal("400.00")
+        autofondeo.payerRate == new BigDecimal("2.5")
         resultado.cupoPropio == new BigDecimal("500.00")
         resultado.cupoDisponible == new BigDecimal("400.00")
     }
@@ -103,7 +106,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         fondeadorQuotaPort.save(_) >> { FondeadorQuota fq -> fq }
 
         when:
-        service.actualizarCupoPropio(1L, new BigDecimal("100.00"))
+        service.actualizarCupoPropio(1L, new BigDecimal("100.00"), new BigDecimal("2.5"))
 
         then:
         autofondeo.payerQuota == new BigDecimal("100.00")
@@ -122,7 +125,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
 
         when:
-        service.actualizarCupoPropio(1L, new BigDecimal("1500.00"))
+        service.actualizarCupoPropio(1L, new BigDecimal("1500.00"), new BigDecimal("2.5"))
 
         then:
         thrown(ReglaDeNegocioException)
@@ -134,7 +137,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         fondeadorQuotaPort.findByFunderIdAndPayerId(9L, 9L) >> Optional.empty()
 
         when:
-        service.actualizarCupoPropio(9L, new BigDecimal("100.00"))
+        service.actualizarCupoPropio(9L, new BigDecimal("100.00"), new BigDecimal("2.5"))
 
         then:
         thrown(RecursoNoEncontradoException)
@@ -149,10 +152,39 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         fondeadorQuotaPort.save(_) >> { FondeadorQuota fq -> fq }
 
         when:
-        service.actualizarCupoPropio(1L, new BigDecimal("400.00"))
+        service.actualizarCupoPropio(1L, new BigDecimal("400.00"), new BigDecimal("2.5"))
 
         then:
         autofondeo.payerQuota == new BigDecimal("400.00")
         autofondeo.payerCurrentQuota == new BigDecimal("400.00")
+    }
+
+    // ─── actualizarEndosoGrupal ───────────────────────────────────────────────
+
+    def "actualizarEndosoGrupal habilita el endoso agrupado del autofondeo"() {
+        given:
+        def autofondeo = FondeadorQuota.builder().funderId(1L).payerId(1L).endosoGrupal(false).build()
+        def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("1000.00")).build()
+        fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
+        empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
+
+        when:
+        def resultado = service.actualizarEndosoGrupal(1L, true)
+
+        then:
+        1 * fondeadorQuotaPort.save(autofondeo) >> autofondeo
+        autofondeo.endosoGrupal
+        resultado.endosoGrupal
+    }
+
+    def "actualizarEndosoGrupal lanza RecursoNoEncontradoException si la empresa no es fondeadora de sí misma"() {
+        given:
+        fondeadorQuotaPort.findByFunderIdAndPayerId(9L, 9L) >> Optional.empty()
+
+        when:
+        service.actualizarEndosoGrupal(9L, true)
+
+        then:
+        thrown(RecursoNoEncontradoException)
     }
 }
