@@ -46,4 +46,25 @@ public class FondeadorQuotaEntity {
 
     @Column(name = "supplier_current_quota")
     private BigDecimal supplierCurrentQuota;
+
+    @Column(name = "payer_rate")
+    private BigDecimal payerRate;
+
+    @Column(name = "supplier_rate")
+    private BigDecimal supplierRate;
+
+    @Column(name = "estado")
+    private String estado;
+
+    @Column(name = "origen")
+    private String origen;
+
+    @Column(name = "aprobado_por_fondeador")
+    private Boolean aprobadoPorFondeador;
+
+    @Column(name = "activo")
+    private Boolean activo;
+
+    @Column(name = "endoso_grupal")
+    private Boolean endosoGrupal;
 }

@@ -25,4 +25,12 @@ public class CupoPropioFondeoDto {
 
     @Schema(description = "Cupo máximo permitido, asignado por el administrador de la plataforma", example = "100000000")
     private BigDecimal cupoMaximoAdministrador;
+
+    @Schema(description = "Tasa que la empresa define para sus propias operaciones de Confirming autofondeadas",
+        example = "2.5")
+    private BigDecimal tasa;
+
+    @Schema(description = "Si la empresa permite agrupar varias facturas autofondeadas en una sola solicitud "
+        + "de descuento (true), o exige una solicitud por factura (false, por defecto)", example = "false")
+    private boolean endosoGrupal;
 }

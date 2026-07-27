@@ -2,6 +2,7 @@ package com.negociadororq.application.web.controller;
 
 import com.negociadororq.application.dto.ActualizarCupoPropioRequestDto;
 import com.negociadororq.application.dto.CupoPropioFondeoDto;
+import com.negociadororq.application.dto.EndosoGrupalRequestDto;
 import com.negociadororq.application.exception.dto.ErrorResponse;
 import com.negociadororq.application.service.CupoPropioFondeoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -87,6 +89,32 @@ public class CupoPropioFondeoController {
             @Parameter(description = "Identificador de la empresa", example = "1", required = true)
             @PathVariable Long companyId,
             @Valid @RequestBody ActualizarCupoPropioRequestDto request) {
-        return ResponseEntity.ok(cupoPropioFondeoService.actualizarCupoPropio(companyId, request.getCupoPropio()));
+        return ResponseEntity.ok(
+                cupoPropioFondeoService.actualizarCupoPropio(companyId, request.getCupoPropio(), request.getTasa()));
+    }
+
+    @Operation(
+        summary = "Permitir o exigir endoso/solicitud individual por factura en el autofondeo",
+        description = "Con endosoGrupal=true la empresa puede agrupar varias facturas autofondeadas en una sola "
+            + "solicitud de descuento; con false (por defecto) debe hacer una por factura.\n\n"
+            + "**Roles requeridos:** `ADMINISTRADOR`, `EMPRESA`",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Configuración actualizada exitosamente.",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = CupoPropioFondeoDto.class))),
+        @ApiResponse(responseCode = "404", description = "La empresa no está habilitada como fondeadora de sí misma, "
+            + "o el administrador aún no le asignó un cupo general.",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    @PreAuthorize("@sec.tieneRol(authentication, 'cupo-propio')")
+    @PatchMapping("/endoso-grupal")
+    public ResponseEntity<CupoPropioFondeoDto> actualizarEndosoGrupal(
+            @Parameter(description = "Identificador de la empresa", example = "1", required = true)
+            @PathVariable Long companyId,
+            @Valid @RequestBody EndosoGrupalRequestDto request) {
+        return ResponseEntity.ok(
+                cupoPropioFondeoService.actualizarEndosoGrupal(companyId, Boolean.TRUE.equals(request.getEndosoGrupal())));
     }
 }

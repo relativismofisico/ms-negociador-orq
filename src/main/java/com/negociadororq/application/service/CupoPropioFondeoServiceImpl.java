@@ -28,7 +28,7 @@ public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
     }
 
     @Override
-    public CupoPropioFondeoDto actualizarCupoPropio(Long companyId, BigDecimal nuevoCupo) {
+    public CupoPropioFondeoDto actualizarCupoPropio(Long companyId, BigDecimal nuevoCupo, BigDecimal nuevaTasa) {
         FondeadorQuota autofondeo = buscarAutofondeo(companyId);
         EmpresaQuota empresaQuota = buscarCupoAdministrador(companyId);
 
@@ -49,7 +49,19 @@ public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
 
         autofondeo.setPayerQuota(nuevoCupo);
         autofondeo.setPayerCurrentQuota(nuevoDisponible);
+        autofondeo.setPayerRate(nuevaTasa);
 
+        FondeadorQuota guardado = fondeadorQuotaPort.save(autofondeo);
+
+        return toDto(companyId, guardado, empresaQuota);
+    }
+
+    @Override
+    public CupoPropioFondeoDto actualizarEndosoGrupal(Long companyId, boolean endosoGrupal) {
+        FondeadorQuota autofondeo = buscarAutofondeo(companyId);
+        EmpresaQuota empresaQuota = buscarCupoAdministrador(companyId);
+
+        autofondeo.setEndosoGrupal(endosoGrupal);
         FondeadorQuota guardado = fondeadorQuotaPort.save(autofondeo);
 
         return toDto(companyId, guardado, empresaQuota);
@@ -74,6 +86,8 @@ public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
                 .cupoPropio(Optional.ofNullable(autofondeo.getPayerQuota()).orElse(BigDecimal.ZERO))
                 .cupoDisponible(Optional.ofNullable(autofondeo.getPayerCurrentQuota()).orElse(BigDecimal.ZERO))
                 .cupoMaximoAdministrador(empresaQuota.getQuota())
+                .tasa(autofondeo.getPayerRate())
+                .endosoGrupal(Boolean.TRUE.equals(autofondeo.getEndosoGrupal()))
                 .build();
     }
 }

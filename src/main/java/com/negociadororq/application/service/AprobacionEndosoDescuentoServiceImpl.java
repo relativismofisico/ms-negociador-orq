@@ -22,6 +22,7 @@ import com.negociadororq.domain.model.AprobacionActorDto;
 import com.negociadororq.domain.model.AprobacionFacturaRequest;
 import com.negociadororq.domain.model.AprobacionRequest;
 import com.negociadororq.domain.model.Company;
+import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
@@ -66,6 +67,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final FirmaEndosoService firmaEndosoService;
     private final NotificacionService notificacionService;
     private final EndosoOutputPort endosoPort;
+    private final DocumentoEndosoService documentoEndosoService;
 
     @Value("${topics.otp-request}")
     private String topicRequestOtp;
@@ -178,6 +180,18 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     request.getRutEmpresa(), rolActor, factReq.isAprobado(),
                     request.getObservacion(), LocalDateTime.now());
 
+            // En Confirming, el firmante del documento (usuario de la empresa
+            // proveedora) recién se conoce en este punto: quien solicitó el
+            // descuento fue el Pagador. Antes de estampar la firma OTP, se
+            // regenera el documento completo con los datos del Proveedor que
+            // está aprobando.
+            if ("CONFIRMING".equalsIgnoreCase(negociacion.getTipoOperacion().getTipo())
+                    && rolActor == RolActor.PROVEEDOR
+                    && factReq.isAprobado()) {
+                regenerarDocumentoConFirmante(
+                        negociacion, negociacion.getId(), factura.getNumeroFactura(), request.getRutOperador());
+            }
+
             firmaEndosoService.firmarPdfEndoso(
                     request.getIdNegociacion(), factura, pending, request.getRutEmpresa(),
                     request.getRutOperador(), rolActor, factReq.isAprobado(), request.getObservacion());
@@ -225,8 +239,11 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             revertirCupos(factura, tipoOperacion, factura.getRutProveedor(), rutOperador);
             notificacionService.notificarLiquidacionFallida(negociacion, motivoError);
-            facturaPatchPort.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), EstadoFirma.RECHAZADA);
-            endosoPatchPort.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), EstadoEndoso.RECHAZADO);
+            facturaPatchPort.actualizarEstadosPorNoFactura(
+                    factura.getNumeroFactura(), EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA);
+            factura.setEstadoFirma(EstadoFirma.RECHAZADA);
+            factura.setEstadoNegociacion(EstadoNegociacion.RECHAZADA);
+            actualizarEstadoEndosoGrupal(negociacion, idNegociacion, factura.getNumeroFactura());
             return;
         }
 
@@ -239,12 +256,12 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         boolean alguienAprobo = rolesQueAprobaron.stream().anyMatch(actoresRequeridos::contains);
 
         EstadoFirma estadoFactura;
-        EstadoEndoso estadoEndoso;
+        EstadoNegociacion estadoNegociacionFactura;
 
         if (todosAprobaron) {
             estadoFactura = "FACTORING".equalsIgnoreCase(tipoOperacion.getTipo())
                     ? EstadoFirma.CESION : EstadoFirma.DESCUENTO;
-            estadoEndoso = EstadoEndoso.ACEPTADO;
+            estadoNegociacionFactura = EstadoNegociacion.APROBADA;
 
             Operacion operacion = Operacion.builder()
                     .tipo(tipoOperacion.getTipo())
@@ -257,29 +274,122 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
         } else if (alguienAprobo) {
             estadoFactura = EstadoFirma.EN_APROBACION;
-            estadoEndoso = EstadoEndoso.PENDIENTE;
+            estadoNegociacionFactura = EstadoNegociacion.EN_APROBACION;
         } else {
             estadoFactura = EstadoFirma.EN_REVISION;
-            estadoEndoso = EstadoEndoso.EN_REVISION;
+            estadoNegociacionFactura = EstadoNegociacion.PENDIENTE;
         }
 
-        facturaPatchPort.actualizarEstadoFirmaPorNoFactura(factura.getNumeroFactura(), estadoFactura);
-        endosoPatchPort.actualizarEstadoEndosoPorNoFactura(idNegociacion, factura.getNumeroFactura(), estadoEndoso);
+        facturaPatchPort.actualizarEstadosPorNoFactura(factura.getNumeroFactura(), estadoFactura, estadoNegociacionFactura);
+
+        // También se actualiza la copia embebida en la negociación: calcularEstadoNegociacion()
+        // (llamado justo después, para cada factura de la solicitud) lee este mismo campo para
+        // determinar el estado global de la negociación, así que si no se sincroniza acá queda
+        // desactualizado y el estado de la negociación nunca refleja lo que en verdad pasó.
+        factura.setEstadoFirma(estadoFactura);
+        factura.setEstadoNegociacion(estadoNegociacionFactura);
+
+        actualizarEstadoEndosoGrupal(negociacion, idNegociacion, factura.getNumeroFactura());
+    }
+
+    /**
+     * El Endoso que cubre esta factura puede agrupar varias facturas (fondeador con
+     * endosoGrupal=true): en vez de sobreescribir su "estado" con el resultado de
+     * solo esta factura, se recalcula a partir del estadoFirma actual (ya
+     * actualizado) de TODAS las facturas que ese Endoso cubre — mismo criterio que
+     * calcularEstadoNegociacion(), pero acotado a las facturas del Endoso en vez de
+     * a toda la negociación.
+     */
+    private void actualizarEstadoEndosoGrupal(Negociacion negociacion, String idNegociacion, String numeroFactura) {
+        Endoso endoso = endosoPort.findByNegociacionIdAndNumeroFactura(idNegociacion, numeroFactura).orElse(null);
+        if (endoso == null) {
+            return;
+        }
+
+        Set<String> numerosFacturaEndoso = Set.copyOf(
+                Optional.ofNullable(endoso.getNumerosFactura()).orElse(List.of()));
+
+        List<EstadoFirma> estadosFirma = negociacion.getFacturas().stream()
+                .filter(f -> numerosFacturaEndoso.contains(f.getNumeroFactura()))
+                .map(FacturaNegociada::getEstadoFirma)
+                .toList();
+
+        boolean hayPendientes = estadosFirma.stream().anyMatch(e ->
+                e == EstadoFirma.EN_APROBACION || e == EstadoFirma.EN_REVISION
+                        || e == EstadoFirma.SIN_CESION || e == EstadoFirma.SIN_DESCUENTO);
+        boolean hayAprobadas = estadosFirma.stream().anyMatch(e -> e == EstadoFirma.CESION || e == EstadoFirma.DESCUENTO);
+        boolean hayRechazadas = estadosFirma.stream().anyMatch(e -> e == EstadoFirma.RECHAZADA);
+
+        EstadoEndoso estadoGrupal;
+        if (hayPendientes) {
+            estadoGrupal = EstadoEndoso.EN_REVISION;
+        } else if (hayAprobadas && hayRechazadas) {
+            estadoGrupal = EstadoEndoso.PARCIAL;
+        } else if (hayAprobadas) {
+            estadoGrupal = EstadoEndoso.ACEPTADO;
+        } else if (hayRechazadas) {
+            estadoGrupal = EstadoEndoso.RECHAZADO;
+        } else {
+            estadoGrupal = EstadoEndoso.EN_REVISION;
+        }
+
+        endosoPatchPort.actualizarEstadoEndosoPorNoFactura(idNegociacion, numeroFactura, estadoGrupal);
+    }
+
+    /**
+     * Regenera el documento formal del endoso que cubre esta factura, ahora con
+     * los datos del usuario que lo firma. Solo aplica a Confirming (ver llamador):
+     * en Factoring el firmante ya se conoce desde la solicitud.
+     */
+    private void regenerarDocumentoConFirmante(Negociacion negociacion, String idNegociacion,
+                                                String numeroFactura, String rutOperadorFirmante) {
+        Endoso endoso = endosoPort.findByNegociacionIdAndNumeroFactura(idNegociacion, numeroFactura).orElse(null);
+        if (endoso == null) {
+            return;
+        }
+
+        List<String> numerosFacturaEndoso = Optional.ofNullable(endoso.getNumerosFactura()).orElse(List.of());
+
+        List<Factura> facturas = numerosFacturaEndoso.stream()
+                .map(nf -> facturaPort.findByNumeroFactura(nf).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+
+        List<FacturaNegociada> facturasNegociadas = negociacion.getFacturas().stream()
+                .filter(fn -> numerosFacturaEndoso.contains(fn.getNumeroFactura()))
+                .toList();
+
+        if (facturas.isEmpty() || facturasNegociadas.isEmpty()) {
+            log.warning("No se pudo regenerar el documento del endoso " + endoso.getId()
+                    + ": no se encontraron las facturas cubiertas (" + numerosFacturaEndoso + ")");
+            return;
+        }
+
+        documentoEndosoService.generarDocumentoFormal(
+                endoso, negociacion, facturas, facturasNegociadas, rutOperadorFirmante);
+        endosoPort.save(endoso);
     }
 
     private EstadoNegociacion calcularEstadoNegociacion(Negociacion negociacion) {
         List<FacturaNegociada> facturas = negociacion.getFacturas();
 
+        // SIN_CESION/SIN_DESCUENTO es el estado inicial de una factura a la que
+        // todavía no se le solicitó endoso/descuento: cuenta como "sin resolver"
+        // igual que EN_APROBACION/EN_REVISION, para no dar por aprobada/rechazada
+        // la negociación completa mientras alguna de sus facturas ni siquiera
+        // entró al proceso.
         boolean hayPendientes = facturas.stream().anyMatch(f ->
-                EstadoFirma.EN_APROBACION.name().equals(f.getEstadoFirma()) ||
-                        EstadoFirma.EN_REVISION.name().equals(f.getEstadoFirma())
+                f.getEstadoFirma() == EstadoFirma.EN_APROBACION
+                        || f.getEstadoFirma() == EstadoFirma.EN_REVISION
+                        || f.getEstadoFirma() == EstadoFirma.SIN_CESION
+                        || f.getEstadoFirma() == EstadoFirma.SIN_DESCUENTO
         );
         boolean hayAprobadas = facturas.stream().anyMatch(f ->
-                EstadoFirma.CESION.name().equals(f.getEstadoFirma()) ||
-                        EstadoFirma.DESCUENTO.name().equals(f.getEstadoFirma())
+                f.getEstadoFirma() == EstadoFirma.CESION
+                        || f.getEstadoFirma() == EstadoFirma.DESCUENTO
         );
         boolean hayRechazadas = facturas.stream().anyMatch(f ->
-                EstadoFirma.RECHAZADA.name().equals(f.getEstadoFirma())
+                f.getEstadoFirma() == EstadoFirma.RECHAZADA
         );
 
         if (hayPendientes) {
@@ -290,6 +400,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         }
         if (hayAprobadas) {
             return EstadoNegociacion.APROBADA;
+        }
+        if (hayRechazadas) {
+            return EstadoNegociacion.RECHAZADA;
         }
         return EstadoNegociacion.EN_APROBACION;
     }

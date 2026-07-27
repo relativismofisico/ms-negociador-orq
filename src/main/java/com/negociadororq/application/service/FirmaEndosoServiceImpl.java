@@ -29,7 +29,13 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
 
         byte[] pdfActual = endoso.getDocumentoPdf();
 
-        int indexFirma = factura.getAprobaciones().size();
+        // OJO: el índice de posición de la firma debe salir de endoso.getAprobaciones()
+        // (el contador atado al documento físico donde realmente se estampa el bloque
+        // de texto), NO de factura.getAprobaciones(). Con endosoGrupal=true, varias
+        // facturas comparten el mismo Endoso/documentoPdf pero cada una lleva su propio
+        // contador de aprobaciones independiente — usar el de la factura hacía que cada
+        // firma nueva reiniciara en índice 0 y se estampara encima de la anterior.
+        int indexFirma = endoso.getAprobaciones() != null ? endoso.getAprobaciones().size() : 0;
 
         // 2. Metadata de firma
         FirmaOtpMetadata firma = FirmaOtpMetadata.builder()
