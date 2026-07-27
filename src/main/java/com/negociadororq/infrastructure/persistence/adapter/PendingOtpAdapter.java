@@ -5,10 +5,14 @@ import com.negociadororq.domain.model.PendingOtp;
 import com.negociadororq.infrastructure.persistence.entity.PendingOtpDocument;
 import com.negociadororq.infrastructure.persistence.repository.PendingOtpRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class PendingOtpAdapter implements PendingOtpOutputPort {
@@ -22,7 +26,31 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
 
     @Override
     public Optional<PendingOtp> findByIdNegociacion(String idNegociacion) {
-        return repository.findByIdNegociacion(idNegociacion).map(this::toDomain);
+        List<PendingOtpDocument> documentos = repository.findByIdNegociacion(idNegociacion);
+
+        if (documentos.isEmpty()) {
+            return Optional.empty();
+        }
+
+        // El id de Mongo (ObjectId) es cronológicamente ordenable como texto:
+        // ante solicitudes duplicadas para la misma negociación (no debería
+        // ocurrir, pero ya ocurrió), se toma la más reciente y se descartan
+        // las demás, en vez de fallar de forma permanente.
+        PendingOtpDocument masReciente = documentos.stream()
+                .max(Comparator.comparing(PendingOtpDocument::getId))
+                .orElseThrow();
+
+        if (documentos.size() > 1) {
+            log.warn("Se encontraron {} solicitudes de OTP pendientes para la negociación {}; "
+                            + "se usa la más reciente ({}) y se descartan las demás.",
+                    documentos.size(), idNegociacion, masReciente.getId());
+
+            documentos.stream()
+                    .filter(doc -> !doc.getId().equals(masReciente.getId()))
+                    .forEach(doc -> repository.deleteById(doc.getId()));
+        }
+
+        return Optional.of(toDomain(masReciente));
     }
 
     @Override
