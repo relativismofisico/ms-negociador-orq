@@ -16,4 +16,5 @@ public class Company {
     private Long ideCompany;
     private String nameCompany;
     private String nit;
+    private String ciudad;
 }

@@ -25,6 +25,7 @@ public class CompanyAdapter implements CompanyOutputPort {
                 .ideCompany(entity.getIdeCompany())
                 .nameCompany(entity.getNameCompany())
                 .nit(entity.getNit())
+                .ciudad(entity.getCity() != null ? entity.getCity().getCityName() : null)
                 .build();
     }
 }
