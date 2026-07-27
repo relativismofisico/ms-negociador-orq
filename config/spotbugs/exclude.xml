@@ -145,6 +145,16 @@
         <Bug pattern="SE_NO_SERIALVERSIONUID"/>
     </Match>
 
+    <!-- UPM_UNCALLED_PRIVATE_METHOD: falso positivo en métodos privados con
+         parámetros por defecto de Groovy (ej. factura(String, String="x", ...)).
+         El compilador genera varios overloads sintéticos; las llamadas con menos
+         argumentos invocan esos overloads mediante dispatch que SpotBugs no
+         puede trazar estáticamente, aunque sí se ejecutan en runtime. -->
+    <Match>
+        <Class name="~.*Spec.*"/>
+        <Bug pattern="UPM_UNCALLED_PRIVATE_METHOD"/>
+    </Match>
+
     <!-- NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE: en tests que usan el patrón
          (Type) converter.convert(obj) el cast se hace directamente sobre el
          retorno. SpotBugs no sabe que la implementación nunca devuelve null
