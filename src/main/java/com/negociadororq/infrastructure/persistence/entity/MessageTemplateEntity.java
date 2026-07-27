@@ -17,7 +17,7 @@ public class MessageTemplateEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "templateName")
+    @Column(name = "template_name")
     private String templateName;
 
     @Column(columnDefinition = "TEXT")
