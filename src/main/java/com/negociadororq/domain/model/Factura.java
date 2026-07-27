@@ -50,6 +50,7 @@ public class Factura {
     private String cufe;
     private String estadoNegociacion;
     private String estadoFirma;
+    private String negociacionId;
     private List<ActorFactura> actores;
     private String usuarioCargaFactura;
     private String empresaCargaFactura;

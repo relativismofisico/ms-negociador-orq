@@ -7,6 +7,9 @@ import com.negociadororq.application.port.output.EmpresaQuotaOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
 import com.negociadororq.application.port.output.FacturaPatchOutputPort
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort
+import com.negociadororq.application.port.output.IndirectFunderOfferOutputPort
+import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort
+import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPort
 import com.negociadororq.application.port.output.UserOutputPort
 import com.negociadororq.domain.enums.EstadoFirma
 import com.negociadororq.domain.model.ActorFactura
@@ -16,6 +19,8 @@ import com.negociadororq.domain.model.Factura
 import com.negociadororq.domain.model.FacturaNegociada
 import com.negociadororq.domain.model.FondeadorAsignacion
 import com.negociadororq.domain.model.FondeadorQuota
+import com.negociadororq.domain.model.IndirectFunderOffer
+import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota
 import com.negociadororq.domain.model.Operacion
 import com.negociadororq.domain.model.User
 import com.negociadororq.domain.model.UserQuota
@@ -33,10 +38,14 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     FondeadorQuotaOutputPort fondeadorQuotaPort = Mock()
     FacturaPatchOutputPort facturaPatchPort = Mock()
     ValidacionFacturaService validacionFacturaService = Mock()
+    PayerFundingVisibilityOutputPort payerFundingVisibilityPort = Mock()
+    IndirectFunderOfferOutputPort indirectFunderOfferPort = Mock()
+    IndirectFunderOfferSupplierQuotaOutputPort indirectFunderOfferSupplierQuotaPort = Mock()
 
     ProcesarFacturaNegociacionServiceImpl service = new ProcesarFacturaNegociacionServiceImpl(
             facturaPort, cupoConsumidorService, userPort, companyPort,
-            empresaQuotaPort, fondeadorQuotaPort, facturaPatchPort, validacionFacturaService
+            empresaQuotaPort, fondeadorQuotaPort, facturaPatchPort, validacionFacturaService,
+            payerFundingVisibilityPort, indirectFunderOfferPort, indirectFunderOfferSupplierQuotaPort
     )
 
     def buildFactura(String numero, String rutProv, String rutPag) {
@@ -90,10 +99,14 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
                 .funderId(20L).supplierId(10L).payerId(30L)
                 .supplierCurrentQuota(new BigDecimal("8000.00"))
                 .payerCurrentQuota(new BigDecimal("8000.00"))
+                .estado("APROBADO")
+                .aprobadoPorFondeador(true)
                 .build()
 
         fondeadorQuotaPort.findByFunderIdAndSupplierId(20L, 10L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(20L, 10L) >> Optional.of(fq)
         fondeadorQuotaPort.findByFunderIdAndPayerId(20L, 30L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndPayerIdActivo(20L, 30L) >> Optional.of(fq)
 
         return factura
     }
@@ -140,9 +153,13 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
                 .funderId(20L).payerId(10L)
                 .payerCurrentQuota(new BigDecimal("8000.00"))
                 .supplierCurrentQuota(new BigDecimal("0.00"))
+                .estado("APROBADO")
+                .aprobadoPorFondeador(true)
                 .build()
         fondeadorQuotaPort.findByFunderIdAndPayerId(20L, 10L) >> Optional.of(fqp)
+        fondeadorQuotaPort.findByFunderIdAndPayerIdActivo(20L, 10L) >> Optional.of(fqp)
         fondeadorQuotaPort.findByFunderIdAndSupplierId(_, _) >> Optional.of(fqp)
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(_, _) >> Optional.of(fqp)
 
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001")
         def reqFact = buildReqFact("FECI002")
@@ -302,9 +319,13 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
                 .funderId(50L).supplierId(10L)
                 .supplierCurrentQuota(new BigDecimal("8000.00"))
                 .payerCurrentQuota(new BigDecimal("8000.00"))
+                .estado("APROBADO")
+                .aprobadoPorFondeador(true)
                 .build()
         fondeadorQuotaPort.findByFunderIdAndSupplierId(50L, 10L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(50L, 10L) >> Optional.of(fq)
         fondeadorQuotaPort.findByFunderIdAndPayerId(50L, 30L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndPayerIdActivo(50L, 30L) >> Optional.of(fq)
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
         // fondeadoresGlobales tiene FOND-001, pero reqFact tiene FOND-LOCAL
@@ -340,8 +361,11 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def fq = FondeadorQuota.builder()
                 .supplierCurrentQuota(new BigDecimal("1.00")) // insuficiente
                 .payerCurrentQuota(new BigDecimal("1.00"))
+                .estado("APROBADO")
+                .aprobadoPorFondeador(true)
                 .build()
         fondeadorQuotaPort.findByFunderIdAndSupplierId(20L, 10L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(20L, 10L) >> Optional.of(fq)
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
@@ -351,6 +375,107 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         then:
         def ex = thrown(RuntimeException)
         ex.message.contains("cupo factoring")
+    }
+
+    // ─── fondeador con la asignación desactivada ──────────────────────────────
+
+    def "procesarFactura lanza excepcion si el fondeador desactivo la asignacion (no aparece via findByFunderIdAndSupplierIdActivo)"() {
+        given:
+        def factura = buildFactura("FECI014", "PROV-001", "PAG-001")
+        facturaPort.findByNumeroFactura("FECI014") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida("FECI014", null) >>
+                ValidacionFacturaResponseDto.builder().valida(true).build()
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
+        companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(10L).build())
+        empresaQuotaPort.findByCompanyId(10L) >> Optional.of(
+                EmpresaQuota.builder().currentQuota(new BigDecimal("9000.00")).build()
+        )
+        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(20L).build())
+        companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().ideCompany(30L).build())
+
+        // La asignación existe (findByFunderIdAndSupplierId la encontraría),
+        // pero está desactivada: la búsqueda "Activo" no la debe encontrar.
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(20L, 10L) >> Optional.empty()
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI014"))
+
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("no tiene una asignación de cupo activa")
+    }
+
+    // ─── fondeador con asignacion pendiente de aprobacion ─────────────────────
+
+    def "procesarFactura lanza RuntimeException si la asignacion de fondeo no esta APROBADA"() {
+        given:
+        def factura = buildFactura("FECI013", "PROV-001", "PAG-001")
+        facturaPort.findByNumeroFactura("FECI013") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida("FECI013", null) >>
+                ValidacionFacturaResponseDto.builder().valida(true).build()
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
+        companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(10L).build())
+        empresaQuotaPort.findByCompanyId(10L) >> Optional.of(
+                EmpresaQuota.builder().currentQuota(new BigDecimal("9000.00")).build()
+        )
+        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(20L).build())
+        companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().ideCompany(30L).build())
+
+        def fq = FondeadorQuota.builder()
+                .supplierCurrentQuota(new BigDecimal("8000.00"))
+                .payerCurrentQuota(new BigDecimal("8000.00"))
+                .estado("PENDIENTE")
+                .aprobadoPorFondeador(true)
+                .build()
+        fondeadorQuotaPort.findByFunderIdAndSupplierId(20L, 10L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(20L, 10L) >> Optional.of(fq)
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI013"))
+
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("no está aprobada")
+    }
+
+    def "procesarFactura lanza RuntimeException si la asignacion aun no fue confirmada por el fondeador"() {
+        given:
+        def factura = buildFactura("FECI014", "PROV-001", "PAG-001")
+        facturaPort.findByNumeroFactura("FECI014") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida("FECI014", null) >>
+                ValidacionFacturaResponseDto.builder().valida(true).build()
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
+        companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(10L).build())
+        empresaQuotaPort.findByCompanyId(10L) >> Optional.of(
+                EmpresaQuota.builder().currentQuota(new BigDecimal("9000.00")).build()
+        )
+        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(20L).build())
+        companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().ideCompany(30L).build())
+
+        def fq = FondeadorQuota.builder()
+                .supplierCurrentQuota(new BigDecimal("8000.00"))
+                .payerCurrentQuota(new BigDecimal("8000.00"))
+                .estado("APROBADO")
+                .aprobadoPorFondeador(false)
+                .build()
+        fondeadorQuotaPort.findByFunderIdAndSupplierId(20L, 10L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(20L, 10L) >> Optional.of(fq)
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI014"))
+
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("no está aprobada")
     }
 
     // ─── construirActores filtra FONDEADOR existentes ─────────────────────────
@@ -377,9 +502,13 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def fq = FondeadorQuota.builder()
                 .supplierCurrentQuota(new BigDecimal("8000.00"))
                 .payerCurrentQuota(new BigDecimal("8000.00"))
+                .estado("APROBADO")
+                .aprobadoPorFondeador(true)
                 .build()
         fondeadorQuotaPort.findByFunderIdAndSupplierId(20L, 10L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(20L, 10L) >> Optional.of(fq)
         fondeadorQuotaPort.findByFunderIdAndPayerId(20L, 30L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndPayerIdActivo(20L, 30L) >> Optional.of(fq)
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
@@ -416,9 +545,13 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def fq = FondeadorQuota.builder()
                 .supplierCurrentQuota(new BigDecimal("8000.00"))
                 .payerCurrentQuota(new BigDecimal("8000.00"))
+                .estado("APROBADO")
+                .aprobadoPorFondeador(true)
                 .build()
         fondeadorQuotaPort.findByFunderIdAndSupplierId(20L, 10L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(20L, 10L) >> Optional.of(fq)
         fondeadorQuotaPort.findByFunderIdAndPayerId(20L, 30L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndPayerIdActivo(20L, 30L) >> Optional.of(fq)
 
         // Empresa con puntos y guion que coincide con proveedor al normalizar
         def request = buildRequest("FACTORING", "900.341.104-5", "OP-001")
@@ -428,5 +561,168 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
 
         then:
         resultado != null
+    }
+
+    // ─── factoring indirecto vía pagador (sin asignación directa) ─────────────
+
+    def setupMocksIndirecto(String numero, BigDecimal valor = new BigDecimal("5000.00")) {
+        def factura = buildFactura(numero, "PROV-001", "PAG-001")
+        factura.valorFactura = valor
+
+        facturaPort.findByNumeroFactura(numero) >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida(numero, null) >>
+                ValidacionFacturaResponseDto.builder().valida(true).build()
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
+        companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(10L).build())
+        empresaQuotaPort.findByCompanyId(10L) >> Optional.of(
+                EmpresaQuota.builder().currentQuota(new BigDecimal("9000.00")).build()
+        )
+        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(20L).build())
+        companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().ideCompany(30L).build())
+
+        // Sin asignación directa funder->supplier: cae al fallback indirecto.
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(20L, 10L) >> Optional.empty()
+        fondeadorQuotaPort.findByFunderIdAndSupplierId(20L, 10L) >> Optional.empty()
+
+        return factura
+    }
+
+    def "procesarFactura FACTORING indirecto rechaza si el pagador no habilito el toggle"() {
+        given:
+        setupMocksIndirecto("FECI020")
+        payerFundingVisibilityPort.estaHabilitado(30L) >> false
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI020"))
+
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("no tiene una asignación de cupo activa")
+        0 * indirectFunderOfferPort.findActivaAprobada(_, _)
+    }
+
+    def "procesarFactura FACTORING indirecto rechaza si no hay oferta aprobada del fondeador hacia el pagador"() {
+        given:
+        setupMocksIndirecto("FECI021")
+        payerFundingVisibilityPort.estaHabilitado(30L) >> true
+        indirectFunderOfferPort.findActivaAprobada(20L, 30L) >> Optional.empty()
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI021"))
+
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("no tiene una asignación de cupo activa")
+    }
+
+    def "procesarFactura FACTORING indirecto rechaza si el cupo del proveedor (ya consumido antes) es insuficiente"() {
+        given:
+        setupMocksIndirecto("FECI022", new BigDecimal("5000.00"))
+        payerFundingVisibilityPort.estaHabilitado(30L) >> true
+        def oferta = IndirectFunderOffer.builder().id(77L).funderId(20L).payerId(30L)
+                .payerRate(new BigDecimal("2.5")).supplierQuotaTemplate(new BigDecimal("10000.00")).build()
+        indirectFunderOfferPort.findActivaAprobada(20L, 30L) >> Optional.of(oferta)
+        indirectFunderOfferSupplierQuotaPort.find(77L, 10L) >> Optional.of(
+                IndirectFunderOfferSupplierQuota.builder().id(1L).offerId(77L).supplierId(10L)
+                        .currentQuota(new BigDecimal("1000.00")).build()
+        )
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI022"))
+
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("Fondeador sin cupo factoring")
+    }
+
+    def "procesarFactura FACTORING indirecto exitoso (primera negociacion) crea la fila de consumo con el cupo integro y descuenta"() {
+        given:
+        setupMocksIndirecto("FECI023", new BigDecimal("5000.00"))
+        payerFundingVisibilityPort.estaHabilitado(30L) >> true
+        def oferta = IndirectFunderOffer.builder().id(77L).funderId(20L).payerId(30L)
+                .payerRate(new BigDecimal("2.5")).supplierQuotaTemplate(new BigDecimal("10000.00")).build()
+        indirectFunderOfferPort.findActivaAprobada(20L, 30L) >> Optional.of(oferta)
+        // Primera negociación de este proveedor contra la oferta: aún no existe fila de consumo.
+        indirectFunderOfferSupplierQuotaPort.find(77L, 10L) >> Optional.empty()
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        def resultado = service.procesarFactura(request, buildReqFact("FECI023"))
+
+        then:
+        resultado.numeroFactura == "FECI023"
+        1 * indirectFunderOfferSupplierQuotaPort.crear(77L, 10L, new BigDecimal("2.5"), new BigDecimal("10000.00")) >>
+                IndirectFunderOfferSupplierQuota.builder().id(1L).offerId(77L).supplierId(10L)
+                        .rate(new BigDecimal("2.5")).quota(new BigDecimal("10000.00"))
+                        .currentQuota(new BigDecimal("10000.00")).originalQuota(new BigDecimal("10000.00")).build()
+        1 * indirectFunderOfferSupplierQuotaPort.save({ IndirectFunderOfferSupplierQuota q ->
+            q.currentQuota == new BigDecimal("5000.00")
+        })
+        1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_CESION, _)
+    }
+
+    def "procesarFactura FACTORING indirecto exitoso (segunda negociacion) descuenta sobre la fila de consumo existente sin recrearla"() {
+        given:
+        setupMocksIndirecto("FECI024", new BigDecimal("2000.00"))
+        payerFundingVisibilityPort.estaHabilitado(30L) >> true
+        def oferta = IndirectFunderOffer.builder().id(77L).funderId(20L).payerId(30L)
+                .payerRate(new BigDecimal("2.5")).supplierQuotaTemplate(new BigDecimal("10000.00")).build()
+        indirectFunderOfferPort.findActivaAprobada(20L, 30L) >> Optional.of(oferta)
+        indirectFunderOfferSupplierQuotaPort.find(77L, 10L) >> Optional.of(
+                IndirectFunderOfferSupplierQuota.builder().id(1L).offerId(77L).supplierId(10L)
+                        .currentQuota(new BigDecimal("8000.00")).build()
+        )
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI024"))
+
+        then:
+        0 * indirectFunderOfferSupplierQuotaPort.crear(_, _, _, _)
+        1 * indirectFunderOfferSupplierQuotaPort.save({ IndirectFunderOfferSupplierQuota q ->
+            q.currentQuota == new BigDecimal("6000.00")
+        })
+    }
+
+    def "procesarFactura CONFIRMING no consulta el fallback indirecto (fuera de alcance para Confirming)"() {
+        given:
+        def factura = buildFactura("FECI025", "PROV-001", "PAG-001")
+        facturaPort.findByNumeroFactura("FECI025") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida("FECI025", null) >>
+                ValidacionFacturaResponseDto.builder().valida(true).build()
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
+        companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().ideCompany(10L).build())
+        empresaQuotaPort.findByCompanyId(10L) >> Optional.of(
+                EmpresaQuota.builder().currentQuota(new BigDecimal("9000.00")).build()
+        )
+        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(20L).build())
+        companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(40L).build())
+        def fqp = FondeadorQuota.builder()
+                .funderId(20L).payerId(10L)
+                .payerCurrentQuota(new BigDecimal("8000.00"))
+                .estado("APROBADO")
+                .aprobadoPorFondeador(true)
+                .build()
+        fondeadorQuotaPort.findByFunderIdAndPayerId(20L, 10L) >> Optional.of(fqp)
+        fondeadorQuotaPort.findByFunderIdAndPayerIdActivo(20L, 10L) >> Optional.of(fqp)
+
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI025"))
+
+        then:
+        0 * payerFundingVisibilityPort.estaHabilitado(_)
+        0 * indirectFunderOfferPort.findActivaAprobada(_, _)
     }
 }

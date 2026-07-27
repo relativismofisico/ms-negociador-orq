@@ -3,6 +3,7 @@ package com.negociadororq.application.service;
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.NegociacionResponseDto;
 import com.negociadororq.application.exception.AccionNoPermitidaException;
+import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Factura;
@@ -13,6 +14,7 @@ import com.negociadororq.domain.enums.EstadoNegociacion;
 import com.negociadororq.application.port.output.CompanyOperationOutputPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final CompanyOperationOutputPort companyOperationPort;
     private final NotificacionService notificacionService;
     private final ProcesarFacturaNegociacionService procesarFacturaNegociacionService;
+    private final FacturaPatchOutputPort facturaPatchPort;
 
 
     /**
@@ -66,6 +69,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                         "No existe operador con username " + request.getRutOperador(), "OPERADOR_NO_ENCONTRADO"));
 
         validarOperacionHabilitada(request);
+        validarUnicaContraparte(request);
 
         /* ======================================================
            1. Agrupar facturas por pagador SOLO en CONFIRMING
@@ -152,7 +156,13 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         negociacion.setErrores(allErrores);
         negociacion.setFechaCreacion(LocalDateTime.now());
         negociacion.setFechaUltimaActualizacion(LocalDateTime.now());
-        negociacionPort.save(negociacion);
+        negociacion = negociacionPort.save(negociacion);
+
+        // El id de la negociación solo existe tras guardarla; se deja registrado en cada
+        // factura aceptada para poder sub-agrupar facturas liquidadas por negociación.
+        String idNegociacionGuardada = negociacion.getId();
+        facturasAceptadas.forEach(fn ->
+                facturaPatchPort.actualizarNegociacionId(fn.getNumeroFactura(), idNegociacionGuardada));
 
         notificacionService.notificarCreacionNegociacion(negociacion);
 
@@ -173,8 +183,9 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     }
 
     /**
-     * Rechaza toda la solicitud (no factura a factura) si la empresa solicitante no tiene
-     * habilitada la operación (FACTORING/CONFIRMING) que está intentando ejecutar. A diferencia
+     * Rechaza toda la solicitud (no factura a factura) si la empresa solicitante, o cualquiera de
+     * las contrapartes involucradas (pagador en FACTORING, proveedor en CONFIRMING), no tiene
+     * habilitada la operación (FACTORING/CONFIRMING) que se está intentando ejecutar. A diferencia
      * de validarPermisoOperacion (dentro de ProcesarFacturaNegociacionServiceImpl, que valida
      * factura a factura y cuyas excepciones se absorben como rechazo individual), esta se lanza
      * antes del loop para que el fallo sea un error HTTP real, no una factura rechazada silenciosa.
@@ -185,13 +196,60 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             return;
         }
 
-        Company company = companyPort.findByNit(request.getRutEmpresa())
-                .orElseThrow(() -> new RecursoNoEncontradoException(
-                        "No existe empresa con NIT " + request.getRutEmpresa(), "EMPRESA_NO_ENCONTRADA"));
+        String tipoOperacionUpper = tipoOperacion.toUpperCase();
 
-        if (!companyOperationPort.isEnabled(company.getIdeCompany(), tipoOperacion.toUpperCase())) {
+        validarEmpresaHabilitada(request.getRutEmpresa(), tipoOperacionUpper);
+
+        boolean esFactoring = "FACTORING".equals(tipoOperacionUpper);
+        Set<String> contrapartes = request.getFacturas().stream()
+                .map(fn -> esFactoring ? fn.getRutPagador() : fn.getRutProveedor())
+                .filter(rut -> rut != null && !rut.isBlank())
+                .collect(Collectors.toSet());
+
+        for (String rutContraparte : contrapartes) {
+            validarEmpresaHabilitada(rutContraparte, tipoOperacionUpper);
+        }
+    }
+
+    /**
+     * Exige que todas las facturas de la solicitud tengan la misma contraparte: el mismo
+     * pagador en FACTORING, o el mismo proveedor en CONFIRMING. Evita mezclar varias
+     * contrapartes en una sola negociación (lo que antes dejaba a "rutProveedor"/"rutPagador"
+     * a nivel de negociación reflejando solo una de ellas): si el usuario quiere negociar con
+     * varias, debe hacerlo en solicitudes separadas, una por contraparte.
+     */
+    private void validarUnicaContraparte(NegociacionRequestDto request) {
+        String tipoOperacion = request.getTipoOperacion() != null ? request.getTipoOperacion().getTipo() : null;
+        if (tipoOperacion == null) {
+            return;
+        }
+
+        boolean esFactoring = "FACTORING".equalsIgnoreCase(tipoOperacion);
+        Set<String> contrapartes = request.getFacturas().stream()
+                .map(fn -> esFactoring ? fn.getRutPagador() : fn.getRutProveedor())
+                .filter(rut -> rut != null && !rut.isBlank())
+                .collect(Collectors.toSet());
+
+        if (contrapartes.size() > 1) {
+            String tipoContraparte = esFactoring ? "pagador" : "proveedor";
+            throw new PeticionInvalidaException(
+                    "Todas las facturas de una negociación deben tener el mismo " + tipoContraparte
+                            + ". Se recibieron facturas de varios " + tipoContraparte + "es distintos: "
+                            + String.join(", ", contrapartes) + ". Negocie cada " + tipoContraparte
+                            + " por separado.",
+                    "MULTIPLES_CONTRAPARTES");
+        }
+    }
+
+    private void validarEmpresaHabilitada(String rutEmpresa, String tipoOperacionUpper) {
+        Company company = companyPort.findByNit(rutEmpresa)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No existe empresa con NIT " + rutEmpresa, "EMPRESA_NO_ENCONTRADA"));
+
+        if (!companyOperationPort.isEnabled(company.getIdeCompany(), tipoOperacionUpper)) {
             throw new AccionNoPermitidaException(
-                    "La empresa no tiene habilitada la operación " + tipoOperacion + ".",
+                    "La empresa con NIT " + rutEmpresa + " no tiene habilitada la operación "
+                            + tipoOperacionUpper + ".",
                     "OPERACION_NO_HABILITADA");
         }
     }

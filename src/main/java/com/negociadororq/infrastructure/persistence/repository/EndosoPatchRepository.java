@@ -25,7 +25,7 @@ public class EndosoPatchRepository {
 
         Query query = Query.query(
                 Criteria.where("negociacionId").is(idNegociacion)
-                        .and("numeroFactura").is(numeroFactura));
+                        .and("numerosFactura").is(numeroFactura));
 
         Update update = new Update()
                 .set("estado", estadoFirma.name())
@@ -43,7 +43,7 @@ public class EndosoPatchRepository {
 
         Query query = Query.query(
                 Criteria.where("negociacionId").is(idNegociacion)
-                        .and("numeroFactura").is(numeroFactura)
+                        .and("numerosFactura").is(numeroFactura)
         );
 
         Update removeUpdate = new Update()

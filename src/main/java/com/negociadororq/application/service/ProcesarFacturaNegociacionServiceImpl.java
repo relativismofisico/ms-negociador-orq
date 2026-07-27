@@ -16,7 +16,12 @@ import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
 import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
+import com.negociadororq.application.port.output.IndirectFunderOfferOutputPort;
+import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort;
+import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
+import com.negociadororq.domain.model.IndirectFunderOffer;
+import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
@@ -43,6 +48,9 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
     private final FondeadorQuotaOutputPort fondeadorQuotaPort;
     private final FacturaPatchOutputPort facturaPatchPort;
     private final ValidacionFacturaService validacionFacturaService;
+    private final PayerFundingVisibilityOutputPort payerFundingVisibilityPort;
+    private final IndirectFunderOfferOutputPort indirectFunderOfferPort;
+    private final IndirectFunderOfferSupplierQuotaOutputPort indirectFunderOfferSupplierQuotaPort;
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -199,43 +207,61 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
             Long funderId = companyPort
                     .findByNit(fon.getRutFondeador())
                     .map(Company::getIdeCompany)
-                    .orElseThrow();
+                    .orElseThrow(() -> new RuntimeException(
+                            "La empresa fondeadora con NIT " + fon.getRutFondeador()
+                                    + " no está registrada en la plataforma"));
 
             Long supplierId = companyPort
                     .findByNit(factura.getRutProveedor())
                     .map(Company::getIdeCompany)
-                    .orElseThrow();
+                    .orElseThrow(() -> new RuntimeException(
+                            "La empresa proveedora con NIT " + factura.getRutProveedor()
+                                    + " no está registrada en la plataforma"));
 
             Long payerId = companyPort
                     .findByNit(factura.getRutPagador())
                     .map(Company::getIdeCompany)
-                    .orElseThrow();
+                    .orElseThrow(() -> new RuntimeException(
+                            "La empresa pagadora con NIT " + factura.getRutPagador()
+                                    + " no está registrada en la plataforma"));
 
             FondeadorQuota quota;
 
             if ("FACTORING".equalsIgnoreCase(
                     request.getTipoOperacion().getTipo())) {
 
-                quota = fondeadorQuotaPort
-                        .findByFunderIdAndSupplierId(
-                                funderId,
-                                supplierId)
-                        .orElseThrow();
+                Optional<FondeadorQuota> asignacionDirecta = fondeadorQuotaPort
+                        .findByFunderIdAndSupplierIdActivo(funderId, supplierId);
 
-                if (quota.getSupplierCurrentQuota()
-                        .compareTo(valorFactura) < 0) {
+                if (asignacionDirecta.isPresent()) {
 
-                    throw new RuntimeException(
-                            "Fondeador sin cupo factoring");
+                    quota = asignacionDirecta.get();
+
+                    validarFondeadorAprobado(quota);
+
+                    if (quota.getSupplierCurrentQuota()
+                            .compareTo(valorFactura) < 0) {
+
+                        throw new RuntimeException(
+                                "Fondeador sin cupo factoring");
+                    }
+
+                } else {
+
+                    validarFondeoIndirecto(fon, funderId, payerId, supplierId, valorFactura);
                 }
 
             } else {
 
                 quota = fondeadorQuotaPort
-                        .findByFunderIdAndPayerId(
+                        .findByFunderIdAndPayerIdActivo(
                                 funderId,
                                 payerId)
-                        .orElseThrow();
+                        .orElseThrow(() -> new RuntimeException(
+                                "El fondeador " + fon.getRutFondeador()
+                                        + " no tiene una asignación de cupo activa para este pagador"));
+
+                validarFondeadorAprobado(quota);
 
                 if (quota.getPayerCurrentQuota()
                         .compareTo(valorFactura) < 0) {
@@ -244,6 +270,58 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                             "Fondeador sin cupo confirming");
                 }
             }
+        }
+    }
+
+    private void validarFondeadorAprobado(FondeadorQuota quota) {
+
+        boolean estadoAprobado = "APROBADO".equalsIgnoreCase(quota.getEstado());
+        boolean aprobadoPorFondeador = Boolean.TRUE.equals(quota.getAprobadoPorFondeador());
+
+        if (!estadoAprobado || !aprobadoPorFondeador) {
+            throw new RuntimeException(
+                    "La asignación de fondeo no está aprobada");
+        }
+    }
+
+    /**
+     * Fallback de "factoring indirecto vía pagador": cuando el proveedor no
+     * tiene una asignación directa con el fondeador, se valida si su pagador
+     * habilitó el toggle general y tiene una oferta de cupo compartido
+     * aprobada con ese fondeador. El cupo por proveedor no se reparte: si
+     * este proveedor todavía no negoció contra esta oferta, se compara contra
+     * el cupo íntegro de la oferta (sin persistir nada todavía; la fila de
+     * consumo se crea recién al descontar, para no dejar filas huérfanas de
+     * negociaciones que fallen después por otra razón).
+     */
+    private void validarFondeoIndirecto(
+            FondeadorAsignacion fon,
+            Long funderId,
+            Long payerId,
+            Long supplierId,
+            BigDecimal valorFactura
+    ) {
+
+        if (!payerFundingVisibilityPort.estaHabilitado(payerId)) {
+            throw new RuntimeException(
+                    "El fondeador " + fon.getRutFondeador()
+                            + " no tiene una asignación de cupo activa para este proveedor");
+        }
+
+        IndirectFunderOffer oferta = indirectFunderOfferPort
+                .findActivaAprobada(funderId, payerId)
+                .orElseThrow(() -> new RuntimeException(
+                        "El fondeador " + fon.getRutFondeador()
+                                + " no tiene una asignación de cupo activa para este proveedor"));
+
+        BigDecimal cupoDisponible = indirectFunderOfferSupplierQuotaPort
+                .find(oferta.getId(), supplierId)
+                .map(IndirectFunderOfferSupplierQuota::getCurrentQuota)
+                .orElse(oferta.getSupplierQuotaTemplate());
+
+        if (cupoDisponible.compareTo(valorFactura) < 0) {
+            throw new RuntimeException(
+                    "Fondeador sin cupo factoring (indirecto vía pagador)");
         }
     }
 
@@ -259,36 +337,83 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
             Long funderId = companyPort
                     .findByNit(fon.getRutFondeador())
                     .map(Company::getIdeCompany)
-                    .orElseThrow();
+                    .orElseThrow(() -> new RuntimeException(
+                            "La empresa fondeadora con NIT " + fon.getRutFondeador()
+                                    + " no está registrada en la plataforma"));
 
             Long payerId = companyPort
                     .findByNit(factura.getRutPagador())
                     .map(Company::getIdeCompany)
-                    .orElseThrow();
+                    .orElseThrow(() -> new RuntimeException(
+                            "La empresa pagadora con NIT " + factura.getRutPagador()
+                                    + " no está registrada en la plataforma"));
 
-            FondeadorQuota quota =
-                    fondeadorQuotaPort
-                            .findByFunderIdAndPayerId(
-                                    funderId,
-                                    payerId)
-                            .orElseThrow();
+            if ("FACTORING".equalsIgnoreCase(request.getTipoOperacion().getTipo())) {
 
-            if ("FACTORING".equalsIgnoreCase(
-                    request.getTipoOperacion().getTipo())) {
+                Long supplierId = companyPort
+                        .findByNit(factura.getRutProveedor())
+                        .map(Company::getIdeCompany)
+                        .orElseThrow(() -> new RuntimeException(
+                                "La empresa proveedora con NIT " + factura.getRutProveedor()
+                                        + " no está registrada en la plataforma"));
 
-                quota.setSupplierCurrentQuota(
-                        quota.getSupplierCurrentQuota()
-                                .subtract(valorFactura));
+                Optional<FondeadorQuota> asignacionDirecta = fondeadorQuotaPort
+                        .findByFunderIdAndSupplierId(funderId, supplierId);
+
+                if (asignacionDirecta.isPresent()) {
+
+                    FondeadorQuota quota = asignacionDirecta.get();
+                    quota.setSupplierCurrentQuota(quota.getSupplierCurrentQuota().subtract(valorFactura));
+                    fondeadorQuotaPort.save(quota);
+
+                } else {
+
+                    descontarCupoIndirecto(funderId, payerId, supplierId, valorFactura);
+                }
 
             } else {
+
+                FondeadorQuota quota =
+                        fondeadorQuotaPort
+                                .findByFunderIdAndPayerId(
+                                        funderId,
+                                        payerId)
+                                .orElseThrow(() -> new RuntimeException(
+                                        "El fondeador " + fon.getRutFondeador()
+                                                + " no tiene una asignación de cupo para este pagador"));
 
                 quota.setPayerCurrentQuota(
                         quota.getPayerCurrentQuota()
                                 .subtract(valorFactura));
-            }
 
-            fondeadorQuotaPort.save(quota);
+                fondeadorQuotaPort.save(quota);
+            }
         }
+    }
+
+    /**
+     * Descuenta el cupo de la fila de consumo del proveedor contra una oferta
+     * de cupo compartido fondeador→pagador, creándola perezosamente si es la
+     * primera vez que este proveedor negocia contra ella (snapshot de
+     * tasa/cupo vigentes de la oferta en ese instante). El cupo íntegro de la
+     * oferta ({@code supplierQuotaTemplate}) queda fijo como techo, nunca se
+     * descuenta ahí.
+     */
+    private void descontarCupoIndirecto(Long funderId, Long payerId, Long supplierId, BigDecimal valorFactura) {
+
+        IndirectFunderOffer oferta = indirectFunderOfferPort
+                .findActivaAprobada(funderId, payerId)
+                .orElseThrow(() -> new RuntimeException(
+                        "No se encontró la oferta de fondeo indirecta al descontar cupo"));
+
+        IndirectFunderOfferSupplierQuota cupoProveedor = indirectFunderOfferSupplierQuotaPort
+                .find(oferta.getId(), supplierId)
+                .orElseGet(() -> indirectFunderOfferSupplierQuotaPort.crear(
+                        oferta.getId(), supplierId, oferta.getPayerRate(), oferta.getSupplierQuotaTemplate()));
+
+        cupoProveedor.setCurrentQuota(cupoProveedor.getCurrentQuota().subtract(valorFactura));
+
+        indirectFunderOfferSupplierQuotaPort.save(cupoProveedor);
     }
 
     private List<ActorFactura> construirActores(

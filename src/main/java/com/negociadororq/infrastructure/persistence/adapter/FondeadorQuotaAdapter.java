@@ -26,6 +26,16 @@ public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {
     }
 
     @Override
+    public Optional<FondeadorQuota> findByFunderIdAndPayerIdActivo(Long funderId, Long payerId) {
+        return repository.findByFunderIdAndPayerIdAndActivoTrue(funderId, payerId).map(this::toDomain);
+    }
+
+    @Override
+    public Optional<FondeadorQuota> findByFunderIdAndSupplierIdActivo(Long funderId, Long supplierId) {
+        return repository.findByFunderIdAndSupplierIdAndActivoTrue(funderId, supplierId).map(this::toDomain);
+    }
+
+    @Override
     public FondeadorQuota save(FondeadorQuota quota) {
         return toDomain(repository.save(toEntity(quota)));
     }
@@ -40,6 +50,13 @@ public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {
                 .supplierQuota(entity.getSupplierQuota())
                 .payerCurrentQuota(entity.getPayerCurrentQuota())
                 .supplierCurrentQuota(entity.getSupplierCurrentQuota())
+                .payerRate(entity.getPayerRate())
+                .supplierRate(entity.getSupplierRate())
+                .estado(entity.getEstado())
+                .origen(entity.getOrigen())
+                .aprobadoPorFondeador(entity.getAprobadoPorFondeador())
+                .activo(entity.getActivo())
+                .endosoGrupal(entity.getEndosoGrupal())
                 .build();
     }
 
@@ -53,6 +70,13 @@ public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {
                 .supplierQuota(quota.getSupplierQuota())
                 .payerCurrentQuota(quota.getPayerCurrentQuota())
                 .supplierCurrentQuota(quota.getSupplierCurrentQuota())
+                .payerRate(quota.getPayerRate())
+                .supplierRate(quota.getSupplierRate())
+                .estado(quota.getEstado())
+                .origen(quota.getOrigen())
+                .aprobadoPorFondeador(quota.getAprobadoPorFondeador())
+                .activo(quota.getActivo())
+                .endosoGrupal(quota.getEndosoGrupal())
                 .build();
     }
 }

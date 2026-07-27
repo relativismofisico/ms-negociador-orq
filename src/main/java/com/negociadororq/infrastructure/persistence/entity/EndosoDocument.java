@@ -20,7 +20,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Document(collection = "endosos")
 @CompoundIndex(
         name = "uniq_negociacion_factura",
-        def = "{'negociacionId': 1, 'numeroFactura': 1}",
+        def = "{'negociacionId': 1, 'numerosFactura': 1}",
         unique = true
 )
 public class EndosoDocument {
@@ -28,7 +28,7 @@ public class EndosoDocument {
     @Id
     private String id;
     private String negociacionId;
-    private String numeroFactura;
+    private List<String> numerosFactura;
     private String rutActorEndosa;
     private String rutProveedor;
     private String rutPagador;

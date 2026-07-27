@@ -9,8 +9,8 @@ import java.util.Optional;
 @Repository
 public interface EndosoRepository extends MongoRepository<EndosoDocument, String> {
 
-    boolean existsByNegociacionIdAndNumeroFactura(String negociacionId, String numeroFactura);
+    boolean existsByNegociacionIdAndNumerosFacturaContains(String negociacionId, String numeroFactura);
 
-    Optional<EndosoDocument> findByNegociacionIdAndNumeroFactura(String negociacionId, String numeroFactura);
+    Optional<EndosoDocument> findByNegociacionIdAndNumerosFacturaContains(String negociacionId, String numeroFactura);
 }
 
