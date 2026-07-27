@@ -12,5 +12,7 @@ public interface CupoPropioFondeoService {
 
     CupoPropioFondeoDto obtenerCupoPropio(Long companyId);
 
-    CupoPropioFondeoDto actualizarCupoPropio(Long companyId, BigDecimal nuevoCupo);
+    CupoPropioFondeoDto actualizarCupoPropio(Long companyId, BigDecimal nuevoCupo, BigDecimal nuevaTasa);
+
+    CupoPropioFondeoDto actualizarEndosoGrupal(Long companyId, boolean endosoGrupal);
 }

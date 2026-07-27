@@ -22,4 +22,11 @@ public class FondeadorQuota {
     private BigDecimal supplierQuota;
     private BigDecimal payerCurrentQuota;
     private BigDecimal supplierCurrentQuota;
+    private BigDecimal payerRate;
+    private BigDecimal supplierRate;
+    private String estado;
+    private String origen;
+    private Boolean aprobadoPorFondeador;
+    private Boolean activo;
+    private Boolean endosoGrupal;
 }

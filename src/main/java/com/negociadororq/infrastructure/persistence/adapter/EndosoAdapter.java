@@ -17,12 +17,12 @@ public class EndosoAdapter implements EndosoOutputPort {
 
     @Override
     public boolean existsByNegociacionIdAndNumeroFactura(String negociacionId, String numeroFactura) {
-        return repository.existsByNegociacionIdAndNumeroFactura(negociacionId, numeroFactura);
+        return repository.existsByNegociacionIdAndNumerosFacturaContains(negociacionId, numeroFactura);
     }
 
     @Override
     public Optional<Endoso> findByNegociacionIdAndNumeroFactura(String negociacionId, String numeroFactura) {
-        return repository.findByNegociacionIdAndNumeroFactura(negociacionId, numeroFactura).map(this::toDomain);
+        return repository.findByNegociacionIdAndNumerosFacturaContains(negociacionId, numeroFactura).map(this::toDomain);
     }
 
     @Override
@@ -34,7 +34,7 @@ public class EndosoAdapter implements EndosoOutputPort {
         return Endoso.builder()
                 .id(doc.getId())
                 .negociacionId(doc.getNegociacionId())
-                .numeroFactura(doc.getNumeroFactura())
+                .numerosFactura(doc.getNumerosFactura())
                 .rutActorEndosa(doc.getRutActorEndosa())
                 .rutProveedor(doc.getRutProveedor())
                 .rutPagador(doc.getRutPagador())
@@ -57,7 +57,7 @@ public class EndosoAdapter implements EndosoOutputPort {
         return EndosoDocument.builder()
                 .id(e.getId())
                 .negociacionId(e.getNegociacionId())
-                .numeroFactura(e.getNumeroFactura())
+                .numerosFactura(e.getNumerosFactura())
                 .rutActorEndosa(e.getRutActorEndosa())
                 .rutProveedor(e.getRutProveedor())
                 .rutPagador(e.getRutPagador())
