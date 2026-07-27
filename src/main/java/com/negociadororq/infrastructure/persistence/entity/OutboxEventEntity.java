@@ -32,12 +32,14 @@ public class OutboxEventEntity {
     @Lob
     private String payload;
 
+    @Builder.Default
     private Boolean enviado = false;
 
     private LocalDateTime fechaCreacion;
 
     private LocalDateTime fechaEnvio;
 
+    @Builder.Default
     private Integer intentos = 0;
 }
 

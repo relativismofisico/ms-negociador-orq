@@ -73,7 +73,10 @@ public class ArchitectureTest {
 
     @Test
     void services_deben_estar_en_aplication_o_domain() {
+        // Las clases que implementan UserDetailsService (Spring Security) llevan ese
+        // sufijo por convención del framework, no por ser servicios de aplicación/dominio.
         classes().that().haveNameMatching(".*Service")
+                .and().doNotImplement("org.springframework.security.core.userdetails.UserDetailsService")
                 .should().resideInAnyPackage("..application.service..", "..domain..")
                 .check(classes);
     }
