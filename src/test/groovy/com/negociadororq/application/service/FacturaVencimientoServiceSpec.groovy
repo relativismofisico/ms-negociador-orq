@@ -1,6 +1,8 @@
 package com.negociadororq.application.service
 
+import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
+import com.negociadororq.application.port.output.NegociacionOutputPort
 import com.negociadororq.domain.model.Factura
 import spock.lang.Specification
 
@@ -9,7 +11,11 @@ import java.time.LocalDate
 class FacturaVencimientoServiceSpec extends Specification {
 
     FacturaOutputPort facturaPort = Mock()
-    FacturaVencimientoService service = new FacturaVencimientoService(facturaPort)
+    NegociacionOutputPort negociacionPort = Mock()
+    CompanyOutputPort companyPort = Mock()
+    CupoReversionService cupoReversionService = Mock()
+    FacturaVencimientoService service = new FacturaVencimientoService(
+            facturaPort, negociacionPort, companyPort, cupoReversionService)
 
     def "marca facturas con dias <= 10 como VENCIDA"() {
         given:
@@ -122,5 +128,80 @@ class FacturaVencimientoServiceSpec extends Specification {
         1 * facturaPort.save(vencida)
         0 * facturaPort.save(vigente)
         0 * facturaPort.save(sinFecha)
+    }
+
+    // ─── reversion de cupos para negociaciones abandonadas ───────────────────
+
+    def "factura SIN_NEGOCIAR que vence no reversa cupos (nunca se consumieron)"() {
+        given:
+        def f = new Factura()
+        f.numeroFactura = "F_SIN_NEG"
+        f.estadoNegociacion = "SIN_NEGOCIAR"
+        f.fechavencimientoFactura = LocalDate.now().plusDays(5)
+        f.negociacionId = "neg-1"
+
+        facturaPort.findFacturasPendientesVencimiento() >> [f]
+
+        when:
+        service.actualizarFacturasVencidas()
+
+        then:
+        f.estadoNegociacion == "VENCIDA"
+        0 * negociacionPort.findById(_)
+        0 * cupoReversionService.revertirCupoEmpresa(_, _)
+    }
+
+    def "factura NEGOCIADA que vence reversa cupos de empresa y fondeadores antes de marcarla VENCIDA"() {
+        given:
+        def f = new Factura()
+        f.numeroFactura = "F_NEG"
+        f.estadoNegociacion = "NEGOCIADA"
+        f.fechavencimientoFactura = LocalDate.now().plusDays(5)
+        f.negociacionId = "neg-1"
+        f.rutProveedor = "RUT-PROV"
+        f.rutPagador = "RUT-PAG"
+        f.valorNetoFactura = new BigDecimal("7000.00")
+
+        facturaPort.findFacturasPendientesVencimiento() >> [f]
+        negociacionPort.findById("neg-1") >> Optional.of(
+                com.negociadororq.domain.model.Negociacion.builder()
+                        .id("neg-1")
+                        .rutEmpresa("RUT-PROV")
+                        .tipoOperacion(new com.negociadororq.domain.model.Operacion("FACTORING", "DESC"))
+                        .rutFondeadores(["FOND-001"])
+                        .build()
+        )
+        companyPort.findByNit("RUT-PROV") >> Optional.of(
+                com.negociadororq.domain.model.Company.builder().ideCompany(2L).build())
+        companyPort.findByNit("FOND-001") >> Optional.of(
+                com.negociadororq.domain.model.Company.builder().ideCompany(1L).build())
+
+        when:
+        service.actualizarFacturasVencidas()
+
+        then:
+        f.estadoNegociacion == "VENCIDA"
+        1 * cupoReversionService.revertirCupoEmpresa(2L, new BigDecimal("7000.00"))
+        1 * cupoReversionService.revertirCupoFondeadorFactoring(1L, 2L, new BigDecimal("7000.00"))
+        1 * facturaPort.save(f)
+    }
+
+    def "factura EN_REVISION sin negociacionId no reversa nada (no hay como resolverla)"() {
+        given:
+        def f = new Factura()
+        f.numeroFactura = "F_SIN_NEGID"
+        f.estadoNegociacion = "EN_REVISION"
+        f.fechavencimientoFactura = LocalDate.now().plusDays(5)
+        f.negociacionId = null
+
+        facturaPort.findFacturasPendientesVencimiento() >> [f]
+
+        when:
+        service.actualizarFacturasVencidas()
+
+        then:
+        f.estadoNegociacion == "VENCIDA"
+        0 * negociacionPort.findById(_)
+        0 * cupoReversionService.revertirCupoEmpresa(_, _)
     }
 }
