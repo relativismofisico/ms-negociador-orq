@@ -67,4 +67,28 @@ public class FondeadorQuotaEntity {
 
     @Column(name = "endoso_grupal")
     private Boolean endosoGrupal;
+
+    @Column(name = "rentabilidad_minima_activa")
+    private Boolean rentabilidadMinimaActiva;
+
+    @Column(name = "rentabilidad_minima")
+    private BigDecimal rentabilidadMinima;
+
+    @Column(name = "tipo_descuento")
+    private String tipoDescuento;
+
+    @Column(name = "tipo_tasa")
+    private String tipoTasa;
+
+    @Column(name = "tarifa_plena")
+    private BigDecimal tarifaPlena;
+
+    @Column(name = "vigencia_descuento")
+    private String vigenciaDescuento;
+
+    @Column(name = "dias_vigencia")
+    private Integer diasVigencia;
+
+    @Column(name = "porcentaje_reserva")
+    private BigDecimal porcentajeReserva;
 }

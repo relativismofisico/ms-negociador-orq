@@ -29,4 +29,12 @@ public class FondeadorQuota {
     private Boolean aprobadoPorFondeador;
     private Boolean activo;
     private Boolean endosoGrupal;
+    private Boolean rentabilidadMinimaActiva;
+    private BigDecimal rentabilidadMinima;
+    private String tipoDescuento;
+    private String tipoTasa;
+    private BigDecimal tarifaPlena;
+    private String vigenciaDescuento;
+    private Integer diasVigencia;
+    private BigDecimal porcentajeReserva;
 }
