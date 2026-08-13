@@ -57,6 +57,14 @@ public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {
                 .aprobadoPorFondeador(entity.getAprobadoPorFondeador())
                 .activo(entity.getActivo())
                 .endosoGrupal(entity.getEndosoGrupal())
+                .rentabilidadMinimaActiva(entity.getRentabilidadMinimaActiva())
+                .rentabilidadMinima(entity.getRentabilidadMinima())
+                .tipoDescuento(entity.getTipoDescuento())
+                .tipoTasa(entity.getTipoTasa())
+                .tarifaPlena(entity.getTarifaPlena())
+                .vigenciaDescuento(entity.getVigenciaDescuento())
+                .diasVigencia(entity.getDiasVigencia())
+                .porcentajeReserva(entity.getPorcentajeReserva())
                 .build();
     }
 
@@ -77,6 +85,14 @@ public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {
                 .aprobadoPorFondeador(quota.getAprobadoPorFondeador())
                 .activo(quota.getActivo())
                 .endosoGrupal(quota.getEndosoGrupal())
+                .rentabilidadMinimaActiva(quota.getRentabilidadMinimaActiva())
+                .rentabilidadMinima(quota.getRentabilidadMinima())
+                .tipoDescuento(quota.getTipoDescuento())
+                .tipoTasa(quota.getTipoTasa())
+                .tarifaPlena(quota.getTarifaPlena())
+                .vigenciaDescuento(quota.getVigenciaDescuento())
+                .diasVigencia(quota.getDiasVigencia())
+                .porcentajeReserva(quota.getPorcentajeReserva())
                 .build();
     }
 }
