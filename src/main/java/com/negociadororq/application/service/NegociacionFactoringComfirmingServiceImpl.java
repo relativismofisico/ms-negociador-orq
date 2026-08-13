@@ -13,6 +13,7 @@ import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.enums.EstadoNegociacion;
 import com.negociadororq.application.port.output.CompanyOperationOutputPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
+import com.negociadororq.application.port.output.CompanySectionVerificationOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
@@ -43,6 +44,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final UserOutputPort userPort;
     private final CompanyOutputPort companyPort;
     private final CompanyOperationOutputPort companyOperationPort;
+    private final CompanySectionVerificationOutputPort companySectionVerificationPort;
     private final NotificacionService notificacionService;
     private final ProcesarFacturaNegociacionService procesarFacturaNegociacionService;
     private final FacturaPatchOutputPort facturaPatchPort;
@@ -251,6 +253,30 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                     "La empresa con NIT " + rutEmpresa + " no tiene habilitada la operación "
                             + tipoOperacionUpper + ".",
                     "OPERACION_NO_HABILITADA");
+        }
+
+        validarTesoreriaVerificadaSiCalifica(company, rutEmpresa);
+    }
+
+    /**
+     * Una empresa fondeadora o autofondeadora (FONDEADOR o CONFIRMING habilitado,
+     * mismo criterio que ms-administrator-front-neg) puede quedar APROBADA sin
+     * tener aún verificadas sus políticas de pago de tesorería ni sus cuentas
+     * bancarias (ver ms-administrator-front-neg CompaniesPendingComponent): esas
+     * dos secciones se difieren para que la empresa pueda entrar y cargarlas, en
+     * vez de bloquear su aprobación por completo. Mientras no las cargue y el
+     * administrador las verifique, no puede operar ninguna negociación.
+     */
+    private void validarTesoreriaVerificadaSiCalifica(Company company, String rutEmpresa) {
+        boolean calificaParaTesoreria = companyOperationPort.isEnabled(company.getIdeCompany(), "FONDEADOR")
+                || companyOperationPort.isEnabled(company.getIdeCompany(), "CONFIRMING");
+
+        if (calificaParaTesoreria && !companySectionVerificationPort.tesoreriaYCuentasVerificadas(company.getIdeCompany())) {
+            throw new AccionNoPermitidaException(
+                    "La empresa con NIT " + rutEmpresa + " todavía no tiene verificadas sus políticas de pago "
+                            + "de tesorería y cuentas bancarias. Debe configurarlas y esperar la verificación "
+                            + "del administrador de la plataforma antes de poder operar.",
+                    "TESORERIA_NO_VERIFICADA");
         }
     }
 

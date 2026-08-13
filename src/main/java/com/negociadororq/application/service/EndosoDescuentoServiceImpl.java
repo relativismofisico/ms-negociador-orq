@@ -6,12 +6,16 @@ import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
+import com.negociadororq.application.port.output.UserOutputPort;
+import com.negociadororq.application.util.VigenciaDescuentoValidator;
 import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
+import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.domain.model.Negociacion;
+import com.negociadororq.domain.model.User;
 import com.negociadororq.domain.enums.EstadoEndoso;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.enums.EstadoNegociacion;
@@ -21,6 +25,8 @@ import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.NegociacionPatchOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
@@ -49,6 +55,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     private final NegociacionPatchOutputPort negociacionPatchPort;
     private final CompanyOutputPort companyPort;
     private final FondeadorQuotaOutputPort fondeadorQuotaPort;
+    private final UserOutputPort userPort;
+    private final CupoReversionService cupoReversionService;
 
     private record FacturaValidada(String numeroFactura, Factura factura, FacturaNegociada facturaNegociada) {
     }
@@ -97,6 +105,13 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                     .orElse(null);
 
             if (factura == null) {
+                // Hueco preexistente (no introducido por vigenciaDescuento): la
+                // negociación consumió cupos para esta factura, pero el documento
+                // ya no está en BD — no hay factura que revertir a SIN_NEGOCIAR,
+                // solo los cupos.
+                revertirCupos(facturaNegociada.getValorFactura(), facturaNegociada.getFondeadores(), tipoOperacion,
+                        request.getRutActor(), request.getRutOperador(),
+                        facturaNegociada.getRutProveedor(), facturaNegociada.getRutPagador());
                 facturasRechazadas.add(numeroFactura + " (factura no existe en BD)");
                 continue;
             }
@@ -107,6 +122,18 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
             if (facturaYaEndosada) {
                 facturasRechazadas.add(numeroFactura + " (ya tiene endoso)");
+                continue;
+            }
+
+            if (!vigenciaPermiteEndosar(factura, facturaNegociada, tipoOperacion)) {
+                BigDecimal valorFactura = Optional.ofNullable(factura.getValorNetoFactura())
+                        .orElse(factura.getValorFactura());
+                revertirCupos(valorFactura, facturaNegociada.getFondeadores(), tipoOperacion,
+                        request.getRutActor(), request.getRutOperador(),
+                        factura.getRutProveedor(), factura.getRutPagador());
+                factura.setEstadoNegociacion("SIN_NEGOCIAR");
+                facturaPort.save(factura);
+                facturasRechazadas.add(numeroFactura + " (vigencia del descuento vencida)");
                 continue;
             }
 
@@ -241,6 +268,82 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
         }
 
         return false;
+    }
+
+    // El chequeo real de vigenciaDescuento ocurre acá (a diferencia de la
+    // negociación, donde solo DIAS_ANTES_VENCIMIENTO puede bloquear): la
+    // factura ya tiene fechaNegociacionFactura persistida, así que
+    // PRIMEROS_DIAS también puede bloquear en este punto. Si no hay
+    // FondeadorQuota resuelta para el primer fondeador de la factura (mismo
+    // criterio que permiteEndosoGrupal), no hay vigencia que validar.
+    private boolean vigenciaPermiteEndosar(Factura factura, FacturaNegociada facturaNegociada, String tipoOperacion) {
+        if (facturaNegociada.getFondeadores() == null || facturaNegociada.getFondeadores().isEmpty()) {
+            return true;
+        }
+
+        String rutFondeador = facturaNegociada.getFondeadores().get(0).getRutFondeador();
+        return resolverFondeadorQuota(rutFondeador, factura, tipoOperacion)
+                .map(quota -> VigenciaDescuentoValidator.dentroDeVigencia(
+                        LocalDate.now(), factura.getFechaNegociacionFactura(), factura.getFechavencimientoFactura(),
+                        quota.getVigenciaDescuento(), quota.getDiasVigencia()))
+                .orElse(true);
+    }
+
+    private Optional<FondeadorQuota> resolverFondeadorQuota(String rutFondeador, Factura factura, String tipoOperacion) {
+        Long funderId = companyPort.findByNit(rutFondeador).map(Company::getIdeCompany).orElse(null);
+        if (funderId == null) {
+            return Optional.empty();
+        }
+
+        if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
+            Long supplierId = companyPort.findByNit(factura.getRutProveedor()).map(Company::getIdeCompany).orElse(null);
+            return supplierId == null
+                    ? Optional.empty()
+                    : fondeadorQuotaPort.findByFunderIdAndSupplierId(funderId, supplierId);
+        }
+
+        Long payerId = companyPort.findByNit(factura.getRutPagador()).map(Company::getIdeCompany).orElse(null);
+        return payerId == null
+                ? Optional.empty()
+                : fondeadorQuotaPort.findByFunderIdAndPayerId(funderId, payerId);
+    }
+
+    // Reversión de cupos para facturas rechazadas al endosar (vigencia vencida,
+    // o el documento ya no existe en BD): mismo bloque CupoReversionService que
+    // ya usa AprobacionEndosoDescuentoServiceImpl.revertirCupos para el rechazo
+    // por OTP, replicado acá porque ese método no está expuesto por ninguna
+    // interfaz inyectable (vive solo en esa clase, llamado internamente).
+    private void revertirCupos(BigDecimal valorFactura, List<FondeadorAsignacion> fondeadores, String tipoOperacion,
+            String rutEmpresa, String rutOperador, String rutProveedor, String rutPagador) {
+
+        BigDecimal valor = Optional.ofNullable(valorFactura).orElse(BigDecimal.ZERO);
+
+        userPort.findByUsername(rutOperador).map(User::getIdeUser)
+                .ifPresent(userId -> cupoReversionService.revertirCupoUsuario(userId, valor));
+
+        companyPort.findByNit(rutEmpresa).map(Company::getIdeCompany)
+                .ifPresent(companyId -> cupoReversionService.revertirCupoEmpresa(companyId, valor));
+
+        if (fondeadores == null) {
+            return;
+        }
+
+        for (FondeadorAsignacion fon : fondeadores) {
+            Long funderId = companyPort.findByNit(fon.getRutFondeador()).map(Company::getIdeCompany).orElse(null);
+            if (funderId == null) {
+                continue;
+            }
+
+            if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
+                companyPort.findByNit(rutProveedor).map(Company::getIdeCompany)
+                        .ifPresent(supplierId ->
+                                cupoReversionService.revertirCupoFondeadorFactoring(funderId, supplierId, valor));
+            } else if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
+                companyPort.findByNit(rutPagador).map(Company::getIdeCompany)
+                        .ifPresent(payerId ->
+                                cupoReversionService.revertirCupoFondeadorConfirming(funderId, payerId, valor));
+            }
+        }
     }
 
 }

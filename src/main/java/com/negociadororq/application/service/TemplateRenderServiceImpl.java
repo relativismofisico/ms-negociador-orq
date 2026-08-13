@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -31,6 +32,28 @@ public class TemplateRenderServiceImpl implements TemplateRenderService {
     // del sistema: se deja parametrizada en la plantilla con este placeholder
     // hasta que exista esa funcionalidad.
     private static final String CUENTA_NO_REGISTRADA = "No registrada";
+
+    // Exclusiva de Factoring CON_RESPONSABILIDAD/SIN_RESPONSABILIDAD. Cualquier
+    // otra clase de Factoring (ANTICIPO, SIN_DESCUENTO) queda sin cláusula,
+    // igual que antes de este cambio.
+    private static final String CLASE_FACTORING_CON_RECURSO = "CON_RESPONSABILIDAD";
+    private static final String CLASE_FACTORING_SIN_RECURSO = "SIN_RESPONSABILIDAD";
+
+    // %1$s = numerosFacturas, %2$s = nombreFondeador. Se resuelven acá (no vía
+    // {{mustache}} anidado) porque el motor de plantillas hace una sola pasada:
+    // un tag mustache dentro de un valor ya sustituido queda como texto literal.
+    private static final String CLAUSULA_CON_RECURSO = """
+            El proveedor responde solidariamente por el pago de la(s) factura(s) %1$s \
+            objeto de este descuento. En caso de que el pagador no cumpla con el pago al vencimiento, \
+            %2$s podrá exigir el reembolso del valor descontado directamente al \
+            proveedor, quien conserva la obligación cambiaria de regreso conforme al artículo 785 del \
+            Código de Comercio.""";
+
+    private static final String CLAUSULA_SIN_RECURSO = """
+            El presente descuento se realiza SIN RESPONSABILIDAD para el proveedor. El riesgo de \
+            impago del pagador es asumido íntegramente por %2$s, sin que pueda \
+            ejercer acción de reembolso ni acción cambiaria de regreso contra el proveedor, conforme \
+            a la cláusula "sin mi responsabilidad" del artículo 657 del Código de Comercio.""";
 
     private final MessageTemplateOutputPort messageTemplatePort;
     private final TemplateEngineOutputPort templateEnginePort;
@@ -93,7 +116,29 @@ public class TemplateRenderServiceImpl implements TemplateRenderService {
                 .toList();
         data.put("facturas", facturasData);
 
+        String numerosFacturas = facturas.stream()
+                .map(FacturaEndosoTemplateData::numeroFactura)
+                .collect(Collectors.joining(", "));
+        data.put("numerosFacturas", numerosFacturas);
+        data.put("clausulaResponsabilidad",
+                resolverClausulaResponsabilidad(esFactoring, claseOperacion, numerosFacturas, nombreFondeador));
+
         return templateEnginePort.render(TEMPLATE_NAME, template.getContent(), data);
+    }
+
+    // Cláusula exclusiva de Factoring CON_RESPONSABILIDAD/SIN_RESPONSABILIDAD.
+    // Cualquier otro caso (Confirming, o Factoring ANTICIPO/SIN_DESCUENTO) queda
+    // sin cláusula — se preserva el comportamiento previo a este cambio.
+    private String resolverClausulaResponsabilidad(
+            boolean esFactoring, String claseOperacion, String numerosFacturas, String nombreFondeador) {
+
+        if (esFactoring && CLASE_FACTORING_SIN_RECURSO.equalsIgnoreCase(claseOperacion)) {
+            return String.format(CLAUSULA_SIN_RECURSO, numerosFacturas, nombreFondeador);
+        }
+        if (esFactoring && CLASE_FACTORING_CON_RECURSO.equalsIgnoreCase(claseOperacion)) {
+            return String.format(CLAUSULA_CON_RECURSO, numerosFacturas, nombreFondeador);
+        }
+        return "";
     }
 
     private String formatearMonto(BigDecimal monto) {

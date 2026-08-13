@@ -22,6 +22,7 @@ import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPor
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.domain.model.IndirectFunderOffer;
 import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
+import com.negociadororq.application.util.VigenciaDescuentoValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -238,6 +240,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                     quota = asignacionDirecta.get();
 
                     validarFondeadorAprobado(quota);
+                    validarVigenciaDescuento(quota, null, factura.getFechavencimientoFactura());
 
                     if (quota.getSupplierCurrentQuota()
                             .compareTo(valorFactura) < 0) {
@@ -262,6 +265,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                                         + " no tiene una asignación de cupo activa para este pagador"));
 
                 validarFondeadorAprobado(quota);
+                validarVigenciaDescuento(quota, null, factura.getFechavencimientoFactura());
 
                 if (quota.getPayerCurrentQuota()
                         .compareTo(valorFactura) < 0) {
@@ -270,6 +274,23 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                             "Fondeador sin cupo confirming");
                 }
             }
+        }
+    }
+
+    // Al negociar, la factura todavía no tiene fechaNegociacionFactura (recién
+    // se setea al final de procesarFactura) — por eso acá solo puede bloquear
+    // DIAS_ANTES_VENCIMIENTO; PRIMEROS_DIAS es trivialmente válido en este
+    // punto (la ventana recién arrancaría hoy). El chequeo real de
+    // PRIMEROS_DIAS ocurre al endosar, contra la fecha ya persistida (ver
+    // EndosoDescuentoServiceImpl).
+    private void validarVigenciaDescuento(FondeadorQuota quota, LocalDate fechaNegociacion, LocalDate fechaVencimiento) {
+        boolean dentroDeVigencia = VigenciaDescuentoValidator.dentroDeVigencia(
+                LocalDate.now(), fechaNegociacion, fechaVencimiento,
+                quota.getVigenciaDescuento(), quota.getDiasVigencia());
+
+        if (!dentroDeVigencia) {
+            throw new RuntimeException(
+                    "La vigencia del descuento configurada por el fondeador ya no permite negociar esta factura");
         }
     }
 

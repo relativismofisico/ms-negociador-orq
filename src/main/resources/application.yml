@@ -116,6 +116,16 @@ security:
     cupo-propio:
       - ADMINISTRADOR
       - EMPRESA
+    # PATCH /companies/{supplierId}/indirect-funder-offers/{offerId}/cupo/recargar
+    recarga-cupo-indirecto:
+      - ADMINISTRADOR
+      - EMPRESA
+    # POST /tasas/conversion
+    conversion-tasa:
+      - ADMINISTRADOR
+      - OPERARIO
+      - EMPRESA
+      - FONDEADOR
 logging:
   level:
     org.springframework.security: DEBUG
