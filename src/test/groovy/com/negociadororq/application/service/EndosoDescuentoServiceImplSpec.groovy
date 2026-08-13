@@ -10,6 +10,7 @@ import com.negociadororq.application.port.output.FacturaPatchOutputPort
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort
 import com.negociadororq.application.port.output.NegociacionOutputPort
 import com.negociadororq.application.port.output.NegociacionPatchOutputPort
+import com.negociadororq.application.port.output.UserOutputPort
 import com.negociadororq.domain.model.Company
 import com.negociadororq.domain.model.Endoso
 import com.negociadororq.domain.model.Factura
@@ -21,6 +22,7 @@ import com.negociadororq.domain.model.Operacion
 import spock.lang.Specification
 
 import java.math.BigDecimal
+import java.time.LocalDate
 
 class EndosoDescuentoServiceImplSpec extends Specification {
 
@@ -33,11 +35,13 @@ class EndosoDescuentoServiceImplSpec extends Specification {
     NegociacionPatchOutputPort negociacionPatchPort = Mock()
     CompanyOutputPort companyPort = Mock()
     FondeadorQuotaOutputPort fondeadorQuotaPort = Mock()
+    UserOutputPort userPort = Mock()
+    CupoReversionService cupoReversionService = Mock()
 
     EndosoDescuentoServiceImpl service = new EndosoDescuentoServiceImpl(
             negociacionPort, endosoPort, facturaPort, notificacionService,
             facturaPatchPort, documentoEndosoService, negociacionPatchPort,
-            companyPort, fondeadorQuotaPort
+            companyPort, fondeadorQuotaPort, userPort, cupoReversionService
     )
 
     // idPorNit vacío por defecto -> companyPort.findByNit devuelve Optional.empty()
@@ -48,10 +52,23 @@ class EndosoDescuentoServiceImplSpec extends Specification {
     // última, así que un stub fijo acá bloquearía cualquier valor más específico
     // declarado luego en el "given:" de cada test.
     private final Map<String, Long> idPorNit = [:]
+    private final Map<String, Long> userIdPorRutOperador = [:]
 
     def setup() {
         companyPort.findByNit(_ as String) >> { String nit ->
             idPorNit.containsKey(nit) ? Optional.of(Company.builder().ideCompany(idPorNit[nit]).build()) : Optional.empty()
+        }
+        // Mismo criterio que idPorNit: un unico closure dinamico (no un valor fijo),
+        // para que cada test pueda poblar userIdPorRutOperador en su "given:" sin
+        // que la interaccion de setup() (declarada primero) bloquee una mas
+        // especifica declarada despues. Ademas, a diferencia de Mockito, un Mock()
+        // de Spock no devuelve Optional.empty() por defecto para un metodo sin
+        // stub (devuelve null) — revertirCupos() lo necesita para no explotar en
+        // los tests que no ejercitan la reversion de cupos en si.
+        userPort.findByUsername(_) >> { String rut ->
+            userIdPorRutOperador.containsKey(rut)
+                    ? Optional.of(com.negociadororq.domain.model.User.builder().ideUser(userIdPorRutOperador[rut]).build())
+                    : Optional.empty()
         }
     }
 
@@ -429,5 +446,108 @@ class EndosoDescuentoServiceImplSpec extends Specification {
         then:
         resultado.facturasEndosadas.size() == 2
         1 * endosoPort.save({ (it.numerosFactura as Set) == (["FECI014", "FECI015"] as Set) })
+    }
+
+    // ─── vigenciaDescuento + reversion de cupos ──────────────────────────────
+
+    def "factura fuera de vigencia DIAS_ANTES_VENCIMIENTO es rechazada y reversa cupos"() {
+        given:
+        def fn = buildNegFactoring("FECI040", "RUT-PROV")
+        def neg = buildNegociacion("FACTORING", [fn])
+        def factura = buildFactura("FECI040", "RUT-PROV")
+        factura.valorNetoFactura = new BigDecimal("5000.00")
+        factura.fechavencimientoFactura = LocalDate.now().plusDays(5)
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        facturaPort.findByNumeroFactura("FECI040") >> Optional.of(factura)
+        endosoPort.existsByNegociacionIdAndNumeroFactura("neg-001", "FECI040") >> false
+        idPorNit["FOND-001"] = 1L
+        idPorNit["RUT-PROV"] = 2L
+        idPorNit["PAG-001"] = 3L
+        fondeadorQuotaPort.findByFunderIdAndSupplierId(1L, 2L) >> Optional.of(
+                FondeadorQuota.builder().vigenciaDescuento("DIAS_ANTES_VENCIMIENTO").diasVigencia(10).build()
+        )
+        userIdPorRutOperador["OP-001"] = 9L
+
+        def request = EndosoRequestDto.builder()
+                .idNegociacion("neg-001")
+                .rutActor("RUT-PROV")
+                .rutOperador("OP-001")
+                .numerosFactura(["FECI040"])
+                .build()
+
+        when:
+        def resultado = service.registrarEndoso(request)
+
+        then:
+        resultado.estadoEndoso == "RECHAZADO"
+        resultado.facturasRechazadas.any { it.contains("vigencia del descuento") }
+        0 * endosoPort.save(_)
+        1 * cupoReversionService.revertirCupoUsuario(9L, new BigDecimal("5000.00"))
+        1 * cupoReversionService.revertirCupoEmpresa(2L, new BigDecimal("5000.00"))
+        1 * cupoReversionService.revertirCupoFondeadorFactoring(1L, 2L, new BigDecimal("5000.00"))
+        1 * facturaPort.save({ it.estadoNegociacion == "SIN_NEGOCIAR" })
+    }
+
+    def "factura dentro de vigencia DIAS_ANTES_VENCIMIENTO se endosa normalmente"() {
+        given:
+        def fn = buildNegFactoring("FECI041", "RUT-PROV")
+        def neg = buildNegociacion("FACTORING", [fn])
+        def factura = buildFactura("FECI041", "RUT-PROV")
+        factura.fechavencimientoFactura = LocalDate.now().plusDays(30)
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        facturaPort.findByNumeroFactura("FECI041") >> Optional.of(factura)
+        endosoPort.existsByNegociacionIdAndNumeroFactura("neg-001", "FECI041") >> false
+        idPorNit["FOND-001"] = 1L
+        idPorNit["RUT-PROV"] = 2L
+        fondeadorQuotaPort.findByFunderIdAndSupplierId(1L, 2L) >> Optional.of(
+                FondeadorQuota.builder().vigenciaDescuento("DIAS_ANTES_VENCIMIENTO").diasVigencia(10).build()
+        )
+
+        def request = EndosoRequestDto.builder()
+                .idNegociacion("neg-001")
+                .rutActor("RUT-PROV")
+                .rutOperador("OP-001")
+                .numerosFactura(["FECI041"])
+                .build()
+
+        when:
+        def resultado = service.registrarEndoso(request)
+
+        then:
+        resultado.estadoEndoso == "PENDIENTE"
+        resultado.facturasEndosadas.contains("FECI041")
+        0 * cupoReversionService.revertirCupoUsuario(_, _)
+    }
+
+    def "factura que no existe en BD reversa cupos usando el valor de FacturaNegociada"() {
+        given:
+        def fn = buildNegFactoring("FECI042", "RUT-PROV")
+        fn.valorFactura = new BigDecimal("3000.00")
+        def neg = buildNegociacion("FACTORING", [fn])
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        facturaPort.findByNumeroFactura("FECI042") >> Optional.empty()
+        idPorNit["FOND-001"] = 1L
+        idPorNit["RUT-PROV"] = 2L
+        userIdPorRutOperador["OP-001"] = 9L
+
+        def request = EndosoRequestDto.builder()
+                .idNegociacion("neg-001")
+                .rutActor("RUT-PROV")
+                .rutOperador("OP-001")
+                .numerosFactura(["FECI042"])
+                .build()
+
+        when:
+        def resultado = service.registrarEndoso(request)
+
+        then:
+        resultado.estadoEndoso == "RECHAZADO"
+        1 * cupoReversionService.revertirCupoUsuario(9L, new BigDecimal("3000.00"))
+        1 * cupoReversionService.revertirCupoEmpresa(2L, new BigDecimal("3000.00"))
+        1 * cupoReversionService.revertirCupoFondeadorFactoring(1L, 2L, new BigDecimal("3000.00"))
+        0 * facturaPort.save(_)
     }
 }
