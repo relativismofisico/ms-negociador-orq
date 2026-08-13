@@ -6,6 +6,7 @@ import com.negociadororq.application.exception.PeticionInvalidaException
 import com.negociadororq.application.exception.RecursoNoEncontradoException
 import com.negociadororq.application.port.output.CompanyOperationOutputPort
 import com.negociadororq.application.port.output.CompanyOutputPort
+import com.negociadororq.application.port.output.CompanySectionVerificationOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
 import com.negociadororq.application.port.output.FacturaPatchOutputPort
 import com.negociadororq.application.port.output.NegociacionOutputPort
@@ -29,12 +30,13 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
     UserOutputPort userPort = Mock()
     CompanyOutputPort companyPort = Mock()
     CompanyOperationOutputPort companyOperationPort = Mock()
+    CompanySectionVerificationOutputPort companySectionVerificationPort = Mock()
     NotificacionService notificacionService = Mock()
     ProcesarFacturaNegociacionService procesarFacturaNegociacionService = Mock()
     FacturaPatchOutputPort facturaPatchPort = Mock()
 
     NegociacionFactoringComfirmingServiceImpl service = new NegociacionFactoringComfirmingServiceImpl(
-            facturaPort, negociacionPort, userPort, companyPort, companyOperationPort,
+            facturaPort, negociacionPort, userPort, companyPort, companyOperationPort, companySectionVerificationPort,
             notificacionService, procesarFacturaNegociacionService, facturaPatchPort
     )
 
@@ -48,6 +50,14 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
     // Permite simular que UNA empresa puntual (por NIT) no tiene la operación habilitada,
     // manteniendo `operationEnabled` como comportamiento por defecto para el resto.
     Set<String> nitsSinOperacionHabilitada = [] as Set
+    // Por defecto el mock genérico de companyOperationPort.isEnabled(_, _) dice que sí a
+    // cualquier tipo pedido (incluido FONDEADOR/CONFIRMING) para cualquier NIT no excluido
+    // arriba; este set permite marcar NITs puntuales que NO califican para tesorería
+    // (no son fondeadoras ni autofondeadoras), sin afectar el resto del stub genérico.
+    Set<String> nitsSinFondeoOConfirming = [] as Set
+    // Controla companySectionVerificationPort.tesoreriaYCuentasVerificadas(_): por defecto
+    // "sí verificada", para que los tests que no se centran en esto no se vean afectados.
+    Boolean tesoreriaVerificada = true
     private final Map<String, Long> idPorNit = [:]
     // Permite simular el id que el adapter real asignaría al guardar (ver test
     // "retorna idNegociacion..."); por defecto conserva el id ya presente en la negociación.
@@ -63,8 +73,15 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         }
         companyOperationPort.isEnabled(_, _) >> { Long id, String type ->
             String nit = idPorNit.find { entry -> entry.value == id }?.key
-            !(nit in nitsSinOperacionHabilitada) && operationEnabled
+            if (nit in nitsSinOperacionHabilitada) {
+                return false
+            }
+            if ((type == "FONDEADOR" || type == "CONFIRMING") && nit in nitsSinFondeoOConfirming) {
+                return false
+            }
+            operationEnabled
         }
+        companySectionVerificationPort.tesoreriaYCuentasVerificadas(_) >> { tesoreriaVerificada }
         // Simula que el adapter real devuelve la negociación persistida (con id asignado):
         // el servicio reasigna `negociacion = negociacionPort.save(negociacion)`, así que sin
         // este stub el valor por defecto (null) rompería el uso posterior de negociacion.getId().
@@ -491,6 +508,63 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
+
+        when:
+        def resultado = service.crearNegociacion(request)
+
+        then:
+        resultado.estado == EstadoNegociacion.PENDIENTE.name()
+    }
+
+    // ─── tesorería/cuentas bancarias verificadas (empresas fondeadoras/autofondeadoras) ──
+
+    def "crearNegociacion lanza AccionNoPermitidaException si la empresa solicitante califica para tesorería y no la tiene verificada"() {
+        given:
+        tesoreriaVerificada = false
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+
+        def fn = buildFn("FECI022", "PROV-001", "PAG-001")
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        def ex = thrown(AccionNoPermitidaException)
+        ex.codigo == "TESORERIA_NO_VERIFICADA"
+        ex.message.contains("PAG-001")
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+    }
+
+    def "crearNegociacion continua normalmente si la empresa NO califica para tesorería (no es fondeadora ni autofondeadora), aunque tesorería no esté verificada"() {
+        given:
+        tesoreriaVerificada = false
+        nitsSinFondeoOConfirming = ["PROV-001", "PAG-001"] as Set
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findByNumeroFactura("FECI024") >> Optional.of(buildFactura("FECI024", "PROV-001", "PAG-001"))
+
+        def fn = buildFn("FECI024", "PROV-001", "PAG-001")
+        procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
+
+        when:
+        def resultado = service.crearNegociacion(request)
+
+        then:
+        resultado.estado == EstadoNegociacion.PENDIENTE.name()
+    }
+
+    def "crearNegociacion continua normalmente cuando la empresa califica para tesorería pero ya la tiene verificada"() {
+        given:
+        tesoreriaVerificada = true
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findByNumeroFactura("FECI025") >> Optional.of(buildFactura("FECI025", "PROV-001", "PAG-001"))
+
+        def fn = buildFn("FECI025", "PROV-001", "PAG-001")
+        procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
+
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn])
 
         when:
         def resultado = service.crearNegociacion(request)
