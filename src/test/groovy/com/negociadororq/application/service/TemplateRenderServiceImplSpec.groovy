@@ -26,6 +26,7 @@ class TemplateRenderServiceImplSpec extends Specification {
         </table>
         <p>Cantidad: {{cantidadFacturas}}</p>
         <p>Cuenta fondeador: {{tipoCuentaFondeador}} {{numeroCuentaFondeador}}</p>
+        <p>{{clausulaResponsabilidad}}</p>
         <p>Firma Autorizada</p>
         <p>{{nombreFirmante}} - {{tipoDocumentoFirmante}} {{numeroDocumentoFirmante}}</p>
         </body>
@@ -174,6 +175,82 @@ class TemplateRenderServiceImplSpec extends Specification {
         then:
         html != null
         !html.contains("null")
+    }
+
+    def "renderEndosoFormalTemplate con claseOperacion SIN_RESPONSABILIDAD incluye la clausula sin recurso"() {
+        when:
+        def html = service.renderEndosoFormalTemplate(
+                "Pag", "NIT-P", "Prov", "NIT-Pr",
+                [factura("FAC-1", "1000")], "FACTORING", "SIN_RESPONSABILIDAD",
+                "Fondeadora SA", "NIT-F", LocalDateTime.now(), firmante())
+
+        then:
+        html.contains("SIN RESPONSABILIDAD para el proveedor")
+        html.contains("Fondeadora SA")
+        html.contains("artículo 657")
+        !html.contains("responde solidariamente")
+    }
+
+    def "renderEndosoFormalTemplate con claseOperacion CON_RESPONSABILIDAD incluye la clausula con recurso y los numeros de factura"() {
+        when:
+        def html = service.renderEndosoFormalTemplate(
+                "Pag", "NIT-P", "Prov", "NIT-Pr",
+                [factura("FAC-1", "1000"), factura("FAC-2", "2000")], "FACTORING", "CON_RESPONSABILIDAD",
+                "Fondeadora SA", "NIT-F", LocalDateTime.now(), firmante())
+
+        then:
+        html.contains("responde solidariamente")
+        html.contains("FAC-1, FAC-2")
+        html.contains("artículo 785")
+        !html.contains("SIN RESPONSABILIDAD para el proveedor")
+    }
+
+    def "renderEndosoFormalTemplate en Factoring ANTICIPO no incluye ninguna clausula de responsabilidad (solo CON/SIN_RESPONSABILIDAD)"() {
+        when:
+        def html = service.renderEndosoFormalTemplate(
+                "Pag", "NIT-P", "Prov", "NIT-Pr",
+                [factura("FAC-1", "1000")], "FACTORING", "ANTICIPO",
+                "Fondeadora SA", "NIT-F", LocalDateTime.now(), firmante())
+
+        then:
+        !html.contains("responde solidariamente")
+        !html.contains("SIN RESPONSABILIDAD para el proveedor")
+    }
+
+    def "renderEndosoFormalTemplate en Factoring SIN_DESCUENTO no incluye ninguna clausula de responsabilidad (solo CON/SIN_RESPONSABILIDAD)"() {
+        when:
+        def html = service.renderEndosoFormalTemplate(
+                "Pag", "NIT-P", "Prov", "NIT-Pr",
+                [factura("FAC-1", "1000")], "FACTORING", "SIN_DESCUENTO",
+                "Fondeadora SA", "NIT-F", LocalDateTime.now(), firmante())
+
+        then:
+        !html.contains("responde solidariamente")
+        !html.contains("SIN RESPONSABILIDAD para el proveedor")
+    }
+
+    def "renderEndosoFormalTemplate en Confirming SIN_RECURSO no incluye ninguna clausula de responsabilidad (exclusiva de Factoring)"() {
+        when:
+        def html = service.renderEndosoFormalTemplate(
+                "Pag", "NIT-P", "Prov", "NIT-Pr",
+                [factura("FAC-1", "1000")], "CONFIRMING", "SIN_RECURSO",
+                "Fondeadora SA", "NIT-F", LocalDateTime.now(), firmante())
+
+        then:
+        !html.contains("SIN RESPONSABILIDAD para el proveedor")
+        !html.contains("responde solidariamente")
+    }
+
+    def "renderEndosoFormalTemplate en Confirming TRADICIONAL no incluye ninguna clausula de responsabilidad (exclusiva de Factoring)"() {
+        when:
+        def html = service.renderEndosoFormalTemplate(
+                "Pag", "NIT-P", "Prov", "NIT-Pr",
+                [factura("FAC-1", "1000")], "CONFIRMING", "TRADICIONAL",
+                "Fondeadora SA", "NIT-F", LocalDateTime.now(), firmante())
+
+        then:
+        !html.contains("responde solidariamente")
+        !html.contains("SIN RESPONSABILIDAD para el proveedor")
     }
 
     def "renderEndosoFormalTemplate lanza excepcion si no hay plantilla activa"() {
