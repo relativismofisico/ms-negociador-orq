@@ -116,6 +116,10 @@ security:
     cupo-propio:
       - ADMINISTRADOR
       - EMPRESA
+    # PATCH /companies/{supplierId}/indirect-funder-offers/{offerId}/cupo/recargar
+    recarga-cupo-indirecto:
+      - ADMINISTRADOR
+      - EMPRESA
 logging:
   level:
     org.springframework.security: DEBUG
