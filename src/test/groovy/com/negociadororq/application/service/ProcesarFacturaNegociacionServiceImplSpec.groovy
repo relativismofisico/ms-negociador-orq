@@ -27,6 +27,7 @@ import com.negociadororq.domain.model.UserQuota
 import spock.lang.Specification
 
 import java.math.BigDecimal
+import java.time.LocalDate
 
 class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
 
@@ -724,5 +725,143 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         then:
         0 * payerFundingVisibilityPort.estaHabilitado(_)
         0 * indirectFunderOfferPort.findActivaAprobada(_, _)
+    }
+
+    // ─── vigenciaDescuento ─────────────────────────────────────────────────────
+
+    def setupMocksFactoringConVigencia(String numero, String vigenciaDescuento, Integer diasVigencia,
+                                        LocalDate fechaVencimiento) {
+        def factura = buildFactura(numero, "PROV-001", "PAG-001")
+        factura.fechavencimientoFactura = fechaVencimiento
+
+        facturaPort.findByNumeroFactura(numero) >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida(numero, null) >>
+                ValidacionFacturaResponseDto.builder().valida(true).build()
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
+        companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(10L).build())
+        empresaQuotaPort.findByCompanyId(10L) >> Optional.of(
+                EmpresaQuota.builder().currentQuota(new BigDecimal("9000.00")).build()
+        )
+        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(20L).build())
+        companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().ideCompany(30L).build())
+
+        def fq = FondeadorQuota.builder()
+                .funderId(20L).supplierId(10L).payerId(30L)
+                .supplierCurrentQuota(new BigDecimal("8000.00"))
+                .payerCurrentQuota(new BigDecimal("8000.00"))
+                .estado("APROBADO")
+                .aprobadoPorFondeador(true)
+                .vigenciaDescuento(vigenciaDescuento)
+                .diasVigencia(diasVigencia)
+                .build()
+        fondeadorQuotaPort.findByFunderIdAndSupplierId(20L, 10L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(20L, 10L) >> Optional.of(fq)
+
+        return factura
+    }
+
+    def "procesarFactura FACTORING lanza RuntimeException si la vigencia DIAS_ANTES_VENCIMIENTO ya no permite negociar"() {
+        given:
+        setupMocksFactoringConVigencia("FECI030", "DIAS_ANTES_VENCIMIENTO", 10, LocalDate.now().plusDays(5))
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI030"))
+
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("vigencia del descuento")
+    }
+
+    def "procesarFactura FACTORING permite negociar si esta dentro de la vigencia DIAS_ANTES_VENCIMIENTO"() {
+        given:
+        setupMocksFactoringConVigencia("FECI031", "DIAS_ANTES_VENCIMIENTO", 10, LocalDate.now().plusDays(30))
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        def resultado = service.procesarFactura(request, buildReqFact("FECI031"))
+
+        then:
+        resultado.numeroFactura == "FECI031"
+    }
+
+    def "procesarFactura FACTORING permite negociar con vigenciaDescuento PRIMEROS_DIAS (trivial al negociar, no hay fechaNegociacion previa)"() {
+        given:
+        setupMocksFactoringConVigencia("FECI032", "PRIMEROS_DIAS", 1, LocalDate.now().plusDays(30))
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        def resultado = service.procesarFactura(request, buildReqFact("FECI032"))
+
+        then:
+        resultado.numeroFactura == "FECI032"
+    }
+
+    // ─── vigenciaDescuento (CONFIRMING) ───────────────────────────────────────
+    // La vigencia del descuento no es exclusiva de Factoring: validarVigenciaDescuento()
+    // se llama igual para la asignación de pagador en Confirming (mismo método,
+    // sin filtro por tipoOperacion). Mismo patrón que los tests FACTORING de arriba.
+
+    def setupMocksConfirmingConVigencia(String numero, String vigenciaDescuento, Integer diasVigencia,
+                                         LocalDate fechaVencimiento) {
+        def factura = buildFactura(numero, "PROV-001", "PAG-001")
+        factura.fechavencimientoFactura = fechaVencimiento
+
+        facturaPort.findByNumeroFactura(numero) >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida(numero, null) >>
+                ValidacionFacturaResponseDto.builder().valida(true).build()
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
+        companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().ideCompany(10L).build())
+        empresaQuotaPort.findByCompanyId(10L) >> Optional.of(
+                EmpresaQuota.builder().currentQuota(new BigDecimal("9000.00")).build()
+        )
+        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(20L).build())
+        companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(40L).build())
+
+        def fq = FondeadorQuota.builder()
+                .funderId(20L).payerId(10L)
+                .payerCurrentQuota(new BigDecimal("8000.00"))
+                .supplierCurrentQuota(new BigDecimal("0.00"))
+                .estado("APROBADO")
+                .aprobadoPorFondeador(true)
+                .vigenciaDescuento(vigenciaDescuento)
+                .diasVigencia(diasVigencia)
+                .build()
+        fondeadorQuotaPort.findByFunderIdAndPayerId(20L, 10L) >> Optional.of(fq)
+        fondeadorQuotaPort.findByFunderIdAndPayerIdActivo(20L, 10L) >> Optional.of(fq)
+
+        return factura
+    }
+
+    def "procesarFactura CONFIRMING lanza RuntimeException si la vigencia DIAS_ANTES_VENCIMIENTO ya no permite negociar"() {
+        given:
+        setupMocksConfirmingConVigencia("FECI033", "DIAS_ANTES_VENCIMIENTO", 10, LocalDate.now().plusDays(5))
+
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI033"))
+
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("vigencia del descuento")
+    }
+
+    def "procesarFactura CONFIRMING permite negociar si esta dentro de la vigencia DIAS_ANTES_VENCIMIENTO"() {
+        given:
+        setupMocksConfirmingConVigencia("FECI034", "DIAS_ANTES_VENCIMIENTO", 10, LocalDate.now().plusDays(30))
+
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001")
+
+        when:
+        def resultado = service.procesarFactura(request, buildReqFact("FECI034"))
+
+        then:
+        resultado.numeroFactura == "FECI034"
     }
 }
