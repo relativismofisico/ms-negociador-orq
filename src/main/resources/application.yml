@@ -120,6 +120,12 @@ security:
     recarga-cupo-indirecto:
       - ADMINISTRADOR
       - EMPRESA
+    # POST /tasas/conversion
+    conversion-tasa:
+      - ADMINISTRADOR
+      - OPERARIO
+      - EMPRESA
+      - FONDEADOR
 logging:
   level:
     org.springframework.security: DEBUG

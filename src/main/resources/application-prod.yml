@@ -43,6 +43,12 @@ security:
       - OPERARIO
       - EMPRESA
       - FONDEADOR
+    # POST /tasas/conversion
+    conversion-tasa:
+      - ADMINISTRADOR
+      - OPERARIO
+      - EMPRESA
+      - FONDEADOR
 
 springdoc:
   api-docs:
