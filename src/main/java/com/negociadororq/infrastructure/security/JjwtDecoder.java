@@ -60,6 +60,18 @@ public class JjwtDecoder implements JwtDecoder {
             throw new BadJwtException("Token inválido: " + ex.getMessage(), ex);
         }
 
+        // Un refresh token (emitido por ms-security-util, mismo secreto, mismos claims que
+        // un access token) nunca es válido como credencial de acceso normal — rechazar SOLO
+        // si el claim está presente y vale "refresh": los tokens emitidos antes de que
+        // existiera ese claim siguen validando igual, retrocompatible. Este chequeo solo
+        // afecta el camino JWT (oauth2ResourceServer) — el de Basic Auth service-to-service
+        // no pasa por este decoder.
+        boolean isRefreshToken = "refresh".equals(claims.get("typ"));
+        if (isRefreshToken) {
+            log.warn("Refresh token usado como credencial de acceso");
+            throw new BadJwtException("El token es un refresh token, no puede usarse como credencial de acceso.");
+        }
+
         Map<String, Object> headers = parseHeaders(token);
         Map<String, Object> claimsMap = new HashMap<>(claims);
 
