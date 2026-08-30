@@ -1,16 +1,20 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Optional;
+import java.util.stream.Stream;
+
 import com.negociadororq.application.port.output.PersonOutputPort;
 import com.negociadororq.domain.model.DatosPersona;
 import com.negociadororq.infrastructure.persistence.entity.DocumentTypeEntity;
 import com.negociadororq.infrastructure.persistence.entity.PersonEntity;
 import com.negociadororq.infrastructure.persistence.repository.DocumentTypeRepository;
 import com.negociadororq.infrastructure.persistence.repository.PersonRepository;
-import java.util.Optional;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * Implementación de {@link PersonOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class PersonAdapter implements PersonOutputPort {

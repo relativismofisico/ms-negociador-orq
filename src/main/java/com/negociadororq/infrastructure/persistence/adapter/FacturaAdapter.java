@@ -1,5 +1,9 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.infrastructure.persistence.entity.FacturaDocument;
@@ -7,10 +11,9 @@ import com.negociadororq.infrastructure.persistence.repository.FacturaRepository
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
+/**
+ * Implementación de {@link FacturaOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class FacturaAdapter implements FacturaOutputPort {

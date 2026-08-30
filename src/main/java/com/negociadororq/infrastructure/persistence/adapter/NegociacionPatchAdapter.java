@@ -6,6 +6,9 @@ import com.negociadororq.infrastructure.persistence.repository.NegociacionPatchR
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * Implementación de {@link NegociacionPatchOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class NegociacionPatchAdapter implements NegociacionPatchOutputPort {

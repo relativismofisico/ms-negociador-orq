@@ -1,14 +1,34 @@
 package com.negociadororq.application.port.output;
 
-import com.negociadororq.domain.model.ActorFactura;
-import com.negociadororq.domain.enums.EstadoFirma;
-import com.negociadororq.domain.enums.EstadoNegociacion;
-
 import java.util.List;
 
+import com.negociadororq.domain.enums.EstadoFirma;
+import com.negociadororq.domain.enums.EstadoNegociacion;
+import com.negociadororq.domain.model.ActorFactura;
+
+/**
+ * Actualizaciones parciales (patch) sobre una factura ya persistida.
+ */
 public interface FacturaPatchOutputPort {
+
+    /**
+     * @param facturaId          id de la factura
+     * @param estadoFirma        nuevo estado de firma
+     * @param estadoNegociacion  nuevo estado de negociación
+     */
     void actualizarEstadoPorId(String facturaId, EstadoFirma estadoFirma, EstadoNegociacion estadoNegociacion);
+
+    /**
+     * @param facturaId   id de la factura
+     * @param estadoFirma nuevo estado de firma
+     * @param actores     actores resultantes de la negociación
+     */
     void marcarComoNegociada(String facturaId, EstadoFirma estadoFirma, List<ActorFactura> actores);
+
+    /**
+     * @param numeroFactura número de la factura
+     * @param estadoFirma   nuevo estado de firma
+     */
     void actualizarEstadoFirmaPorNoFactura(String numeroFactura, EstadoFirma estadoFirma);
 
     /**

@@ -5,6 +5,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Evento publicado a Kafka para pedirle al servicio de OTP que valide el código
+ * ingresado por el operador al aprobar una negociación.
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

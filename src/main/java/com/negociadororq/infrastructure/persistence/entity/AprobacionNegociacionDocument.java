@@ -1,6 +1,7 @@
 package com.negociadororq.infrastructure.persistence.entity;
 
 import java.time.LocalDateTime;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,6 +9,9 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+/**
+ * Persistencia MongoDB de una {@link com.negociadororq.domain.model.AprobacionNegociacion}.
+ */
 @Data
 @Builder
 @NoArgsConstructor

@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.IndirectFunderOfferOutputPort;
 import com.negociadororq.domain.model.IndirectFunderOffer;
 import com.negociadororq.infrastructure.persistence.entity.IndirectFunderOfferEntity;
@@ -7,8 +9,9 @@ import com.negociadororq.infrastructure.persistence.repository.IndirectFunderOff
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
-
+/**
+ * Implementación de {@link IndirectFunderOfferOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class IndirectFunderOfferAdapter implements IndirectFunderOfferOutputPort {

@@ -1,15 +1,18 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.List;
+
 import com.negociadororq.application.port.output.FacturaPatchOutputPort;
-import com.negociadororq.domain.model.ActorFactura;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.enums.EstadoNegociacion;
+import com.negociadororq.domain.model.ActorFactura;
 import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-
+/**
+ * Implementación de {@link FacturaPatchOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class FacturaPatchAdapter implements FacturaPatchOutputPort {

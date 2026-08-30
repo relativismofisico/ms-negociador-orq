@@ -1,12 +1,15 @@
 package com.negociadororq.application.service;
 
+import java.util.List;
+
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
 
-import java.util.List;
-
+/**
+ * Genera el documento formal (HTML + PDF) de un endoso de descuento.
+ */
 public interface DocumentoEndosoService {
 
     /**

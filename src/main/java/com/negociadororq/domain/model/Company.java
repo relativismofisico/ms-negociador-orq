@@ -6,6 +6,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Datos básicos de una empresa, tal como los expone `ms-registroempresa-neg` a este
+ * microservicio.
+ */
 @Getter
 @Setter
 @NoArgsConstructor

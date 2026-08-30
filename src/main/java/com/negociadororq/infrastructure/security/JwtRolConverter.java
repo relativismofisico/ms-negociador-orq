@@ -1,5 +1,9 @@
 package com.negociadororq.infrastructure.security;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Locale;
+
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -8,9 +12,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-
-import java.util.ArrayList;
-import java.util.Collection;
 
 /**
  * Convierte el claim 'rol' del JWT en un GrantedAuthority de Spring Security.
@@ -32,7 +33,7 @@ public class JwtRolConverter implements Converter<Jwt, AbstractAuthenticationTok
         String rol = jwt.getClaimAsString(CLAIM_ROL);
         if (StringUtils.hasText(rol)) {
             // Sin prefijo ROLE_ — se usa hasAuthority() en @PreAuthorize
-            authorities.add(new SimpleGrantedAuthority(rol.toUpperCase()));
+            authorities.add(new SimpleGrantedAuthority(rol.toUpperCase(Locale.ROOT)));
         }
 
         return new JwtAuthenticationToken(jwt, authorities, jwt.getSubject());

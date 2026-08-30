@@ -1,8 +1,13 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.dto.TasaConversionResponseDto;
 import java.math.BigDecimal;
 
+import com.negociadororq.application.dto.TasaConversionResponseDto;
+
+/**
+ * Convierte tasas de interés entre sus distintas representaciones
+ * equivalentes.
+ */
 public interface TasaConversionService {
 
     /**

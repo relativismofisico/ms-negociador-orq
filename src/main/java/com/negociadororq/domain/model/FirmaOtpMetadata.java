@@ -1,12 +1,16 @@
 package com.negociadororq.domain.model;
 
+import java.time.LocalDateTime;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-
+/**
+ * Metadatos de auditoría de una firma vía OTP: quién la hizo, desde qué IP, si fue
+ * aprobada y con qué observación.
+ */
 @Builder
 @Getter
 @AllArgsConstructor

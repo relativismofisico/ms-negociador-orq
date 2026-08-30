@@ -8,9 +8,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Clase Dto de la liquidacion de la factura
+ * Clase Dto de la liquidacion de la factura.
+ *
  * @author John Redondo
- * */
+ */
 @Builder
 @Data
 @AllArgsConstructor

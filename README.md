@@ -64,25 +64,26 @@ La comunicación asíncrona con otros microservicios se realiza mediante **Apach
 | Categoría | Tecnología | Versión |
 |---|---|---|
 | Lenguaje | Java | 17 |
-| Framework | Spring Boot | 3.3.4 |
+| Framework | Spring Boot | 3.5.4 |
+| Gestión de dependencias | io.spring.dependency-management | 1.1.7 |
 | Build | Gradle | 8.10 |
-| Persistencia documental | MongoDB (Spring Data) | Spring Boot 3.3.4 managed |
+| Persistencia documental | MongoDB (Spring Data) | Spring Boot 3.5.4 managed |
 | Persistencia relacional | MySQL + Spring Data JPA | Connector 8.3.0 |
-| Mensajería | Apache Kafka (Spring Kafka) | Spring Boot 3.3.4 managed |
-| Seguridad | Spring Security 6 + OAuth2 Resource Server | Spring Boot 3.3.4 managed |
+| Mensajería | Apache Kafka (Spring Kafka) | Spring Boot 3.5.4 managed |
+| Seguridad | Spring Security 6 + OAuth2 Resource Server | Spring Boot 3.5.4 managed |
 | JWT | jjwt-api | 0.12.6 |
 | Documentación API | springdoc-openapi-starter-webmvc-ui | 2.5.0 |
 | Generación de PDF | openhtmltopdf-pdfbox | 1.0.10 |
-| Reducción boilerplate | Lombok | Spring Boot 3.3.4 managed |
-| Pruebas unitarias | JUnit 5 + Mockito | Spring Boot 3.3.4 managed |
+| Reducción boilerplate | Lombok | Spring Boot 3.5.4 managed |
+| Pruebas unitarias | JUnit 5 + Mockito | Spring Boot 3.5.4 managed |
 | Pruebas de aceptación | Karate | 1.4.0 |
 | Pruebas de arquitectura | ArchUnit | 1.3.0 |
 | Pruebas de rendimiento | Apache JMeter | 5.6.3 (externo) |
-| Cobertura | JaCoCo | Spring Boot 3.3.4 managed |
+| Cobertura | JaCoCo | 0.8.13 |
 | Análisis estático | Checkstyle | 10.17.0 |
 | Análisis estático | PMD | 7.3.0 |
 | Análisis estático | SpotBugs | 4.8.6 |
-| Calidad de código | SonarQube | Pendiente por definir (versión del servidor) |
+| Calidad de código | SonarQube | Plugin Gradle `org.sonarqube` 5.1.0.4882 (servidor: pendiente por definir) |
 
 ---
 
@@ -133,7 +134,12 @@ java -version
 
 ### Docker
 
-No se detectó `Dockerfile` ni `docker-compose.yml` en el repositorio. **Pendiente por definir** si el despliegue se realiza en contenedores.
+El repositorio incluye un `Dockerfile` multi-stage:
+
+- **Stage `build`**: `eclipse-temurin:17-jdk-alpine`, compila con `./gradlew bootJar` saltando tests y checks (`-x test -x checkstyleMain -x checkstyleTest -x pmdMain -x pmdTest -x spotbugsMain -x spotbugsTest -x architectureTest -x automatedTest`).
+- **Stage `runtime`**: `eclipse-temurin:17-jre-alpine`, corre como usuario no-root `appuser`, expone el puerto **8080** (nota: el `server.port` real de la aplicación es `8083` — verificar `SERVER_PORT` al desplegar si se usa este Dockerfile tal cual).
+
+No se detectó `docker-compose.yml` en el repositorio.
 
 ---
 
@@ -595,6 +601,37 @@ Validando OTP...
 
 ---
 
+### Gestión de Cupo Propio de Fondeo — `CupoPropioFondeoController`
+
+**Base path:** `/companies/{companyId}/cupo-propio-fondeo` — **Grupo de roles:** `cupo-propio` (ADMINISTRADOR, EMPRESA)
+
+| Método | Path | Descripción |
+|---|---|---|
+| GET | `/companies/{companyId}/cupo-propio-fondeo` | Obtiene el cupo propio de fondeo de una empresa |
+| PUT | `/companies/{companyId}/cupo-propio-fondeo` | Actualiza el cupo propio de fondeo |
+| PATCH | `.../endoso-grupal` | Actualiza la habilitación de endoso grupal |
+| PATCH | `.../rentabilidad-minima` | Actualiza la rentabilidad mínima exigida |
+| PATCH | `.../restablecer` | Restablece el cupo propio a su valor original |
+
+### Cupo de Oferta Indirecta de Fondeador — `IndirectFunderOfferSupplierQuotaController`
+
+**Base path:** `/companies/{supplierId}/indirect-funder-offers`
+
+| Método | Path | Grupo de rol | Descripción |
+|---|---|---|---|
+| GET | `.../{funderId}/{payerId}/cupo` | `negociacion` (ADMINISTRADOR, EMPRESA, OPERARIO) | Consulta el cupo indirecto disponible entre un fondeador y un pagador para el proveedor |
+| PATCH | `.../{offerId}/cupo/recargar` | `recarga-cupo-indirecto` (ADMINISTRADOR, EMPRESA) | Recarga el cupo de una oferta indirecta de fondeador |
+
+### Conversión de Tasas — `TasaConversionController`
+
+**Base path:** `/tasas` — **Grupo de roles:** `conversion-tasa` (ADMINISTRADOR, OPERARIO, EMPRESA, FONDEADOR)
+
+| Método | Path | Descripción |
+|---|---|---|
+| POST | `/tasas/conversion` | Convierte un valor entre tipos de tasa (cómputo puro, sin efectos secundarios) |
+
+---
+
 ### Estructura de Error (todos los endpoints)
 
 ```json
@@ -823,6 +860,10 @@ Los grupos de roles permitidos por endpoint son totalmente configurables en `app
 | `POST /validaciones/facturas/vencimiento` | ADMINISTRADOR, OPERARIO, EMPRESA, FONDEADOR |
 | `POST /negociaciones/solicitar-otp` | ADMINISTRADOR, EMPRESA, FONDEADOR |
 | `POST /negociaciones/confirmar-otp` | ADMINISTRADOR, EMPRESA, FONDEADOR |
+| `GET/PUT /companies/{companyId}/cupo-propio-fondeo` (+ 3 PATCH) | ADMINISTRADOR, EMPRESA |
+| `GET .../indirect-funder-offers/{funderId}/{payerId}/cupo` | ADMINISTRADOR, EMPRESA, OPERARIO |
+| `PATCH .../indirect-funder-offers/{offerId}/cupo/recargar` | ADMINISTRADOR, EMPRESA |
+| `POST /tasas/conversion` | ADMINISTRADOR, OPERARIO, EMPRESA, FONDEADOR |
 
 ### Endpoints Públicos (sin autenticación)
 
@@ -926,26 +967,35 @@ Ubicación: `src/automated-test/`
 | `FullRunner` | `@full` | Suite completa de todos los escenarios |
 | `SmokeRunner` | `@smoke` | Pruebas rápidas sin dependencia de BD |
 | `RegressionRunner` | `@regression` | Flujos de negocio completos |
-| `ProdRunner` | `@production-safe` | Solo operaciones de lectura, seguras para producción |
+| `ProductionRunner` | `@production-safe` | Solo operaciones de lectura, seguras para producción |
 
-**Ejecutar:**
+**Ejecutar** (cada runner tiene su propia tarea Gradle dedicada, filtrada por tag — ninguna re-ejecuta los escenarios de otra):
 ```bash
-./gradlew automatedTest
+./gradlew smokeTest        # @smoke
+./gradlew regressionTest   # @regression
+./gradlew productionTest   # @production-safe
+./gradlew automatedTest    # suite completa (FullRunner, @full)
 ```
+
+Selector de ambiente (afecta a los 4): `AMBIENTE_PIPE=qa ./gradlew regressionTest` (prioridad: variable de entorno `AMBIENTE_PIPE` > propiedad Gradle `-Penv` > `dev` por defecto). Ver `src/automated-test/README-TESTS.md` para el detalle completo de variables por ambiente.
 
 ### Pruebas de Rendimiento (JMeter)
 
-Ubicación: `external-test/jmeter/`
+Ubicación: `external-test/jmeter/` (estructura normalizada: plan en `plans/`, `.properties` por ambiente en `config/`).
 
 | Archivo | Descripción |
 |---|---|
-| `negociador-orq-test-plan.jmx` | Plan de prueba parametrizable (1/10/100 hilos) |
-| `desarrollo.properties` | Configuración para ambiente de desarrollo |
+| `plans/negociador-orq-test-plan.jmx` | Plan de prueba parametrizable (1/10/100 hilos) |
+| `config/desarrollo.properties` | Configuración para ambiente de desarrollo |
+| `config/qa.properties` | Configuración para ambiente de QA |
+| `config/produccion.properties` | Configuración para producción (solo lectura) |
+
+También existe `external-test/smoke/postman/ms-negociador-orq.postman_collection.json` — colección Postman de smoke tests.
 
 **Ejecutar:**
 ```bash
 # Desde el directorio external-test/jmeter/
-jmeter -n -t negociador-orq-test-plan.jmx -q desarrollo.properties
+jmeter -n -t plans/negociador-orq-test-plan.jmx -q config/desarrollo.properties
 ```
 
 Parámetros configurables via `-J` o en el archivo `.properties`:
@@ -984,10 +1034,13 @@ ms-negociador-orq/
 │   │   └── ruleset.xml
 │   └── spotbugs/
 │       └── exclude.xml
+├── Dockerfile
 ├── external-test/
-│   └── jmeter/
-│       ├── negociador-orq-test-plan.jmx
-│       └── desarrollo.properties
+│   ├── jmeter/
+│   │   ├── plans/negociador-orq-test-plan.jmx
+│   │   └── config/                          # desarrollo/qa/produccion.properties
+│   └── smoke/
+│       └── postman/                         # colección Postman de smoke tests
 └── src/
     ├── main/
     │   ├── java/com/negociadororq/
@@ -1001,7 +1054,9 @@ ms-negociador-orq/
     │   │   │   ├── service/                     # NegociacionFactoringComfirmingServiceImpl, etc.
     │   │   │   ├── util/                        # IpUtils
     │   │   │   └── web/
-    │   │   │       └── controller/              # 4 controladores REST
+    │   │   │       └── controller/              # 7 controladores REST: Crear/AprobarEndosoDescuento,
+    │   │   │                                     # CrearNegociacionFactoringComfirming, ValidacionFactura,
+    │   │   │                                     # CupoPropioFondeo, IndirectFunderOfferSupplierQuota, TasaConversion
     │   │   ├── domain/
     │   │   │   ├── enums/                       # EstadoNegociacion, EstadoEndoso, EstadoFirma, etc.
     │   │   │   ├── event/                       # OtpRequestEvent, LiquidacionSolicitadaEvent, etc.

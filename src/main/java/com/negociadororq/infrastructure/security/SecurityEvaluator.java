@@ -1,11 +1,11 @@
 package com.negociadororq.infrastructure.security;
 
+import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 /**
  * Evaluador de expresiones SpEL para @PreAuthorize.
@@ -40,11 +40,7 @@ public class SecurityEvaluator {
 
         List<String> rolesPermitidos = securityProperties.getRolesForGroup(grupo);
 
-        if (rolesPermitidos.isEmpty()) {
-            return false;
-        }
-
-        return authentication.getAuthorities().stream()
+        return !rolesPermitidos.isEmpty() && authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .map(String::toUpperCase)
                 .anyMatch(rolesPermitidos::contains);

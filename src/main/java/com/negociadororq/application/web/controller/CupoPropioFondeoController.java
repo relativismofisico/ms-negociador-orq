@@ -27,6 +27,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Cupo de autofondeo que una empresa aprobada para Confirming define para sí misma.
+ */
 @Tag(name = "Cupo propio de fondeo", description = "Cupo de autofondeo que una empresa aprobada para Confirming define para sí misma")
 @RestController
 @RequestMapping("/companies/{companyId}/cupo-propio-fondeo")

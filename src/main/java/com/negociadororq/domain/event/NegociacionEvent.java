@@ -5,6 +5,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Registro de una acción de negocio ocurrida sobre una negociación (creación, aprobación,
+ * rechazo, etc.), con el actor que la disparó y el estado resultante.
+ */
 @Data
 @Builder
 @NoArgsConstructor

@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.EndosoOutputPort;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.infrastructure.persistence.entity.EndosoDocument;
@@ -7,8 +9,9 @@ import com.negociadororq.infrastructure.persistence.repository.EndosoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
-
+/**
+ * Implementación de {@link EndosoOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class EndosoAdapter implements EndosoOutputPort {

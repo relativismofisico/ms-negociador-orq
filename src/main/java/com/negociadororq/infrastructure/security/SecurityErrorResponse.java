@@ -1,11 +1,11 @@
 package com.negociadororq.infrastructure.security;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Getter;
-
-import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * Respuesta estándar de error para las capas de seguridad (401 / 403).

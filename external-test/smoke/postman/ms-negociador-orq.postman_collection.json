@@ -341,6 +341,254 @@
         "description": "Valida el OTP ingresado por el actor y procesa la aprobación o rechazo del endoso.\n\n**Respuesta esperada:** 200 OK\n\n**Roles permitidos:** PAGADOR, PROVEEDOR, FONDEADOR, ADMINISTRADOR\n\n**Nota:** La validación del OTP es asíncrona vía Kafka. El resultado final se refleja en el estado de la negociación."
       },
       "response": []
+    },
+    {
+      "name": "6. Consultar Cupo Propio de Fondeo",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwtToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/companies/1/cupo-propio-fondeo",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "companies",
+            "1",
+            "cupo-propio-fondeo"
+          ]
+        },
+        "description": "Consulta el cupo de autofondeo (Confirming) que una empresa definió para sí misma.\n\n**Respuesta esperada:** 200 OK (404 si la empresa no está habilitada como fondeadora de sí misma)\n\n**Roles permitidos (grupo `cupo-propio`):** ADMINISTRADOR, EMPRESA"
+      },
+      "response": []
+    },
+    {
+      "name": "7. Actualizar Cupo Propio de Fondeo",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwtToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cupoPropio\": 50000000,\n  \"tasa\": 1.5,\n  \"tipoDescuento\": \"FIJO\",\n  \"vigenciaDescuento\": \"TODO_EL_PLAZO\",\n  \"porcentajeReserva\": 10\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/companies/1/cupo-propio-fondeo",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "companies",
+            "1",
+            "cupo-propio-fondeo"
+          ]
+        },
+        "description": "Define el cupo propio de autofondeo (Confirming) de la empresa. No puede exceder el cupo general asignado por el administrador.\n\n**Respuesta esperada:** 200 OK\n\n**Roles permitidos (grupo `cupo-propio`):** ADMINISTRADOR, EMPRESA"
+      },
+      "response": []
+    },
+    {
+      "name": "8. Consultar Cupo Indirecto (Factoring vía pagador)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwtToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/companies/1/indirect-funder-offers/2/3/cupo",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "companies",
+            "1",
+            "indirect-funder-offers",
+            "2",
+            "3",
+            "cupo"
+          ]
+        },
+        "description": "Consulta el cupo disponible del proveedor (id en la URL, `1`) contra una oferta de fondeo indirecta entre fondeador (`2`) y pagador (`3`). Devuelve 200 con cuerpo vacío si no hay oferta aprobada vigente.\n\n**Roles permitidos (grupo `negociacion`):** ADMINISTRADOR, EMPRESA, OPERARIO"
+      },
+      "response": []
+    },
+    {
+      "name": "9. Recargar Cupo Indirecto (Factoring vía pagador)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK o 404 (sin consumo previo)', function () {",
+              "    pm.expect([200, 404]).to.include(pm.response.code);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwtToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "PATCH",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/companies/1/indirect-funder-offers/2/cupo/recargar",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "companies",
+            "1",
+            "indirect-funder-offers",
+            "2",
+            "cupo",
+            "recargar"
+          ]
+        },
+        "description": "Restaura el cupo disponible del proveedor (`1`) contra la oferta de fondeo indirecta (`2`) a su valor original. Acción disparada por el fondeador.\n\n**Respuesta esperada:** 200 OK (404 si el proveedor aún no negoció bajo esta oferta)\n\n**Roles permitidos (grupo `recarga-cupo-indirecto`):** ADMINISTRADOR, EMPRESA"
+      },
+      "response": []
+    },
+    {
+      "name": "10. Convertir Tasa",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200 OK', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{jwtToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"valor\": 2.1,\n  \"tipoTasa\": \"TASA_MES_VENCIDO\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tasas/conversion",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "tasas",
+            "conversion"
+          ]
+        },
+        "description": "Convierte un valor de tasa entre Tasa Efectiva Anual, Tasa Mes Vencido y Tasa Mes Anticipado. Cómputo puro, sin efectos secundarios.\n\n**Respuesta esperada:** 200 OK\n\n**Roles permitidos (grupo `conversion-tasa`):** ADMINISTRADOR, OPERARIO, EMPRESA, FONDEADOR"
+      },
+      "response": []
     }
   ],
   "auth": {

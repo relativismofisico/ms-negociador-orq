@@ -1,7 +1,27 @@
 package com.negociadororq.application.service;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
+import com.negociadororq.application.port.output.CompanyOutputPort;
+import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
+import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.FacturaPatchOutputPort;
+import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
+import com.negociadororq.application.port.output.IndirectFunderOfferOutputPort;
+import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort;
+import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPort;
+import com.negociadororq.application.port.output.UserOutputPort;
+import com.negociadororq.application.util.VigenciaDescuentoValidator;
+import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.model.ActorFactura;
 import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.EmpresaQuota;
@@ -9,34 +29,18 @@ import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.FondeadorQuota;
-import com.negociadororq.domain.model.User;
-import com.negociadororq.domain.enums.EstadoFirma;
-import com.negociadororq.application.port.output.CompanyOutputPort;
-import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
-import com.negociadororq.application.port.output.FacturaPatchOutputPort;
-import com.negociadororq.application.port.output.FacturaOutputPort;
-import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
-import com.negociadororq.application.port.output.IndirectFunderOfferOutputPort;
-import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort;
-import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPort;
-import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.domain.model.IndirectFunderOffer;
 import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
-import com.negociadororq.application.util.VigenciaDescuentoValidator;
+import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
+/**
+ * Implementación de {@link ProcesarFacturaNegociacionService}.
+ */
 @Log
 @Service
 @RequiredArgsConstructor
@@ -515,7 +519,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 .replace("-", "")
                 .replace(" ", "")
                 .trim()
-                .toUpperCase();
+                .toUpperCase(Locale.ROOT);
     }
 }
 

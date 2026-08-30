@@ -6,6 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Tipo y clase de operación (Factoring/Confirming) sobre la que se negocia.
+ */
 @Data
 @Builder
 @RequiredArgsConstructor

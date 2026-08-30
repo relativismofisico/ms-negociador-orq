@@ -1,8 +1,8 @@
 package com.negociadororq.application.port.output;
 
-import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
-
 import java.util.Optional;
+
+import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
 
 /**
  * Puerto para el consumo independiente de cada proveedor contra una oferta

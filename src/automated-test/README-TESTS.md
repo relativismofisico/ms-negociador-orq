@@ -14,7 +14,7 @@ src/automated-test/
 │       ├── SmokeRunner.java            ← @smoke
 │       ├── RegressionRunner.java       ← @regression
 │       ├── FullRunner.java             ← @full  (task por defecto)
-│       └── ProdRunner.java             ← @production-safe
+│       └── ProductionRunner.java       ← @production-safe
 └── resources/
     ├── karate-config.js                ← TODA la logica de config (dev/qa/prod en un solo archivo)
     ├── karate-config-dev.js            ← stub vacio (requerido por Karate, logica en karate-config.js)
@@ -98,11 +98,11 @@ export TEST_TOKEN_EMPRESA=eyJhbGciOiJIUzM4...
 export TEST_TOKEN_FONDEADOR=eyJhbGciOiJIUzM4...
 export TEST_TOKEN_OPERARIO=eyJhbGciOiJIUzM4...
 
-./gradlew prodTest
+./gradlew productionTest
 ```
 
 > **IMPORTANTE:** Nunca definir `JWT_SECRET` en el pipeline de producción.  
-> `prodTest` falla si `BASE_URL` no está definida (guarda de seguridad en Gradle).
+> `productionTest` falla si `BASE_URL` no está definida (guarda de seguridad en Gradle).
 
 ---
 

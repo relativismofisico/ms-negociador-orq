@@ -1,5 +1,8 @@
 package com.negociadororq.infrastructure.security;
 
+import java.io.IOException;
+import java.time.LocalDateTime;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -10,9 +13,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
-
-import java.io.IOException;
-import java.time.LocalDateTime;
 
 /**
  * Manejador de errores 401 Unauthorized.
@@ -40,7 +40,10 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
         String codigo;
         String mensaje;
 
-        String causeMsg = authException.getCause() != null ? authException.getCause().getMessage() : "";
+        String causeMsg = "";
+        if (authException.getCause() != null) {
+            causeMsg = authException.getCause().getMessage();
+        }
         if (causeMsg.contains("expirado") || causeMsg.contains("expired") || causeMsg.contains("Expired")) {
             codigo = "TOKEN_EXPIRADO";
             mensaje = "El token JWT ha expirado. Por favor autentíquese nuevamente.";

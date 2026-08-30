@@ -14,10 +14,21 @@ import org.springframework.http.HttpStatus;
  */
 public class PeticionInvalidaException extends NegociadorException {
 
+    /**
+     * Crea la excepción con el código de error genérico {@code PETICION_INVALIDA}.
+     *
+     * @param mensaje mensaje legible describiendo qué dato de la petición es inválido
+     */
     public PeticionInvalidaException(String mensaje) {
         super(mensaje, HttpStatus.BAD_REQUEST, "PETICION_INVALIDA");
     }
 
+    /**
+     * Crea la excepción con un código de error específico del caso de uso.
+     *
+     * @param mensaje mensaje legible describiendo qué dato de la petición es inválido
+     * @param codigo  código de error de dominio en SNAKE_UPPER_CASE
+     */
     public PeticionInvalidaException(String mensaje, String codigo) {
         super(mensaje, HttpStatus.BAD_REQUEST, codigo);
     }

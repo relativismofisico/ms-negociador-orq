@@ -14,10 +14,21 @@ import org.springframework.http.HttpStatus;
  */
 public class AccionNoPermitidaException extends NegociadorException {
 
+    /**
+     * Crea la excepción con el código de error genérico {@code ACCION_NO_PERMITIDA}.
+     *
+     * @param mensaje mensaje legible describiendo la acción no permitida
+     */
     public AccionNoPermitidaException(String mensaje) {
         super(mensaje, HttpStatus.FORBIDDEN, "ACCION_NO_PERMITIDA");
     }
 
+    /**
+     * Crea la excepción con un código de error específico del caso de uso.
+     *
+     * @param mensaje mensaje legible describiendo la acción no permitida
+     * @param codigo  código de error de dominio en SNAKE_UPPER_CASE
+     */
     public AccionNoPermitidaException(String mensaje, String codigo) {
         super(mensaje, HttpStatus.FORBIDDEN, codigo);
     }

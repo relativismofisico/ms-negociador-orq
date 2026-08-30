@@ -1,26 +1,5 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.port.output.CompanyOutputPort;
-import com.negociadororq.application.port.output.FacturaOutputPort;
-import com.negociadororq.application.port.output.NegociacionOutputPort;
-import com.negociadororq.application.service.notificacion.CuerpoNotificacionFactory;
-import com.negociadororq.application.service.notificacion.DestinatarioResolver;
-import com.negociadororq.domain.event.DestinatarioEmail;
-import com.negociadororq.domain.event.NotificacionEmailEvent;
-import com.negociadororq.domain.model.AprobacionFacturaRequest;
-import com.negociadororq.domain.model.AprobacionRequest;
-import com.negociadororq.domain.model.Company;
-import com.negociadororq.domain.model.Endoso;
-import com.negociadororq.domain.model.Factura;
-import com.negociadororq.domain.model.FacturaNegociada;
-import com.negociadororq.domain.model.FondeadorAsignacion;
-import com.negociadororq.domain.model.Negociacion;
-import com.negociadororq.domain.enums.EstadoEndoso;
-import com.negociadororq.domain.enums.TipoNotificacion;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
@@ -38,6 +17,30 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.negociadororq.application.port.output.CompanyOutputPort;
+import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.NegociacionOutputPort;
+import com.negociadororq.application.service.notificacion.CuerpoNotificacionFactory;
+import com.negociadororq.application.service.notificacion.DestinatarioResolver;
+import com.negociadororq.domain.enums.EstadoEndoso;
+import com.negociadororq.domain.enums.TipoNotificacion;
+import com.negociadororq.domain.event.DestinatarioEmail;
+import com.negociadororq.domain.event.NotificacionEmailEvent;
+import com.negociadororq.domain.model.AprobacionFacturaRequest;
+import com.negociadororq.domain.model.AprobacionRequest;
+import com.negociadororq.domain.model.Company;
+import com.negociadororq.domain.model.Endoso;
+import com.negociadororq.domain.model.Factura;
+import com.negociadororq.domain.model.FacturaNegociada;
+import com.negociadororq.domain.model.FondeadorAsignacion;
+import com.negociadororq.domain.model.Negociacion;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+/**
+ * Implementación de {@link NotificacionService}.
+ */
 @Service
 @RequiredArgsConstructor
 public class NotificacionServiceImpl implements NotificacionService {
@@ -63,11 +66,16 @@ public class NotificacionServiceImpl implements NotificacionService {
         List<DestinatarioEmail> destinatarios =
                 destinatarioResolver.resolverParaCreacionNegociacion(negociacion);
 
+        String tipoOperacion = null;
+        String claseOperacion = null;
+        if (negociacion.getTipoOperacion() != null) {
+            tipoOperacion = negociacion.getTipoOperacion().getTipo();
+            claseOperacion = negociacion.getTipoOperacion().getClase();
+        }
+
         Map<String, Object> data = safeMap(
-                "tipoOperacion", negociacion.getTipoOperacion() != null
-                        ? negociacion.getTipoOperacion().getTipo() : null,
-                "claseOperacion", negociacion.getTipoOperacion() != null
-                        ? negociacion.getTipoOperacion().getClase() : null,
+                "tipoOperacion", tipoOperacion,
+                "claseOperacion", claseOperacion,
                 "nombrePagador", nombreCompania(negociacion.getRutPagador()),
                 "nombreProveedor", nombreCompania(negociacion.getRutProveedor()),
                 "nombresFondeadores", nombresFondeadoresNegociacion(negociacion),
@@ -113,7 +121,10 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .distinct()
                 .collect(Collectors.joining(", "));
 
-        return nombres.isEmpty() ? SIN_DATO : nombres;
+        if (nombres.isEmpty()) {
+            return SIN_DATO;
+        }
+        return nombres;
     }
 
     private List<String> nombresFondeadoresFactura(FacturaNegociada factura) {
@@ -140,11 +151,18 @@ public class NotificacionServiceImpl implements NotificacionService {
     private Map<String, Object> detalleFactura(FacturaNegociada factura) {
         String nombresFondeadores = String.join(", ", nombresFondeadoresFactura(factura));
 
+        String nombreFondeadorMostrar;
+        if (nombresFondeadores.isEmpty()) {
+            nombreFondeadorMostrar = SIN_DATO;
+        } else {
+            nombreFondeadorMostrar = nombresFondeadores;
+        }
+
         return safeMap(
                 "numeroFactura", factura.getNumeroFactura(),
                 "valorFactura", formatearMonto(factura.getValorFactura()),
                 "nombrePagador", nombreCompania(factura.getRutPagador()),
-                "nombreFondeador", nombresFondeadores.isEmpty() ? SIN_DATO : nombresFondeadores
+                "nombreFondeador", nombreFondeadorMostrar
         );
     }
 
@@ -159,7 +177,10 @@ public class NotificacionServiceImpl implements NotificacionService {
     }
 
     private String formatearFecha(LocalDateTime fecha) {
-        return fecha != null ? fecha.format(FORMATO_FECHA) : SIN_DATO;
+        if (fecha != null) {
+            return fecha.format(FORMATO_FECHA);
+        }
+        return SIN_DATO;
     }
 
     @Override
@@ -170,12 +191,21 @@ public class NotificacionServiceImpl implements NotificacionService {
         boolean esConfirming = endoso.getTipoOperacion() != null
                 && "CONFIRMING".equalsIgnoreCase(endoso.getTipoOperacion().getTipo());
 
-        String tituloAccion = esConfirming ? "Solicitud de Descuento" : "Endoso";
-        String tituloAccionCorta = esConfirming ? "Descuento" : "Endoso";
-        String mensajeIntro = esConfirming
-                ? "Se ha generado una solicitud de descuento que requiere tu aprobación."
-                : "Se ha generado un endoso que requiere tu aprobación.";
-        String textoBoton = esConfirming ? "Aprobar Solicitud de Descuento" : "Aprobar Endoso";
+        String tituloAccion;
+        String tituloAccionCorta;
+        String mensajeIntro;
+        String textoBoton;
+        if (esConfirming) {
+            tituloAccion = "Solicitud de Descuento";
+            tituloAccionCorta = "Descuento";
+            mensajeIntro = "Se ha generado una solicitud de descuento que requiere tu aprobación.";
+            textoBoton = "Aprobar Solicitud de Descuento";
+        } else {
+            tituloAccion = "Endoso";
+            tituloAccionCorta = "Endoso";
+            mensajeIntro = "Se ha generado un endoso que requiere tu aprobación.";
+            textoBoton = "Aprobar Endoso";
+        }
 
         List<String> numerosFactura = Optional.ofNullable(endoso.getNumerosFactura()).orElse(List.of());
         String estadoAmigable = estadoEndosoAmigable(endoso.getEstado());
@@ -243,8 +273,12 @@ public class NotificacionServiceImpl implements NotificacionService {
     }
 
     private String claveDestinatario(Endoso endoso) {
+        String tipoOperacion = SIN_DATO;
+        if (endoso.getTipoOperacion() != null) {
+            tipoOperacion = endoso.getTipoOperacion().getTipo();
+        }
         return String.join("|",
-                endoso.getTipoOperacion() != null ? endoso.getTipoOperacion().getTipo() : SIN_DATO,
+                tipoOperacion,
                 Objects.toString(endoso.getRutProveedor(), SIN_DATO),
                 Objects.toString(endoso.getRutPagador(), SIN_DATO),
                 Objects.toString(endoso.getRutFondeador(), SIN_DATO));
@@ -262,12 +296,21 @@ public class NotificacionServiceImpl implements NotificacionService {
         boolean esConfirming = representante.getTipoOperacion() != null
                 && "CONFIRMING".equalsIgnoreCase(representante.getTipoOperacion().getTipo());
 
-        String tituloAccion = esConfirming ? "Solicitud de Descuento" : "Endoso";
-        String tituloAccionCorta = esConfirming ? "Descuento" : "Endoso";
-        String mensajeIntro = esConfirming
-                ? "Se han generado varias solicitudes de descuento que requieren tu aprobación."
-                : "Se han generado varios endosos que requieren tu aprobación.";
-        String textoBoton = esConfirming ? "Aprobar Solicitudes de Descuento" : "Aprobar Endosos";
+        String tituloAccion;
+        String tituloAccionCorta;
+        String mensajeIntro;
+        String textoBoton;
+        if (esConfirming) {
+            tituloAccion = "Solicitud de Descuento";
+            tituloAccionCorta = "Descuento";
+            mensajeIntro = "Se han generado varias solicitudes de descuento que requieren tu aprobación.";
+            textoBoton = "Aprobar Solicitudes de Descuento";
+        } else {
+            tituloAccion = "Endoso";
+            tituloAccionCorta = "Endoso";
+            mensajeIntro = "Se han generado varios endosos que requieren tu aprobación.";
+            textoBoton = "Aprobar Endosos";
+        }
 
         // Cada Endoso del grupo puede a su vez cubrir varias facturas (endosoGrupal
         // habilitado en el fondeador), así que se aplana antes de listar.
@@ -323,7 +366,10 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .filter(Objects::nonNull)
                 .toList();
 
-        return valores.isEmpty() ? null : valores.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (valores.isEmpty()) {
+            return null;
+        }
+        return valores.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private BigDecimal valorFactura(String numeroFactura) {
@@ -361,8 +407,15 @@ public class NotificacionServiceImpl implements NotificacionService {
         boolean esConfirming = negociacion.getTipoOperacion() != null
                 && "CONFIRMING".equalsIgnoreCase(negociacion.getTipoOperacion().getTipo());
 
-        String tituloAccion = esConfirming ? "Solicitud de Descuento" : "Endoso";
-        String tituloAccionCorta = esConfirming ? "Descuento" : "Endoso";
+        String tituloAccion;
+        String tituloAccionCorta;
+        if (esConfirming) {
+            tituloAccion = "Solicitud de Descuento";
+            tituloAccionCorta = "Descuento";
+        } else {
+            tituloAccion = "Endoso";
+            tituloAccionCorta = "Endoso";
+        }
 
         List<AprobacionFacturaRequest> facturasRequest = Optional.ofNullable(aprobacion.getFacturas())
                 .orElseGet(Collections::emptyList);
@@ -370,26 +423,47 @@ public class NotificacionServiceImpl implements NotificacionService {
         boolean todasAprobadas = !facturasRequest.isEmpty()
                 && facturasRequest.stream().allMatch(AprobacionFacturaRequest::isAprobado);
 
-        String tituloResultado = esConfirming
-                ? (todasAprobadas ? "Solicitud de Descuento Aprobada" : "Solicitud de Descuento Rechazada")
-                : (todasAprobadas ? "Endoso Aprobado" : "Endoso Rechazado");
+        String tituloResultado;
+        if (esConfirming) {
+            if (todasAprobadas) {
+                tituloResultado = "Solicitud de Descuento Aprobada";
+            } else {
+                tituloResultado = "Solicitud de Descuento Rechazada";
+            }
+        } else {
+            if (todasAprobadas) {
+                tituloResultado = "Endoso Aprobado";
+            } else {
+                tituloResultado = "Endoso Rechazado";
+            }
+        }
 
         List<Map<String, Object>> facturas = facturasRequest.stream()
-                .map(f -> safeMap(
-                        "numeroFactura", f.getNumeroFactura(),
-                        "resultado", f.isAprobado() ? "Aprobada" : "Rechazada"
-                ))
+                .map(f -> {
+                    String resultado;
+                    if (f.isAprobado()) {
+                        resultado = "Aprobada";
+                    } else {
+                        resultado = "Rechazada";
+                    }
+                    return safeMap("numeroFactura", f.getNumeroFactura(), "resultado", resultado);
+                })
                 .toList();
+
+        String tipoOperacion = null;
+        String claseOperacion = null;
+        if (negociacion.getTipoOperacion() != null) {
+            tipoOperacion = negociacion.getTipoOperacion().getTipo();
+            claseOperacion = negociacion.getTipoOperacion().getClase();
+        }
 
         Map<String, Object> data = safeMap(
                 "id", negociacion.getId(),
                 "tituloAccion", tituloAccion,
                 "tituloAccionCorta", tituloAccionCorta,
                 "tituloResultado", tituloResultado,
-                "tipoOperacion", negociacion.getTipoOperacion() != null
-                        ? negociacion.getTipoOperacion().getTipo() : null,
-                "claseOperacion", negociacion.getTipoOperacion() != null
-                        ? negociacion.getTipoOperacion().getClase() : null,
+                "tipoOperacion", tipoOperacion,
+                "claseOperacion", claseOperacion,
                 "nombreActor", nombreCompania(aprobacion.getRutEmpresa()),
                 "facturas", facturas,
                 "anio", String.valueOf(LocalDateTime.now().getYear())
@@ -412,16 +486,23 @@ public class NotificacionServiceImpl implements NotificacionService {
         List<DestinatarioEmail> destinatarios =
                 destinatarioResolver.resolverParaLiquidacionFallida(negociacion);
 
+        String tipoOperacion = null;
+        if (negociacion.getTipoOperacion() != null) {
+            tipoOperacion = negociacion.getTipoOperacion().getTipo();
+        }
+        int cantidadFacturas = 0;
+        if (negociacion.getFacturas() != null) {
+            cantidadFacturas = negociacion.getFacturas().size();
+        }
+
         Map<String, Object> data = safeMap(
                 "id", negociacion.getId(),
-                "tipoOperacion", negociacion.getTipoOperacion() != null
-                        ? negociacion.getTipoOperacion().getTipo() : null,
+                "tipoOperacion", tipoOperacion,
                 "rutPagador", negociacion.getRutPagador(),
                 "rutProveedor", negociacion.getRutProveedor(),
                 "rutFondeadores", negociacion.getRutFondeadores(),
                 "totalNegociado", negociacion.getTotalNegociado(),
-                "facturas", negociacion.getFacturas() != null
-                        ? negociacion.getFacturas().size() : 0
+                "facturas", cantidadFacturas
         );
 
         NotificacionEmailEvent event = NotificacionEmailEvent.builder()

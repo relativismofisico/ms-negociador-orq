@@ -1,5 +1,7 @@
 package com.negociadororq.application.dto;
 
+import java.util.List;
+
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Operacion;
@@ -9,8 +11,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
+/**
+ * Solicitud para crear una negociación de Factoring o Confirming.
+ */
 @Schema(description = "Solicitud para crear una negociación de Factoring o Confirming")
 @Data
 @Builder

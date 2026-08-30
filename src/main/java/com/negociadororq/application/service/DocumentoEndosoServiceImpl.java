@@ -1,5 +1,8 @@
 package com.negociadororq.application.service;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 import com.negociadororq.application.port.output.PdfGeneradorOutputPort;
 import com.negociadororq.application.port.output.PersonOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
@@ -13,9 +16,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-import java.util.List;
-
+/**
+ * Implementación de {@link DocumentoEndosoService}.
+ */
 @Log
 @Service
 @RequiredArgsConstructor
@@ -59,9 +62,13 @@ public class DocumentoEndosoServiceImpl implements DocumentoEndosoService {
 
         byte[] pdf = pdfGeneradorPort.generarDesdePdfHtml(html);
 
-        String nombreArchivo = facturas.size() == 1
-                ? "ENDOSO_" + primera.getNumeroFactura() + ".pdf"
-                : "ENDOSO_" + endoso.getNegociacionId() + "_" + primeraNegociada.getFondeadores().get(0).getRutFondeador() + ".pdf";
+        String nombreArchivo;
+        if (facturas.size() == 1) {
+            nombreArchivo = "ENDOSO_" + primera.getNumeroFactura() + ".pdf";
+        } else {
+            nombreArchivo = "ENDOSO_" + endoso.getNegociacionId() + "_"
+                    + primeraNegociada.getFondeadores().get(0).getRutFondeador() + ".pdf";
+        }
 
         endoso.setDocumentoHtml(html);
         endoso.setDocumentoPdf(pdf);

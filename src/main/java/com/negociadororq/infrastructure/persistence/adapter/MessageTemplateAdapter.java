@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.MessageTemplateOutputPort;
 import com.negociadororq.domain.model.MessageTemplate;
 import com.negociadororq.infrastructure.persistence.entity.MessageTemplateEntity;
@@ -7,8 +9,9 @@ import com.negociadororq.infrastructure.persistence.repository.MessageTemplateRe
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
-
+/**
+ * Implementación de {@link MessageTemplateOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class MessageTemplateAdapter implements MessageTemplateOutputPort {

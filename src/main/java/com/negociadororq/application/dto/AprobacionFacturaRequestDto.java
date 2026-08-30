@@ -5,6 +5,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Decisión de aprobación individual para una factura dentro de la solicitud OTP.
+ */
 @Schema(description = "Decisión de aprobación individual para una factura dentro de la solicitud OTP")
 @Data
 @NoArgsConstructor

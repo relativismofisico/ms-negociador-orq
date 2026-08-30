@@ -1,10 +1,11 @@
 package com.negociadororq.infrastructure.persistence.entity;
 
-import com.negociadororq.domain.model.AprobacionActorDto;
-import com.negociadororq.domain.model.Operacion;
-import com.negociadororq.domain.enums.EstadoEndoso;
 import java.time.LocalDateTime;
 import java.util.List;
+
+import com.negociadororq.domain.enums.EstadoEndoso;
+import com.negociadororq.domain.model.AprobacionActorDto;
+import com.negociadororq.domain.model.Operacion;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,6 +14,11 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+/**
+ * Persistencia MongoDB de un {@link com.negociadororq.domain.model.Endoso}. El índice
+ * único evita registrar dos veces el mismo endoso para la misma combinación de
+ * negociación y facturas.
+ */
 @Data
 @Builder
 @NoArgsConstructor

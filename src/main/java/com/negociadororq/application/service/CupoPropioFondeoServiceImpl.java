@@ -1,5 +1,9 @@
 package com.negociadororq.application.service;
 
+import java.math.BigDecimal;
+import java.util.Optional;
+import java.util.Set;
+
 import com.negociadororq.application.dto.CupoPropioFondeoDto;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
@@ -8,12 +12,12 @@ import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
 import com.negociadororq.domain.model.EmpresaQuota;
 import com.negociadororq.domain.model.FondeadorQuota;
-import java.math.BigDecimal;
-import java.util.Optional;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * Implementación de {@link CupoPropioFondeoService}.
+ */
 @Service
 @RequiredArgsConstructor
 public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
@@ -41,6 +45,7 @@ public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
     }
 
     @Override
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public CupoPropioFondeoDto actualizarCupoPropio(Long companyId, BigDecimal nuevoCupo, BigDecimal nuevaTasa,
             String tipoDescuento, String tipoTasa, BigDecimal tarifaPlena,
             String vigenciaDescuento, Integer diasVigencia, BigDecimal porcentajeReserva) {

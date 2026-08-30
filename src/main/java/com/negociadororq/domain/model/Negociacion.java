@@ -4,11 +4,16 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Agregado raíz de una negociación de Factoring/Confirming: las facturas incluidas, sus
+ * fondeadores/pagadores, el total negociado y las aprobaciones que lleva acumuladas.
+ */
 @Data
 @Builder
 @NoArgsConstructor

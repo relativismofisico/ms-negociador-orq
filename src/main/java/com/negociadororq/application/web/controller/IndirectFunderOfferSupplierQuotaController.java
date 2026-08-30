@@ -19,6 +19,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Consulta de solo lectura del cupo disponible de un proveedor contra una oferta de cupo
+ * compartido fondeador→pagador, y recarga de ese cupo disparada por el fondeador.
+ */
 @Tag(name = "Cupo de factoring indirecto vía pagador",
         description = "Consulta de solo lectura del cupo disponible de un proveedor contra una oferta de "
                 + "cupo compartido fondeador→pagador, y recarga de ese cupo disparada por el fondeador")

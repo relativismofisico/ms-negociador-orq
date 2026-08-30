@@ -100,11 +100,11 @@ task regressionTest(type: Test) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// task: prodTest — Solo pruebas @production-safe (lectura, sin efectos).
+// task: productionTest — Solo pruebas @production-safe (lectura, sin efectos).
 // Fuerza karate.env=prod. Requiere BASE_URL y tokens pre-obtenidos como env vars.
-// Uso: AMBIENTE_PIPE=prod BASE_URL=https://api.prod.com TEST_TOKEN_ADMIN=... ./gradlew prodTest
+// Uso: AMBIENTE_PIPE=prod BASE_URL=https://api.prod.com TEST_TOKEN_ADMIN=... ./gradlew productionTest
 // ─────────────────────────────────────────────────────────────────────────────
-task prodTest(type: Test) {
+task productionTest(type: Test) {
     description = 'Runs production-safe Karate tests (@production-safe) — solo lectura'
     group = 'verification'
 
@@ -113,7 +113,7 @@ task prodTest(type: Test) {
 
     useJUnitPlatform()
     filter {
-        includeTestsMatching '*.runner.ProdRunner'
+        includeTestsMatching '*.runner.ProductionRunner'
     }
 
     systemProperty 'karate.env', 'prod'
@@ -121,8 +121,8 @@ task prodTest(type: Test) {
     doFirst {
         if (!System.getenv('BASE_URL')) {
             throw new GradleException(
-                'prodTest requiere BASE_URL apuntando al ambiente de producción.\n' +
-                'Ejemplo: BASE_URL=https://api.prod.com ./gradlew prodTest'
+                'productionTest requiere BASE_URL apuntando al ambiente de producción.\n' +
+                'Ejemplo: BASE_URL=https://api.prod.com ./gradlew productionTest'
             )
         }
     }
@@ -183,3 +183,4 @@ spotbugsMain {
         html.required = true
     }
 }
+check.dependsOn architectureTest

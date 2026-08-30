@@ -1,12 +1,17 @@
 package com.negociadororq.domain.model;
 
 import java.math.BigDecimal;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Cupo y condiciones (tasa, descuento, vigencia) que un fondeador asigna a un pagador
+ * o a un proveedor puntual, junto con cuánto de ese cupo lleva consumido.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
