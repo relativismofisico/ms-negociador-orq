@@ -1,16 +1,16 @@
 package com.negociadororq.infrastructure.security;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import com.negociadororq.application.service.LoginLockoutService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Servicio de detalles de usuario compuesto que intenta cargar credenciales en este orden:
@@ -26,9 +26,10 @@ public class CompositeUserDetailsService implements UserDetailsService {
 
     private final SecurityProperties securityProperties;
     private final DatabaseUserDetailsService databaseUserDetailsService;
+    private final LoginLockoutService loginLockoutService;
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(String username) {
         // Estrategia 1: Intentar cargar credenciales de servicio
         SecurityProperties.ServiceCredential serviceCredential = securityProperties.getServiceCredentials()
             .get(username);
@@ -45,7 +46,7 @@ public class CompositeUserDetailsService implements UserDetailsService {
                     .password(serviceCredential.getPassword())
                     .authorities(authorities)
                     .accountExpired(false)
-                    .accountLocked(false)
+                    .accountLocked(loginLockoutService.isLocked(username))
                     .credentialsExpired(false)
                     .disabled(false)
                     .build();
