@@ -1,13 +1,18 @@
 package com.negociadororq.domain.model;
 
-import com.negociadororq.domain.enums.EstadoEndoso;
 import java.time.LocalDateTime;
 import java.util.List;
+
+import com.negociadororq.domain.enums.EstadoEndoso;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Solicitud de endoso de descuento sobre una o varias facturas del mismo fondeador,
+ * con su documento firmado y el historial de aprobaciones de cada actor involucrado.
+ */
 @Data
 @Builder
 @NoArgsConstructor

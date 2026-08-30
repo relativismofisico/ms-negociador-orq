@@ -1,14 +1,18 @@
 package com.negociadororq.application.dto;
 
+import java.math.BigDecimal;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
-import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Solicitud para definir el cupo propio de autofondeo de una empresa para Confirming.
+ */
 @Schema(description = "Solicitud para definir el cupo propio de autofondeo de una empresa para Confirming")
 @Data
 @Builder

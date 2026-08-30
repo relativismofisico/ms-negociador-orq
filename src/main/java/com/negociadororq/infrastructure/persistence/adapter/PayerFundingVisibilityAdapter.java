@@ -5,6 +5,9 @@ import com.negociadororq.infrastructure.persistence.repository.PayerFundingVisib
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * Implementación de {@link PayerFundingVisibilityOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class PayerFundingVisibilityAdapter implements PayerFundingVisibilityOutputPort {

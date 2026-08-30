@@ -1,11 +1,15 @@
 package com.negociadororq.application.dto;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.util.List;
 
+/**
+ * Solicitud para iniciar el flujo de aprobación OTP sobre una negociación.
+ */
 @Schema(description = "Solicitud para iniciar el flujo de aprobación OTP sobre una negociación")
 @Data
 @NoArgsConstructor

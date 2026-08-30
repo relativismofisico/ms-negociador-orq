@@ -3,10 +3,15 @@ package com.negociadororq.domain.model;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Datos completos de una factura tal como se cargó al ecosistema, incluidos los
+ * actores (pagador, proveedor) y los valores necesarios para negociarla.
+ */
 @Data
 @RequiredArgsConstructor
 @AllArgsConstructor

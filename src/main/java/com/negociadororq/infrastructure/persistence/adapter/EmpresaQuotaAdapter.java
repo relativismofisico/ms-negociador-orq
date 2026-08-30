@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
 import com.negociadororq.domain.model.EmpresaQuota;
 import com.negociadororq.infrastructure.persistence.entity.EmpresaQuotaEntity;
@@ -7,8 +9,9 @@ import com.negociadororq.infrastructure.persistence.repository.EmpresaQuotaRepos
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
-
+/**
+ * Implementación de {@link EmpresaQuotaOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class EmpresaQuotaAdapter implements EmpresaQuotaOutputPort {

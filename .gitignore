@@ -55,3 +55,6 @@ external-test/jmeter/jmeter.log
 external-test/jmeter/*.jtl
 
 
+
+# Log local de bootRun, no debe versionarse
+bootrun.log

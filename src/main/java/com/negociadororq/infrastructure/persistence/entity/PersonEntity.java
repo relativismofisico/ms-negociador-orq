@@ -12,6 +12,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Persistencia JPA de los datos personales de un {@link UserEntity}.
+ */
 @Entity
 @Table(name = "person")
 @Getter

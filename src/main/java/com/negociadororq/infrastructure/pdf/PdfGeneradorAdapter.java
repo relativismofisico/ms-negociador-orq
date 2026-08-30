@@ -1,12 +1,15 @@
 package com.negociadororq.infrastructure.pdf;
 
+import java.io.ByteArrayOutputStream;
+
 import com.negociadororq.application.port.output.PdfGeneradorOutputPort;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.io.ByteArrayOutputStream;
-
+/**
+ * Implementación de {@link PdfGeneradorOutputPort}, basada en openhtmltopdf.
+ */
 @Slf4j
 @Service
 public class PdfGeneradorAdapter implements PdfGeneradorOutputPort {

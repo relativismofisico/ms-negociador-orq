@@ -5,6 +5,9 @@ import com.negociadororq.infrastructure.persistence.repository.CompanyOperationR
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * Implementación de {@link CompanyOperationOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class CompanyOperationAdapter implements CompanyOperationOutputPort {

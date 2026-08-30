@@ -1,5 +1,12 @@
 package com.negociadororq.application.service;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
@@ -10,13 +17,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-
+/**
+ * Job de negocio que marca como VENCIDA a las facturas negociadas próximas a
+ * su fecha de vencimiento, revirtiendo el cupo consumido por negociaciones
+ * que quedaron abandonadas sin completarse.
+ */
 @Log
 @Service
 @RequiredArgsConstructor
@@ -25,6 +30,7 @@ public class FacturaVencimientoService {
     private static final String SIN_NEGOCIAR = "SIN_NEGOCIAR";
     private static final String FACTORING = "FACTORING";
     private static final String CONFIRMING = "CONFIRMING";
+    private static final long DIAS_LIMITE_VENCIMIENTO = 10;
 
     private final FacturaOutputPort facturaPort;
     private final NegociacionOutputPort negociacionPort;
@@ -63,7 +69,7 @@ public class FacturaVencimientoService {
                         );
 
                 // 🔥 REGLA NEGOCIO
-                if (dias <= 10) {
+                if (dias <= DIAS_LIMITE_VENCIMIENTO) {
 
                     // findFacturasPendientesVencimiento() trae cualquier estado
                     // no terminal (NEGOCIADA, EN_REVISION, EN_APROBACION, APROBADA,
@@ -117,9 +123,10 @@ public class FacturaVencimientoService {
         companyPort.findByNit(negociacion.getRutEmpresa()).map(Company::getIdeCompany)
                 .ifPresent(companyId -> cupoReversionService.revertirCupoEmpresa(companyId, valor));
 
-        String tipoOperacion = negociacion.getTipoOperacion() != null
-                ? negociacion.getTipoOperacion().getTipo()
-                : null;
+        String tipoOperacion = null;
+        if (negociacion.getTipoOperacion() != null) {
+            tipoOperacion = negociacion.getTipoOperacion().getTipo();
+        }
         List<String> rutFondeadores = Optional.ofNullable(negociacion.getRutFondeadores())
                 .orElse(Collections.emptyList());
 

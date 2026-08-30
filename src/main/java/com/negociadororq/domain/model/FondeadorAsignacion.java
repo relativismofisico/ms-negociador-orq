@@ -5,6 +5,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Referencia mínima a un fondeador asociado a una factura negociada (RUT y nombre).
+ */
 @Data
 @Builder
 @NoArgsConstructor

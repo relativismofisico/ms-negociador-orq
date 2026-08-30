@@ -1,8 +1,13 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.domain.model.Factura;
 import java.util.List;
 
+import com.negociadororq.domain.model.Factura;
+
+/**
+ * Consultas y actualizaciones sobre facturas usadas por el flujo de
+ * negociación, endoso y firma.
+ */
 public interface FacturaService {
 
     /**

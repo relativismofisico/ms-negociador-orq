@@ -1,15 +1,18 @@
 package com.negociadororq.infrastructure.template;
 
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.util.Map;
+
 import com.github.mustachejava.DefaultMustacheFactory;
 import com.github.mustachejava.Mustache;
 import com.github.mustachejava.MustacheFactory;
 import com.negociadororq.application.port.output.TemplateEngineOutputPort;
 import org.springframework.stereotype.Service;
 
-import java.io.StringReader;
-import java.io.StringWriter;
-import java.util.Map;
-
+/**
+ * Implementación de {@link TemplateEngineOutputPort} basada en Mustache.
+ */
 @Service
 public class MustacheTemplateEngineAdapter implements TemplateEngineOutputPort {
 

@@ -1,5 +1,8 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.negociadororq.application.port.output.OutboxOutputPort;
@@ -8,9 +11,9 @@ import com.negociadororq.infrastructure.persistence.repository.OutboxEventReposi
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
-
+/**
+ * Implementación de {@link OutboxOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class OutboxAdapter implements OutboxOutputPort {

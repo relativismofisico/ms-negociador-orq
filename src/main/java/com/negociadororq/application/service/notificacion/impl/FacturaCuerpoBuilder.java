@@ -4,6 +4,9 @@ import com.negociadororq.application.service.notificacion.CuerpoNotificacionBuil
 import com.negociadororq.domain.model.Factura;
 import org.springframework.stereotype.Component;
 
+/**
+ * Cuerpo de notificación para el registro de una nueva factura.
+ */
 @Component
 public class FacturaCuerpoBuilder implements CuerpoNotificacionBuilder<Factura> {
 
@@ -14,10 +17,10 @@ public class FacturaCuerpoBuilder implements CuerpoNotificacionBuilder<Factura> 
 
     @Override
     public String construir(Factura factura) {
-        return "Nueva factura registrada.\n\n" +
-                "Número: " + factura.getNumeroFactura() + "\n" +
-                "Proveedor: " + factura.getRutProveedor() + "\n" +
-                "Valor: " + factura.getValorFactura() + "\n";
+        return "Nueva factura registrada.\n\n"
+                + "Número: " + factura.getNumeroFactura() + "\n"
+                + "Proveedor: " + factura.getRutProveedor() + "\n"
+                + "Valor: " + factura.getValorFactura() + "\n";
     }
 }
 

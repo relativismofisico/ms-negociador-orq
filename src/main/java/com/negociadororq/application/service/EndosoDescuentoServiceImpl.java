@@ -1,13 +1,31 @@
 package com.negociadororq.application.service;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import com.negociadororq.application.dto.EndosoRequestDto;
 import com.negociadororq.application.dto.EndosoResponseDto;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.CompanyOutputPort;
+import com.negociadororq.application.port.output.EndosoOutputPort;
+import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
+import com.negociadororq.application.port.output.NegociacionOutputPort;
+import com.negociadororq.application.port.output.NegociacionPatchOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.application.util.VigenciaDescuentoValidator;
+import com.negociadororq.domain.enums.EstadoEndoso;
+import com.negociadororq.domain.enums.EstadoFirma;
+import com.negociadororq.domain.enums.EstadoNegociacion;
 import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.Factura;
@@ -16,31 +34,15 @@ import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.model.User;
-import com.negociadororq.domain.enums.EstadoEndoso;
-import com.negociadororq.domain.enums.EstadoFirma;
-import com.negociadororq.domain.enums.EstadoNegociacion;
-import com.negociadororq.application.port.output.EndosoOutputPort;
-import com.negociadororq.application.port.output.FacturaPatchOutputPort;
-import com.negociadororq.application.port.output.FacturaOutputPort;
-import com.negociadororq.application.port.output.NegociacionPatchOutputPort;
-import com.negociadororq.application.port.output.NegociacionOutputPort;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
-
+/**
+ * Implementación de {@link EndosoDescuentoService}.
+ */
 @Service
 @RequiredArgsConstructor
 @Log
@@ -82,8 +84,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
             FacturaNegociada facturaNegociada = negociacion.getFacturas().stream()
                     .filter(facturaNegociadaPivote ->
-                            facturaNegociadaPivote.getNumeroFactura().equals(numeroFactura) &&
-                                    esFacturaValidaParaOperacion(
+                            facturaNegociadaPivote.getNumeroFactura().equals(numeroFactura)
+                                    && esFacturaValidaParaOperacion(
                                             facturaNegociadaPivote,
                                             request.getRutActor(),
                                             tipoOperacion
@@ -93,9 +95,12 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                     .orElse(null);
 
             if (facturaNegociada == null) {
-                String actor = "FACTORING".equalsIgnoreCase(tipoOperacion)
-                        ? "PROVEEDOR"
-                        : "PAGADOR";
+                String actor;
+                if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
+                    actor = "PROVEEDOR";
+                } else {
+                    actor = "PAGADOR";
+                }
 
                 facturasRechazadas.add(numeroFactura + " (no pertenece al " + actor + ")");
                 continue;
@@ -158,9 +163,12 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
             boolean permiteAgrupar = permiteEndosoGrupal(rutFondeador, negociacion, tipoOperacion);
 
-            List<List<FacturaValidada>> lotes = permiteAgrupar
-                    ? List.of(facturasDelFondeador)
-                    : facturasDelFondeador.stream().map(List::of).toList();
+            List<List<FacturaValidada>> lotes;
+            if (permiteAgrupar) {
+                lotes = List.of(facturasDelFondeador);
+            } else {
+                lotes = facturasDelFondeador.stream().map(List::of).toList();
+            }
 
             for (List<FacturaValidada> lote : lotes) {
                 Endoso endoso = crearEndoso(request, negociacion, rutFondeador, lote);
@@ -185,10 +193,14 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
         // de mandar un correo por factura.
         notificacionService.notificarEndosos(endososCreados);
 
-        String estadoGlobal =
-                facturasCreadas.isEmpty() ? "RECHAZADO"
-                        : facturasRechazadas.isEmpty() ? "PENDIENTE"
-                        : "PARCIAL";
+        String estadoGlobal;
+        if (facturasCreadas.isEmpty()) {
+            estadoGlobal = "RECHAZADO";
+        } else if (facturasRechazadas.isEmpty()) {
+            estadoGlobal = "PENDIENTE";
+        } else {
+            estadoGlobal = "PARCIAL";
+        }
 
         return EndosoResponseDto.builder()
                 .idNegociacion(request.getIdNegociacion())
@@ -220,9 +232,12 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
         // Confirming quien solicita es el Pagador; el firmante real (Proveedor) se
         // resuelve más adelante, cuando aprueba, y el documento se regenera —
         // ver AprobacionEndosoDescuentoServiceImpl.
-        String rutOperadorFirmante = "FACTORING".equalsIgnoreCase(negociacion.getTipoOperacion().getTipo())
-                ? request.getRutOperador()
-                : null;
+        String rutOperadorFirmante;
+        if ("FACTORING".equalsIgnoreCase(negociacion.getTipoOperacion().getTipo())) {
+            rutOperadorFirmante = request.getRutOperador();
+        } else {
+            rutOperadorFirmante = null;
+        }
 
         documentoEndosoService.generarDocumentoFormal(
                 endoso, negociacion,
@@ -243,15 +258,19 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
         if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
             Long supplierId = companyPort.findByNit(negociacion.getRutProveedor())
                     .map(Company::getIdeCompany).orElse(null);
-            quota = supplierId == null
-                    ? Optional.empty()
-                    : fondeadorQuotaPort.findByFunderIdAndSupplierId(funderId, supplierId);
+            if (supplierId == null) {
+                quota = Optional.empty();
+            } else {
+                quota = fondeadorQuotaPort.findByFunderIdAndSupplierId(funderId, supplierId);
+            }
         } else {
             Long payerId = companyPort.findByNit(negociacion.getRutPagador())
                     .map(Company::getIdeCompany).orElse(null);
-            quota = payerId == null
-                    ? Optional.empty()
-                    : fondeadorQuotaPort.findByFunderIdAndPayerId(funderId, payerId);
+            if (payerId == null) {
+                quota = Optional.empty();
+            } else {
+                quota = fondeadorQuotaPort.findByFunderIdAndPayerId(funderId, payerId);
+            }
         }
 
         return quota.map(FondeadorQuota::getEndosoGrupal).map(Boolean.TRUE::equals).orElse(false);
@@ -263,11 +282,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
             return factura.getRutProveedor().equals(rutSolicitante);
         }
 
-        if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
-            return factura.getRutPagador().equals(rutSolicitante);
-        }
-
-        return false;
+        return "CONFIRMING".equalsIgnoreCase(tipoOperacion) && factura.getRutPagador().equals(rutSolicitante);
     }
 
     // El chequeo real de vigenciaDescuento ocurre acá (a diferencia de la
@@ -297,15 +312,17 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
         if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
             Long supplierId = companyPort.findByNit(factura.getRutProveedor()).map(Company::getIdeCompany).orElse(null);
-            return supplierId == null
-                    ? Optional.empty()
-                    : fondeadorQuotaPort.findByFunderIdAndSupplierId(funderId, supplierId);
+            if (supplierId == null) {
+                return Optional.empty();
+            }
+            return fondeadorQuotaPort.findByFunderIdAndSupplierId(funderId, supplierId);
         }
 
         Long payerId = companyPort.findByNit(factura.getRutPagador()).map(Company::getIdeCompany).orElse(null);
-        return payerId == null
-                ? Optional.empty()
-                : fondeadorQuotaPort.findByFunderIdAndPayerId(funderId, payerId);
+        if (payerId == null) {
+            return Optional.empty();
+        }
+        return fondeadorQuotaPort.findByFunderIdAndPayerId(funderId, payerId);
     }
 
     // Reversión de cupos para facturas rechazadas al endosar (vigencia vencida,

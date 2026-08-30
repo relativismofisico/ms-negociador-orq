@@ -76,3 +76,4 @@ jacocoTestCoverageVerification {
 jacocoTestReport {
     dependsOn test
 }
+check.dependsOn jacocoTestCoverageVerification

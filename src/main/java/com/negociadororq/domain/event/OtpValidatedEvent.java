@@ -5,6 +5,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Evento publicado a Kafka con el resultado final de la validación del OTP, ya listo
+ * para que el listener correspondiente registre la aprobación u obligue a reintentar.
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

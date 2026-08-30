@@ -1,8 +1,8 @@
 package com.negociadororq.application.port.output;
 
-import com.negociadororq.domain.model.IndirectFunderOffer;
-
 import java.util.Optional;
+
+import com.negociadororq.domain.model.IndirectFunderOffer;
 
 /**
  * Puerto de solo lectura para ofertas de cupo compartido fondeador→pagador

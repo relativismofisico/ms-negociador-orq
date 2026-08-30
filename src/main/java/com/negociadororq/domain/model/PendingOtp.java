@@ -5,6 +5,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Solicitud de aprobación de negociación que quedó pendiente de que su OTP sea
+ * validado, con el request original guardado para aplicarlo una vez confirmado.
+ */
 @Data
 @Builder
 @NoArgsConstructor

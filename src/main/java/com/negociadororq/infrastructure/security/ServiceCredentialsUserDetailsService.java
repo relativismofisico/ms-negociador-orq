@@ -1,5 +1,8 @@
 package com.negociadororq.infrastructure.security;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
@@ -7,16 +10,17 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
+/**
+ * Resuelve las credenciales Basic Auth de servicio a servicio configuradas en
+ * {@link SecurityProperties}, para autenticar llamadas entre microservicios.
+ */
 @RequiredArgsConstructor
 public class ServiceCredentialsUserDetailsService implements UserDetailsService {
 
     private final SecurityProperties securityProperties;
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(String username) {
         SecurityProperties.ServiceCredential credential = securityProperties.getServiceCredentials()
             .get(username);
 
@@ -33,7 +37,7 @@ public class ServiceCredentialsUserDetailsService implements UserDetailsService 
         return User.builder()
             .username(username)
             .password(credential.getPassword())
-            .authorities((authorities))
+            .authorities(authorities)
             .accountExpired(false)
             .accountLocked(false)
             .credentialsExpired(false)

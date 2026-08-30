@@ -1,5 +1,9 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.PendingOtpOutputPort;
 import com.negociadororq.domain.model.PendingOtp;
 import com.negociadororq.infrastructure.persistence.entity.PendingOtpDocument;
@@ -8,10 +12,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
-
+/**
+ * Implementación de {@link PendingOtpOutputPort}.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

@@ -12,6 +12,16 @@ spring:
       database: ${MONGO_DB:DB_Facturas_QA}
   kafka:
     bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+  # ---- Esquema de BD: solo validar, nunca alterar (Fase 13 - Flyway gobierna el esquema) ----
+  # Este perfil no sobreescribía ddl-auto y heredaba "update" del
+  # application.yml base sin que nadie lo hubiera decidido — corregido acá.
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  # Flyway deshabilitado en QA hasta confirmar con acceso real de
+  # infraestructura el estado actual de este esquema.
+  flyway:
+    enabled: false
 
 security:
   jwt:

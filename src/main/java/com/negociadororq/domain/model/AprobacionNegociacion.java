@@ -1,11 +1,16 @@
 package com.negociadororq.domain.model;
 
 import java.time.LocalDateTime;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Decisión de aprobación de una empresa (identificada por RUT y rol) sobre una
+ * negociación, persistida para llevar el historial de quién aprobó/rechazó y cuándo.
+ */
 @Data
 @Builder
 @NoArgsConstructor

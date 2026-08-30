@@ -2,7 +2,10 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import org.junit.jupiter.api.Test;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
@@ -36,7 +39,7 @@ public class ArchitectureTest {
         ArchRule rule = classes()
                 .that().resideInAPackage("..application..")
                 .should().onlyDependOnClassesThat()
-                .resideInAnyPackage("..application..", "..domain..", "java..", "javax..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..");
+                .resideInAnyPackage("..application..", "..domain..", "java..", "javax..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..", "com.factoring.commons..");
 
         rule.check(classes);
     }
@@ -57,7 +60,7 @@ public class ArchitectureTest {
         ArchRule rule = classes()
                 .that().resideInAPackage("..web..")
                 .should().onlyDependOnClassesThat()
-                .resideInAnyPackage("..web..", "..application..", "..domain..", "java..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..");
+                .resideInAnyPackage("..web..", "..application..", "..domain..", "java..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..", "com.factoring.commons..");
 
         rule.check(classes);
     }
@@ -96,6 +99,28 @@ public class ArchitectureTest {
                 .that().resideInAPackage("..domain..")
                 .should().dependOnClassesThat()
                 .haveNameMatching(".*(Spring|Autowired|Service|Repository|Controller).*")
+                .check(classes);
+    }
+
+    @Test
+    void impl_debe_implementar_interfaz() {
+        classes().that().haveSimpleNameEndingWith("Impl")
+                .should(new ArchCondition<JavaClass>("implementar al menos una interfaz") {
+                    @Override
+                    public void check(JavaClass javaClass, ConditionEvents events) {
+                        if (javaClass.getInterfaces().isEmpty()) {
+                            events.add(SimpleConditionEvent.violated(
+                                    javaClass, javaClass.getName() + " no implementa ninguna interfaz"));
+                        }
+                    }
+                })
+                .check(classes);
+    }
+
+    @Test
+    void controllers_no_dependen_de_impls() {
+        noClasses().that().resideInAPackage("..web.controller..")
+                .should().dependOnClassesThat().haveSimpleNameEndingWith("Impl")
                 .check(classes);
     }
 }

@@ -1,7 +1,8 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.dto.CupoPropioFondeoDto;
 import java.math.BigDecimal;
+
+import com.negociadororq.application.dto.CupoPropioFondeoDto;
 
 /**
  * Cupo de autofondeo que una empresa aprobada para Confirming define para sí misma
@@ -10,6 +11,10 @@ import java.math.BigDecimal;
  */
 public interface CupoPropioFondeoService {
 
+    /**
+     * @param companyId id de la empresa
+     * @return la configuración de autofondeo vigente de la empresa
+     */
     CupoPropioFondeoDto obtenerCupoPropio(Long companyId);
 
     /**
@@ -24,10 +29,19 @@ public interface CupoPropioFondeoService {
      *         pagar por la factura a su vencimiento, o cuando corresponde aplicar un descuento comercial sobre
      *         el valor de la factura. Obligatorio.
      */
+    // 9 parámetros: cada uno es un campo independiente de la configuración de autofondeo
+    // que se actualiza en conjunto (ver reglas de obligatoriedad condicional arriba); partirlo
+    // en varias llamadas rompería la atomicidad de la validación conjunta.
+    @SuppressWarnings("checkstyle:ParameterNumber")
     CupoPropioFondeoDto actualizarCupoPropio(Long companyId, BigDecimal nuevoCupo, BigDecimal nuevaTasa,
             String tipoDescuento, String tipoTasa, BigDecimal tarifaPlena,
             String vigenciaDescuento, Integer diasVigencia, BigDecimal porcentajeReserva);
 
+    /**
+     * @param companyId    id de la empresa
+     * @param endosoGrupal si habilita agrupar varias facturas del mismo fondeador en un solo endoso
+     * @return la configuración de autofondeo actualizada
+     */
     CupoPropioFondeoDto actualizarEndosoGrupal(Long companyId, boolean endosoGrupal);
 
     /**

@@ -4,6 +4,10 @@ import com.negociadororq.domain.enums.EstadoFactura;
 import com.negociadororq.domain.enums.EstadoNegociacion;
 import org.springframework.stereotype.Component;
 
+/**
+ * Traduce entre el vocabulario de estado de {@link EstadoNegociacion} (interno a la
+ * agregación Negociacion) y el de {@link EstadoFactura} (expuesto en el documento Factura).
+ */
 @Component
 public class EstadoFacturaMapper {
 

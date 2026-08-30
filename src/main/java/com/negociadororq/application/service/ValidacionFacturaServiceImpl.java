@@ -1,17 +1,20 @@
 package com.negociadororq.application.service;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
-import com.negociadororq.domain.model.Factura;
 import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.domain.model.Factura;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-
+/**
+ * Implementación de {@link ValidacionFacturaService}.
+ */
 @Log
 @Service
 @RequiredArgsConstructor
@@ -25,7 +28,12 @@ public class ValidacionFacturaServiceImpl implements ValidacionFacturaService {
     @Override
     public ValidacionFacturaResponseDto validarFacturaVencida(String numeroFactura, LocalDate fechaProceso) {
 
-        LocalDate fechaValidacion = fechaProceso != null ? fechaProceso : LocalDate.now();
+        LocalDate fechaValidacion;
+        if (fechaProceso != null) {
+            fechaValidacion = fechaProceso;
+        } else {
+            fechaValidacion = LocalDate.now();
+        }
 
         Factura factura = facturaPort
                 .findByNumeroFactura(numeroFactura)
@@ -49,18 +57,22 @@ public class ValidacionFacturaServiceImpl implements ValidacionFacturaService {
 
         boolean valida = diasHastaVencimiento > diasMinimosVencimiento;
 
+        String codigo;
+        String mensaje;
+        if (valida) {
+            codigo = "FACTURA_VIGENTE";
+            mensaje = "Factura vigente para negociación/liquidación";
+        } else {
+            codigo = "FACTURA_VENCIDA";
+            mensaje = "Factura no negociable. Restan " + diasHastaVencimiento + " días para vencimiento";
+        }
+
         return ValidacionFacturaResponseDto.builder()
                 .valida(valida)
                 .vencida(!valida)
                 .diasHastaVencimiento(diasHastaVencimiento)
-                .codigo(valida
-                        ? "FACTURA_VIGENTE"
-                        : "FACTURA_VENCIDA")
-                .mensaje(valida
-                        ? "Factura vigente para negociación/liquidación"
-                        : "Factura no negociable. Restan "
-                        + diasHastaVencimiento
-                        + " días para vencimiento")
+                .codigo(codigo)
+                .mensaje(mensaje)
                 .build();
     }
 }

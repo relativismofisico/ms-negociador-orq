@@ -1,5 +1,8 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.math.BigDecimal;
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort;
 import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
 import com.negociadororq.infrastructure.persistence.entity.IndirectFunderOfferSupplierQuotaEntity;
@@ -7,9 +10,9 @@ import com.negociadororq.infrastructure.persistence.repository.IndirectFunderOff
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.util.Optional;
-
+/**
+ * Implementación de {@link IndirectFunderOfferSupplierQuotaOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class IndirectFunderOfferSupplierQuotaAdapter implements IndirectFunderOfferSupplierQuotaOutputPort {

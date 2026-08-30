@@ -1,17 +1,27 @@
 package com.negociadororq.application.service.notificacion;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.negociadororq.domain.event.DestinatarioEmail;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-
+/**
+ * Resuelve, para cada evento notificable del ciclo de vida de una
+ * negociación (creación, endoso, firma, liquidación fallida), la lista de
+ * destinatarios (actor + RUT) a los que debe llegar la notificación, según
+ * el tipo de operación (FACTORING o CONFIRMING).
+ */
 @Component
 public class DestinatarioResolver {
 
+    /**
+     * @param negociacion negociación recién creada
+     * @return destinatarios a notificar de su creación
+     */
     public List<DestinatarioEmail> resolverParaCreacionNegociacion(Negociacion negociacion) {
         List<DestinatarioEmail> destinatarios = new ArrayList<>();
         String tipo = negociacion.getTipoOperacion().getTipo();
@@ -34,6 +44,10 @@ public class DestinatarioResolver {
         return destinatarios;
     }
 
+    /**
+     * @param endoso endoso recién creado
+     * @return destinatarios a notificar de su creación
+     */
     public List<DestinatarioEmail> resolverParaEndoso(Endoso endoso) {
         List<DestinatarioEmail> destinatarios = new ArrayList<>();
         String tipo = endoso.getTipoOperacion().getTipo();
@@ -45,15 +59,18 @@ public class DestinatarioResolver {
             if (endoso.getRutFondeador() != null) {
                 destinatarios.add(new DestinatarioEmail("FONDEADOR", endoso.getRutFondeador(), "EMPRESA"));
             }
-        } else if ("CONFIRMING".equalsIgnoreCase(tipo)) {
-            if (endoso.getRutProveedor() != null) {
-                destinatarios.add(new DestinatarioEmail("PROVEEDOR", endoso.getRutProveedor(), "EMPRESA"));
-            }
+        } else if ("CONFIRMING".equalsIgnoreCase(tipo) && endoso.getRutProveedor() != null) {
+            destinatarios.add(new DestinatarioEmail("PROVEEDOR", endoso.getRutProveedor(), "EMPRESA"));
         }
 
         return destinatarios;
     }
 
+    /**
+     * @param negociacion negociación asociada al endoso firmado
+     * @param rutFirmante RUT de la empresa que firmó (o rechazó) el endoso
+     * @return destinatarios a notificar de la firma
+     */
     public List<DestinatarioEmail> resolverParaFirmaEndoso(Negociacion negociacion, String rutFirmante) {
         List<DestinatarioEmail> destinatarios = new ArrayList<>();
         String tipo = negociacion.getTipoOperacion().getTipo();
@@ -64,8 +81,8 @@ public class DestinatarioResolver {
             }
         } else if ("FACTORING".equalsIgnoreCase(tipo)) {
             boolean esPagador = rutFirmante.equals(negociacion.getRutPagador());
-            boolean esFondeador = negociacion.getRutFondeadores() != null &&
-                    negociacion.getRutFondeadores().contains(rutFirmante);
+            boolean esFondeador = negociacion.getRutFondeadores() != null
+                    && negociacion.getRutFondeadores().contains(rutFirmante);
 
             if (esPagador) {
                 if (negociacion.getRutFondeadores() != null) {
@@ -90,6 +107,10 @@ public class DestinatarioResolver {
         return destinatarios;
     }
 
+    /**
+     * @param negociacion negociación cuya liquidación falló
+     * @return destinatarios a notificar de la falla
+     */
     public List<DestinatarioEmail> resolverParaLiquidacionFallida(Negociacion negociacion) {
         List<DestinatarioEmail> destinatarios = new ArrayList<>();
         String tipo = negociacion.getTipoOperacion().getTipo();
