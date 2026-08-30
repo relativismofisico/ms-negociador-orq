@@ -1,24 +1,24 @@
 package com.negociadororq.application.exception.handler;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import com.negociadororq.application.exception.NegociadorException;
 import com.negociadororq.application.exception.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.java.Log;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Manejador global de excepciones HTTP para ms-negociador-orq.
@@ -64,7 +64,7 @@ public class GlobalExceptionHandler {
     // =========================================================================
 
     /**
-     * Errores de validación de Bean Validation (@Valid, @NotNull, etc.)
+     * Errores de validación de Bean Validation (@Valid, @NotNull, etc.).
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(
@@ -74,20 +74,29 @@ public class GlobalExceptionHandler {
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .collect(Collectors.toList());
 
+        List<ErrorResponse.FieldErrorDetail> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+                .map(fe -> new ErrorResponse.FieldErrorDetail(
+                        fe.getField(), rejectedValueAsString(fe.getRejectedValue()), fe.getDefaultMessage()))
+                .toList();
+
         log.warning(String.format("Validacion fallida en %s: %s", request.getRequestURI(), detalles));
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(buildError(
-                        HttpStatus.BAD_REQUEST,
-                        "VALIDACION_FALLIDA",
-                        "Errores de validación en el cuerpo de la petición",
-                        request.getRequestURI(),
-                        detalles));
+                .body(ErrorResponse.builder()
+                        .timestamp(LocalDateTime.now())
+                        .status(HttpStatus.BAD_REQUEST.value())
+                        .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+                        .codigo("VALIDACION_FALLIDA")
+                        .mensaje("Errores de validación en el cuerpo de la petición")
+                        .path(request.getRequestURI())
+                        .detalles(detalles)
+                        .fieldErrors(fieldErrors)
+                        .build());
     }
 
     /**
-     * Body JSON malformado o con tipo incorrecto
+     * Body JSON malformado o con tipo incorrecto.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMessageNotReadable(
@@ -106,7 +115,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Content-Type no soportado por el endpoint (ej: text/plain en vez de application/json)
+     * Content-Type no soportado por el endpoint (ej: text/plain en vez de application/json).
      */
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(
@@ -125,7 +134,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Verbo HTTP no soportado por el endpoint (ej: GET en vez de POST)
+     * Verbo HTTP no soportado por el endpoint (ej: GET en vez de POST).
      */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ErrorResponse> handleMethodNotSupported(
@@ -144,7 +153,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Parámetro de query obligatorio ausente
+     * Parámetro de query obligatorio ausente.
      */
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ErrorResponse> handleMissingParameter(
@@ -161,7 +170,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Path variable con tipo incompatible (ej: texto donde se espera número)
+     * Path variable con tipo incompatible (ej: texto donde se espera número).
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(
@@ -236,6 +245,16 @@ public class GlobalExceptionHandler {
                 .path(path)
                 .detalles(detalles)
                 .build();
+    }
+
+    /**
+     * Convierte el valor rechazado de un campo a texto, preservando {@code null} cuando no aplica.
+     */
+    private static String rejectedValueAsString(Object rejectedValue) {
+        if (rejectedValue == null) {
+            return null;
+        }
+        return String.valueOf(rejectedValue);
     }
 }
 
