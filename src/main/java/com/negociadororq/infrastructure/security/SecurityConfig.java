@@ -1,12 +1,20 @@
 package com.negociadororq.infrastructure.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+
+import com.factoring.commons.web.RateLimitFilter;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.negociadororq.application.service.LoginLockoutService;
+import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DefaultAuthenticationEventPublisher;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
@@ -19,10 +27,10 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 
 /**
  * Configuración central de Spring Security 6 para ms-negociador-orq.
@@ -47,6 +55,7 @@ public class SecurityConfig {
     private final JwtRolConverter jwtRolConverter;
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
     private final CustomAccessDeniedHandler accessDeniedHandler;
+    private final RateLimitFilter rateLimitFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
@@ -94,14 +103,18 @@ public class SecurityConfig {
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(authenticationEntryPoint)
                 .accessDeniedHandler(accessDeniedHandler)
-            );
+            )
+
+            // Límite de solicitudes por IP lo más temprano posible en la cadena,
+            // antes de intentar Basic Auth o validar el Bearer JWT.
+            .addFilterBefore(rateLimitFilter, SecurityContextHolderFilter.class);
 
         return http.build();
     }
 
     @Bean
-    public JwtDecoder jwtDecoder(ObjectMapper objectMapper) {
-        return new JjwtDecoder(securityProperties.getJwt().getSecret(), objectMapper);
+    public JwtDecoder jwtDecoder(ObjectMapper objectMapper, UserRepository userRepository) {
+        return new JjwtDecoder(securityProperties.getJwt().getSecret(), objectMapper, userRepository);
     }
 
     @Bean
@@ -130,15 +143,18 @@ public class SecurityConfig {
     }
 
     @Bean
-    public DatabaseUserDetailsService databaseUserDetailsService(UserRepository userRepository) {
-        return new DatabaseUserDetailsService(userRepository);
+    public DatabaseUserDetailsService databaseUserDetailsService(
+            UserRepository userRepository,
+            LoginLockoutService loginLockoutService) {
+        return new DatabaseUserDetailsService(userRepository, loginLockoutService);
     }
 
     @Bean
     public UserDetailsService userDetailsService(
             SecurityProperties securityProperties,
-            DatabaseUserDetailsService databaseUserDetailsService) {
-        return new CompositeUserDetailsService(securityProperties, databaseUserDetailsService);
+            DatabaseUserDetailsService databaseUserDetailsService,
+            LoginLockoutService loginLockoutService) {
+        return new CompositeUserDetailsService(securityProperties, databaseUserDetailsService, loginLockoutService);
     }
 
     @Bean
@@ -154,10 +170,24 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(
             HttpSecurity http,
-            DaoAuthenticationProvider daoAuthenticationProvider) throws Exception {
-        return http.getSharedObject(AuthenticationManagerBuilder.class)
+            DaoAuthenticationProvider daoAuthenticationProvider,
+            AuthenticationEventPublisher authenticationEventPublisher) throws Exception {
+        AuthenticationManager manager = http.getSharedObject(AuthenticationManagerBuilder.class)
             .authenticationProvider(daoAuthenticationProvider)
             .build();
+        // ProviderManager.build() no conecta un AuthenticationEventPublisher por
+        // defecto en este armado manual — se lo setea explícito para que
+        // LoginAttemptListener reciba los eventos de éxito/fallo.
+        if (manager instanceof ProviderManager providerManager) {
+            providerManager.setAuthenticationEventPublisher(authenticationEventPublisher);
+        }
+        return manager;
+    }
+
+    @Bean
+    public AuthenticationEventPublisher authenticationEventPublisher(
+            ApplicationEventPublisher applicationEventPublisher) {
+        return new DefaultAuthenticationEventPublisher(applicationEventPublisher);
     }
 }
 
