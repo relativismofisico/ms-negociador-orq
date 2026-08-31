@@ -4,6 +4,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Rol de una empresa dentro de una factura puntual (pagador, proveedor, etc.).
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

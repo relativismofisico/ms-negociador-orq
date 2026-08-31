@@ -1,5 +1,8 @@
 package com.negociadororq.infrastructure.kafka.config;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import com.negociadororq.domain.event.OtpValidatedEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -13,9 +16,9 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 
-import java.util.HashMap;
-import java.util.Map;
-
+/**
+ * Configura el consumidor Kafka del topic de respuesta de validación de OTP.
+ */
 @Configuration
 public class OtpKafkaConsumerConfig {
 

@@ -14,16 +14,32 @@ spring:
     password: Juliana1987****
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      maximum-pool-size: 10
+      maximum-pool-size: ${DB_POOL_SIZE:5}
+      connection-timeout: 5000
+      validation-timeout: 2000
+      connection-test-query: SELECT 1
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
     database-platform: org.hibernate.dialect.MySQL8Dialect
+  # Flyway — Fase 13 del pipeline de mantenibilidad. baseline-on-migrate
+  # marca el esquema YA existente (dev) como "ya en V1". Tabla de historial
+  # DEDICADA (no la default `flyway_schema_history`): varios de estos
+  # backends comparten físicamente el schema `dbcompany`, y esa tabla es
+  # única por schema, no por aplicación. qa/prod la desactivan
+  # explícitamente hasta confirmar su esquema real.
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 1
+    table: flyway_schema_history_negociador
   data:
     mongodb:
       uri: mongodb://localhost:27017/DB_Facturas
       database: DB_Facturas
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   kafka:
     bootstrap-servers: localhost:9092
     producer:
@@ -126,6 +142,21 @@ security:
       - OPERARIO
       - EMPRESA
       - FONDEADOR
+
+# ─────────────────────────────────────────────────────────────
+# Rate limiting / lockout — estado en Redis, compartido por todas
+# las instancias del servicio
+# ─────────────────────────────────────────────────────────────
+rate-limit:
+  ip:
+    enabled: true
+    max-requests: 100
+    window-seconds: 60
+
+login-lockout:
+  max-attempts: 5
+  window-minutes: 15
+
 logging:
   level:
     org.springframework.security: DEBUG

@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
 import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.infrastructure.persistence.entity.FondeadorQuotaEntity;
@@ -7,8 +9,9 @@ import com.negociadororq.infrastructure.persistence.repository.FondeadorQuotaRep
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
-
+/**
+ * Implementación de {@link FondeadorQuotaOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {

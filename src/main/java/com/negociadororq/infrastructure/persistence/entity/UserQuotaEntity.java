@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.entity;
 
+import java.math.BigDecimal;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -9,13 +11,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Persistencia JPA de una {@link com.negociadororq.domain.model.UserQuota}: el cupo individual
+ * asignado a un {@link UserEntity} dentro del cupo total de su empresa.
+ */
 @Entity
 @Table(name = "user_quota")
 @Getter

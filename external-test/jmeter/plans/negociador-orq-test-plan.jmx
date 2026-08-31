@@ -4,11 +4,11 @@
 
     <!-- ═══════════════════════════════════════════════════════════════
          Plan de rendimiento — ms-negociador-orq
-         Uso:
-           jmeter -n -t negociador-orq-test-plan.jmx -q desarrollo.properties
-           jmeter -n -t negociador-orq-test-plan.jmx -q qa.properties
-           jmeter -n -t negociador-orq-test-plan.jmx -q produccion.properties
-           jmeter -n -t negociador-orq-test-plan.jmx -q qa.properties -Jthreads=100 -Jrampup=30 -Jloops=10
+         Uso (desde external-test/jmeter/):
+           jmeter -n -t plans/negociador-orq-test-plan.jmx -q config/desarrollo.properties
+           jmeter -n -t plans/negociador-orq-test-plan.jmx -q config/qa.properties
+           jmeter -n -t plans/negociador-orq-test-plan.jmx -q config/produccion.properties
+           jmeter -n -t plans/negociador-orq-test-plan.jmx -q config/qa.properties -Jthreads=100 -Jrampup=30 -Jloops=10
     ═══════════════════════════════════════════════════════════════ -->
     <TestPlan guiclass="TestPlanGui" testclass="TestPlan"
               testname="ms-negociador-orq — Plan de Rendimiento" enabled="true">

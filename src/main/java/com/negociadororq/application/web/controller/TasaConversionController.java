@@ -20,6 +20,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Convierte una tasa entre Tasa Efectiva Anual, Tasa Mes Vencido y Tasa Mes Anticipado, para
+ * que cada empresa pueda ver una tasa que le informaron en la unidad que prefiera.
+ */
 @Tag(name = "Conversión de tasas",
     description = "Convierte una tasa entre Tasa Efectiva Anual, Tasa Mes Vencido y Tasa Mes Anticipado, "
         + "para que cada empresa pueda ver una tasa que le informaron en la unidad que prefiera")

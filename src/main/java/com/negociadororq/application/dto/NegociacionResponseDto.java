@@ -1,17 +1,20 @@
 package com.negociadororq.application.dto;
 
+import java.math.BigDecimal;
+import java.util.List;
+
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Operacion;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
+/**
+ * Resultado de la creación de una negociación.
+ */
 @Schema(description = "Resultado de la creación de una negociación")
 @Data
 @Builder

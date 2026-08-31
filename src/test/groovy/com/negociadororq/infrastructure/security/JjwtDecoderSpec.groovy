@@ -1,6 +1,8 @@
 package com.negociadororq.infrastructure.security
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.negociadororq.infrastructure.persistence.entity.UserEntity
+import com.negociadororq.infrastructure.persistence.repository.UserRepository
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import org.springframework.security.oauth2.jwt.BadJwtException
@@ -15,7 +17,9 @@ class JjwtDecoderSpec extends Specification {
             "AF84F1FGllNpNnLG055fdg5hGHJK4KGG5VH5TR5J05JFGGDFDGXVV545J4505G666JFGF2mMY95y"
     static final SecretKey SIGN_KEY = Keys.hmacShaKeyFor(Base64.decoder.decode(SECRET))
 
-    JjwtDecoder decoder = new JjwtDecoder(SECRET, new ObjectMapper())
+    UserRepository userRepository = Mock()
+
+    JjwtDecoder decoder = new JjwtDecoder(SECRET, new ObjectMapper(), userRepository)
 
     private String buildToken(String typ) {
         def builder = Jwts.builder()
@@ -31,6 +35,7 @@ class JjwtDecoderSpec extends Specification {
 
     def "decode acepta un token con typ=access"() {
         given:
+        userRepository.findByUsername("usuario@test.com") >> Optional.of(new UserEntity())
         def token = buildToken("access")
 
         when:
@@ -42,6 +47,7 @@ class JjwtDecoderSpec extends Specification {
 
     def "decode acepta un token legacy sin claim 'typ' (retrocompatibilidad)"() {
         given:
+        userRepository.findByUsername("usuario@test.com") >> Optional.of(new UserEntity())
         def token = buildToken(null)
 
         when:
@@ -54,6 +60,18 @@ class JjwtDecoderSpec extends Specification {
     def "decode lanza BadJwtException para un refresh token usado como access token"() {
         given:
         def token = buildToken("refresh")
+
+        when:
+        decoder.decode(token)
+
+        then:
+        thrown(BadJwtException)
+    }
+
+    def "decode lanza BadJwtException cuando el usuario del token ya no existe en BD"() {
+        given:
+        userRepository.findByUsername("usuario@test.com") >> Optional.empty()
+        def token = buildToken("access")
 
         when:
         decoder.decode(token)

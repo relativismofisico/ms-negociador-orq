@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.entity;
 
+import java.util.List;
+
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -8,13 +10,16 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Persistencia JPA de un {@link com.negociadororq.domain.model.User}, con sus cupos
+ * individuales asociados ({@link UserQuotaEntity}).
+ */
 @Entity
 @Table(name = "user")
 @Getter

@@ -1,18 +1,21 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.domain.model.Factura;
-import com.negociadororq.application.port.output.FacturaOutputPort;
 import java.util.List;
+
+import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.domain.model.Factura;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
-
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Implementación de {@link FacturaService}.
+ */
 @Log
 @Service
 @RequiredArgsConstructor
-public class FacturaServiceImpl implements FacturaService{
+public class FacturaServiceImpl implements FacturaService {
 
     private final FacturaOutputPort facturaPort;
 

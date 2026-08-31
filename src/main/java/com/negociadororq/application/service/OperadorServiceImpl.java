@@ -1,20 +1,24 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.domain.model.EmpresaQuota;
-import com.negociadororq.domain.model.FondeadorQuota;
-import com.negociadororq.domain.model.UserQuota;
-import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
-import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
-import com.negociadororq.application.port.output.UserQuotaOutputPort;
 import java.math.BigDecimal;
 import java.util.Optional;
 
+import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
+import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
+import com.negociadororq.application.port.output.UserQuotaOutputPort;
+import com.negociadororq.domain.model.EmpresaQuota;
+import com.negociadororq.domain.model.FondeadorQuota;
+import com.negociadororq.domain.model.UserQuota;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Implementación de {@link CupoConsumidorService} y {@link CupoReversionService}
+ * (agregadas en {@link OperadorService}).
+ */
 @Log
 @Service
 @RequiredArgsConstructor

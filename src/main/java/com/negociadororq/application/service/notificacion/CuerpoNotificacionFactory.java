@@ -1,13 +1,18 @@
 package com.negociadororq.application.service.notificacion;
 
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+/**
+ * Despacha la construcción del cuerpo de una notificación al
+ * {@link CuerpoNotificacionBuilder} registrado para el tipo del objeto
+ * recibido.
+ */
 @Component
 @RequiredArgsConstructor
 public class CuerpoNotificacionFactory {
@@ -16,6 +21,9 @@ public class CuerpoNotificacionFactory {
 
     private Map<Class<?>, CuerpoNotificacionBuilder<?>> mapa;
 
+    /**
+     * Indexa los builders inyectados por el tipo de dominio que cada uno declara manejar.
+     */
     @PostConstruct
     public void init() {
         mapa = new HashMap<>();
@@ -24,6 +32,12 @@ public class CuerpoNotificacionFactory {
         }
     }
 
+    /**
+     * @param objeto objeto de dominio a partir del cual construir el cuerpo
+     * @param <T>    tipo del objeto de dominio
+     * @return el cuerpo de texto de la notificación, o un mensaje indicando
+     *         que no hay builder registrado para ese tipo
+     */
     @SuppressWarnings("unchecked")
     public <T> String construir(T objeto) {
 

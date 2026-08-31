@@ -1,7 +1,14 @@
 package com.negociadororq.infrastructure.security;
 
+import java.time.Instant;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+import javax.crypto.SecretKey;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
@@ -12,12 +19,6 @@ import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
-
-import javax.crypto.SecretKey;
-import java.time.Instant;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Decodificador JWT compatible con el ms-security que genera los tokens.
@@ -34,17 +35,27 @@ import java.util.Map;
 @Slf4j
 public class JjwtDecoder implements JwtDecoder {
 
+    /** Vigencia de respaldo (24h) cuando el token no trae claim de expiración. */
+    private static final long DEFAULT_EXPIRATION_SECONDS = 24L * 60 * 60;
+
     private final SecretKey signingKey;
     private final ObjectMapper objectMapper;
+    private final UserRepository userRepository;
 
-    public JjwtDecoder(String secretBase64, ObjectMapper objectMapper) {
+    /**
+     * @param secretBase64   clave secreta de firma, en Base64, compartida con ms-security-util
+     * @param objectMapper   usado para parsear el header del JWT
+     * @param userRepository usado para verificar que el usuario del token siga existiendo
+     */
+    public JjwtDecoder(String secretBase64, ObjectMapper objectMapper, UserRepository userRepository) {
         byte[] keyBytes = Decoders.BASE64.decode(secretBase64);
         this.signingKey = Keys.hmacShaKeyFor(keyBytes);
         this.objectMapper = objectMapper;
+        this.userRepository = userRepository;
     }
 
     @Override
-    public Jwt decode(String token) throws JwtException {
+    public Jwt decode(String token) {
         Claims claims;
         try {
             claims = Jwts.parser()
@@ -72,13 +83,31 @@ public class JjwtDecoder implements JwtDecoder {
             throw new BadJwtException("El token es un refresh token, no puede usarse como credencial de acceso.");
         }
 
+        // El usuario del token debe seguir existiendo en la base compartida (dbcompany.user,
+        // la misma que administra ms-security-util) — un usuario borrado no debe seguir
+        // operando solo porque su JWT no haya expirado todavía. Mismo criterio ya aplicado
+        // en ms-security-util.
+        if (userRepository.findByUsername(claims.getSubject()).isEmpty()) {
+            log.warn("Usuario del token ya no existe: {}", claims.getSubject());
+            throw new BadJwtException("El usuario del token ya no existe.");
+        }
+
         Map<String, Object> headers = parseHeaders(token);
         Map<String, Object> claimsMap = new HashMap<>(claims);
 
-        Instant issuedAt = claims.getIssuedAt() != null
-                ? claims.getIssuedAt().toInstant() : Instant.now();
-        Instant expiresAt = claims.getExpiration() != null
-                ? claims.getExpiration().toInstant() : Instant.now().plusSeconds(86400);
+        Instant issuedAt;
+        if (claims.getIssuedAt() != null) {
+            issuedAt = claims.getIssuedAt().toInstant();
+        } else {
+            issuedAt = Instant.now();
+        }
+
+        Instant expiresAt;
+        if (claims.getExpiration() != null) {
+            expiresAt = claims.getExpiration().toInstant();
+        } else {
+            expiresAt = Instant.now().plusSeconds(DEFAULT_EXPIRATION_SECONDS);
+        }
 
         return Jwt.withTokenValue(token)
                 .headers(h -> h.putAll(headers))
@@ -92,7 +121,7 @@ public class JjwtDecoder implements JwtDecoder {
         try {
             String headerSegment = token.split("\\.")[0];
             byte[] headerBytes = Base64.getUrlDecoder().decode(headerSegment);
-            return objectMapper.readValue(headerBytes, new TypeReference<>() {});
+            return objectMapper.readValue(headerBytes, new TypeReference<>() { });
         } catch (Exception ex) {
             log.debug("No se pudieron parsear los headers del JWT: {}", ex.getMessage());
             return Map.of("alg", "HS384", "typ", "JWT");

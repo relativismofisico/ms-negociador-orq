@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.NegociacionOutputPort;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.infrastructure.persistence.entity.NegociacionDocument;
@@ -7,8 +9,9 @@ import com.negociadororq.infrastructure.persistence.repository.NegociacionReposi
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
-
+/**
+ * Implementación de {@link NegociacionOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class NegociacionAdapter implements NegociacionOutputPort {

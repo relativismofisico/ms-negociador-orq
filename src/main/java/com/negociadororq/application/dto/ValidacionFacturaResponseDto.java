@@ -6,6 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Resultado de la validación de vencimiento de una factura.
+ */
 @Schema(description = "Resultado de la validación de vencimiento de una factura")
 @Data
 @Builder

@@ -1,12 +1,15 @@
 package com.negociadororq.application.exception.dto;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
-import java.util.List;
-
+/**
+ * Estructura estándar de respuesta de error para todos los endpoints.
+ */
 @Schema(description = "Estructura estándar de respuesta de error para todos los endpoints")
 @Getter
 @Builder
@@ -32,4 +35,22 @@ public class ErrorResponse {
 
     @Schema(description = "Errores detallados de validación de campos. Presente solo en errores 400.")
     private final List<String> detalles;
+
+    @Schema(description = "Igual que 'detalles' pero estructurado por campo en vez de un string concatenado "
+            + "('campo: mensaje'). Presente solo en errores 400 de validación; el frontend todavía usa "
+            + "'mensaje'/'detalles' para el toast genérico, este campo queda disponible para cuando se "
+            + "implemente resaltado por campo.")
+    private final List<FieldErrorDetail> fieldErrors;
+
+    /**
+     * Un error de validación puntual: qué campo falló, qué valor se rechazó y por qué. Mismo contrato
+     * {@code field}/{@code rejectedValue}/{@code message} que ms-notificaciones-util, tomado como el
+     * estándar único de la plataforma para este detalle estructurado.
+     *
+     * @param field         nombre del campo del body que falló la validación
+     * @param rejectedValue valor recibido que fue rechazado (como texto; {@code null} si no aplica)
+     * @param message       mensaje de validación de ese campo
+     */
+    public record FieldErrorDetail(String field, String rejectedValue, String message) {
+    }
 }

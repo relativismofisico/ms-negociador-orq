@@ -1,12 +1,16 @@
 package com.negociadororq.domain.event;
 
+import java.time.LocalDateTime;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-
+/**
+ * Evento publicado a Kafka cuando se solicita un código OTP para aprobar una
+ * negociación, para que el servicio de notificaciones lo genere y lo envíe.
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

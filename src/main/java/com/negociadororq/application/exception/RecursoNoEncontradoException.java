@@ -13,10 +13,21 @@ import org.springframework.http.HttpStatus;
  */
 public class RecursoNoEncontradoException extends NegociadorException {
 
+    /**
+     * Crea la excepción con el código de error genérico {@code RECURSO_NO_ENCONTRADO}.
+     *
+     * @param mensaje mensaje legible describiendo qué recurso no se encontró
+     */
     public RecursoNoEncontradoException(String mensaje) {
         super(mensaje, HttpStatus.NOT_FOUND, "RECURSO_NO_ENCONTRADO");
     }
 
+    /**
+     * Crea la excepción con un código de error específico del caso de uso.
+     *
+     * @param mensaje mensaje legible describiendo qué recurso no se encontró
+     * @param codigo  código de error de dominio en SNAKE_UPPER_CASE
+     */
     public RecursoNoEncontradoException(String mensaje, String codigo) {
         super(mensaje, HttpStatus.NOT_FOUND, codigo);
     }

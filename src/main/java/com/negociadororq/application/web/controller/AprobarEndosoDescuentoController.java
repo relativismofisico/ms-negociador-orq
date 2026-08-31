@@ -1,10 +1,10 @@
 package com.negociadororq.application.web.controller;
 
+import com.factoring.commons.util.IpUtils;
 import com.negociadororq.application.dto.AprobacionRequestDto;
 import com.negociadororq.application.dto.ConfirmacionOtpRequestDto;
 import com.negociadororq.application.exception.dto.ErrorResponse;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoService;
-import com.negociadororq.application.util.IpUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -22,6 +22,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Flujo de aprobación de endosos mediante código OTP.
+ */
 @Tag(name = "Aprobación OTP", description = "Flujo de aprobación de endosos mediante código OTP")
 @RestController
 @RequestMapping("/negociaciones")

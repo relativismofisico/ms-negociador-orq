@@ -5,9 +5,9 @@ plugins {
     id 'jacoco'
     id 'checkstyle'
     id 'org.sonarqube' version '5.1.0.4882'
-    id 'com.github.spotbugs' version '6.0.26'
-    id 'org.springframework.boot' version '3.3.4'
-    id 'io.spring.dependency-management' version '1.1.6'
+    id 'com.github.spotbugs' version '6.1.7'
+    id 'org.springframework.boot' version '3.5.4'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
 
@@ -16,11 +16,41 @@ group = 'com.negociadororq'
 sourceCompatibility = '17'
 
 jacoco {
-    toolVersion = '0.8.12'
+    toolVersion = '0.8.13'
+}
+
+spotbugs {
+    excludeFilter = file('config/spotbugs/exclude.xml')
+}
+
+sonarqube {
+    properties {
+        property 'sonar.projectKey', 'ms-negociador-orq'
+        property 'sonar.projectName', 'ms-negociador-orq'
+        property 'sonar.projectVersion', version
+        property 'sonar.sources', 'src/main/java'
+        property 'sonar.tests', 'src/test/java,src/test/groovy,src/automated-test/java'
+        property 'sonar.java.source', '17'
+        property 'sonar.sourceEncoding', 'UTF-8'
+        property 'sonar.coverage.jacoco.xmlReportPaths',
+                'build/reports/jacoco/test/jacocoTestReport.xml'
+        property 'sonar.java.checkstyle.reportPaths',
+                'build/reports/checkstyle/main.xml'
+        property 'sonar.java.pmd.reportPaths',
+                'build/reports/pmd/main.xml'
+        property 'sonar.java.spotbugs.reportPaths',
+                'build/reports/spotbugs/main.xml'
+        property 'sonar.coverage.exclusions',
+                '**/dto/**,**/*Application.java'
+    }
 }
 
 repositories {
     mavenCentral()
+    // PILOTO Fase 11 (pipeline de mantenibilidad) — ms-commons-util todavía no
+    // se publica a GitHub Packages, se prueba vía mavenLocal() hasta que se
+    // decida esa parte.
+    mavenLocal()
 }
 
 configurations {
@@ -43,6 +73,10 @@ dependencies {
     implementation 'com.mysql:mysql-connector-j:8.3.0'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
 
+    // Flyway — migraciones versionadas de esquema (Fase 13 del pipeline de
+    // mantenibilidad). Dependencia de runtime pura, sin plugin de Gradle.
+    implementation 'org.flywaydb:flyway-mysql'
+
     // Source: https://mvnrepository.com/artifact/com.openhtmltopdf/openhtmltopdf-pdfbox
     implementation("com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10")
     // Mustache template engine (plantillas de documentos formales, tabla messages_templates)
@@ -55,6 +89,11 @@ dependencies {
 
     // Security — OAuth2 Resource Server + JWT
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    // Redis — estado de rate-limiting/lockout compartido entre instancias
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    // ShedLock — lock distribuido para @Scheduled corriendo en varias instancias
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:5.13.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-redis-spring:5.13.0'
     implementation 'org.springframework.security:spring-security-oauth2-resource-server'
     implementation 'org.springframework.security:spring-security-oauth2-jose'
 
@@ -62,6 +101,10 @@ dependencies {
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    // ms-commons-util — IpUtils/RateLimitFilter extraídos en la Fase 11 del
+    // pipeline de mantenibilidad (PILOTO vía mavenLocal(), ver repositories{})
+    implementation 'com.factoring:ms-commons-util:0.2.0'
 
     // Tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

@@ -7,15 +7,15 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Prod: SOLO pruebas de lectura sin efectos secundarios en producción.
+ * Production: SOLO pruebas de lectura sin efectos secundarios en producción.
  * Requiere: BASE_URL, TEST_TOKEN_ADMIN, TEST_TOKEN_EMPRESA,
  *           TEST_TOKEN_FONDEADOR, TEST_TOKEN_OPERARIO como env vars.
- * Ejecución: AMBIENTE_PIPE=prod BASE_URL=https://... ./gradlew prodTest
+ * Ejecución: AMBIENTE_PIPE=prod BASE_URL=https://... ./gradlew productionTest
  */
-class ProdRunner {
+class ProductionRunner {
 
     @Test
-    void runProd() {
+    void runProduction() {
         Results results = Runner
                 .path("classpath:com/negociadororq")
                 .tags("@production-safe")

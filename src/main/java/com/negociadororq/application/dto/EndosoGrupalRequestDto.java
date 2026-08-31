@@ -7,6 +7,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Solicitud para permitir o exigir endoso/solicitud individual por factura.
+ */
 @Schema(description = "Solicitud para permitir o exigir endoso/solicitud individual por factura")
 @Data
 @Builder

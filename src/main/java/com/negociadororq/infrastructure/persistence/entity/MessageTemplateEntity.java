@@ -8,6 +8,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Data;
 
+/**
+ * Persistencia JPA de una {@link com.negociadororq.domain.model.MessageTemplate} usada para
+ * renderizar notificaciones (email, etc.).
+ */
 @Entity
 @Table(name = "messages_templates")
 @Data

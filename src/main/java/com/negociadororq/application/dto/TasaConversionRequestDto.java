@@ -1,12 +1,16 @@
 package com.negociadororq.application.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
+
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Solicitud para convertir una tasa entre Tasa Efectiva Anual, Tasa Mes Vencido y.
+ */
 @Schema(description = "Solicitud para convertir una tasa entre Tasa Efectiva Anual, Tasa Mes Vencido y "
     + "Tasa Mes Anticipado")
 @Data

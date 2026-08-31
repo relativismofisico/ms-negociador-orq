@@ -12,6 +12,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Persistencia JPA de un tipo de documento del catálogo.
+ */
 @Entity
 @Table(name = "document_type")
 @Getter

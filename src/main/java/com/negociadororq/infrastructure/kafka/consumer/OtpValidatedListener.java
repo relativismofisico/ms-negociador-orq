@@ -1,14 +1,18 @@
 package com.negociadororq.infrastructure.kafka.consumer;
 
+import com.negociadororq.application.port.output.PendingOtpOutputPort;
 import com.negociadororq.application.service.AprobacionInternaService;
 import com.negociadororq.domain.event.OtpValidatedEvent;
 import com.negociadororq.domain.model.PendingOtp;
-import com.negociadororq.application.port.output.PendingOtpOutputPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+/**
+ * Consume el resultado de la validación de un OTP y, si es válido, completa la aprobación
+ * interna pendiente asociada.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -17,7 +21,7 @@ public class OtpValidatedListener {
     private final PendingOtpOutputPort pendingOtpPort;
     private final AprobacionInternaService service;
 
-    @KafkaListener(topics ="${topics.otp-validate-response}",
+    @KafkaListener(topics = "${topics.otp-validate-response}",
             groupId = "ms-negociador-orq",
             containerFactory = "otpKafkaListenerContainerFactory")
     public void handle(OtpValidatedEvent event) {
