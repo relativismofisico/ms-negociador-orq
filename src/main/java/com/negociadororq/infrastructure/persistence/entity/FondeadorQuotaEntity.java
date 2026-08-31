@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -97,4 +98,10 @@ public class FondeadorQuotaEntity {
 
     @Column(name = "porcentaje_reserva")
     private BigDecimal porcentajeReserva;
+
+    // Optimistic locking: dos negociaciones concurrentes contra el mismo fondeador
+    // (descontarCupoFondeadores) hacían read-modify-save en memoria sin esto,
+    // perdiendo el descuento de cupo de una de las dos ("lost update" real).
+    @Version
+    private Long version;
 }

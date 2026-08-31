@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -38,4 +39,10 @@ public class EmpresaQuotaEntity {
 
     @Column(name = "current_quota", nullable = false)
     private BigDecimal currentQuota;
+
+    // Optimistic locking: dos negociaciones concurrentes sobre la misma empresa
+    // (procesarFactura/revertirCupoEmpresa) hacían read-modify-save en memoria sin
+    // esto, perdiendo el descuento/reverso de una de las dos ("lost update" real).
+    @Version
+    private Long version;
 }

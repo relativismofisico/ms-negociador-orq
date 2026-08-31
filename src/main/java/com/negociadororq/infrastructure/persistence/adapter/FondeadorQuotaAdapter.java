@@ -43,6 +43,11 @@ public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {
         return toDomain(repository.save(toEntity(quota)));
     }
 
+    @Override
+    public FondeadorQuota saveAndFlush(FondeadorQuota quota) {
+        return toDomain(repository.saveAndFlush(toEntity(quota)));
+    }
+
     private FondeadorQuota toDomain(FondeadorQuotaEntity entity) {
         return FondeadorQuota.builder()
                 .id(entity.getId())
@@ -68,6 +73,7 @@ public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {
                 .vigenciaDescuento(entity.getVigenciaDescuento())
                 .diasVigencia(entity.getDiasVigencia())
                 .porcentajeReserva(entity.getPorcentajeReserva())
+                .version(entity.getVersion())
                 .build();
     }
 
@@ -96,6 +102,7 @@ public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {
                 .vigenciaDescuento(quota.getVigenciaDescuento())
                 .diasVigencia(quota.getDiasVigencia())
                 .porcentajeReserva(quota.getPorcentajeReserva())
+                .version(quota.getVersion())
                 .build();
     }
 }

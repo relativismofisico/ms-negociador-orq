@@ -5,8 +5,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
-import com.negociadororq.domain.model.FacturaNegociada;
-import com.negociadororq.domain.model.Operacion;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,14 +24,14 @@ public class NegociacionDocument {
 
     @Id
     private String id;
-    private Operacion tipoOperacion;
+    private OperacionEmbedded tipoOperacion;
     private String rutEmpresa;
     private String rutPagador;
     private String rutProveedor;
     private List<String> rutFondeadores;
     private List<String> rutPagadores;
     private BigDecimal totalNegociado;
-    private List<FacturaNegociada> facturas;
+    private List<FacturaNegociadaEmbedded> facturas;
     private String estado;
     private List<String> errores;
     private LocalDateTime fechaCreacion;

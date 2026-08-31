@@ -104,7 +104,9 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
         }
 
         quota.setPayerCurrentQuota(nuevo);
-        fondeadorQuotaPort.save(quota);
+        // saveAndFlush (no save): mismo motivo que revertirCupoEmpresa arriba — fuerza
+        // que un conflicto de @Version se detecte de forma síncrona en vez de diferirse.
+        fondeadorQuotaPort.saveAndFlush(quota);
 
         log.info(String.format("Cupo confirming revertido funderId=%s payerId=%s valor=%s", funderId, payerId, valor));
     }
@@ -124,7 +126,9 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
         }
 
         quota.setSupplierCurrentQuota(nuevo);
-        fondeadorQuotaPort.save(quota);
+        // saveAndFlush (no save): mismo motivo que revertirCupoEmpresa arriba — fuerza
+        // que un conflicto de @Version se detecte de forma síncrona en vez de diferirse.
+        fondeadorQuotaPort.saveAndFlush(quota);
 
         log.info(String.format("Cupo factoring revertido funderId=%s supplierId=%s valor=%s", funderId, supplierId, valor));
     }

@@ -231,7 +231,7 @@ class OperadorServiceImplSpec extends Specification {
 
         then:
         fq.payerCurrentQuota == new BigDecimal("500.00")
-        1 * fondeadorQuotaPort.save(fq)
+        1 * fondeadorQuotaPort.saveAndFlush(fq)
     }
 
     def "revertirCupoFondeadorConfirming limita al maximo payerQuota"() {
@@ -310,7 +310,7 @@ class OperadorServiceImplSpec extends Specification {
 
         then:
         fq.supplierCurrentQuota == new BigDecimal("900.00")
-        1 * fondeadorQuotaPort.save(fq)
+        1 * fondeadorQuotaPort.saveAndFlush(fq)
     }
 
     def "revertirCupoFondeadorFactoring limita al maximo supplierQuota"() {

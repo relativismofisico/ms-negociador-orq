@@ -42,4 +42,5 @@ public class FondeadorQuota {
     private String vigenciaDescuento;
     private Integer diasVigencia;
     private BigDecimal porcentajeReserva;
+    private Long version;
 }
