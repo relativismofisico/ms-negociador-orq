@@ -10,6 +10,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Persistencia JPA de la visibilidad de fondeo habilitada para un pagador (si sus proveedores
+ * pueden ver ofertas de fondeo indirecto).
+ */
 @Entity
 @Table(name = "payer_funding_visibility")
 @Getter

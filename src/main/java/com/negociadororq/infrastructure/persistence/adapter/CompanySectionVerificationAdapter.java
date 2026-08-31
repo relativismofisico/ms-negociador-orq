@@ -1,13 +1,16 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.List;
+
 import com.negociadororq.application.port.output.CompanySectionVerificationOutputPort;
 import com.negociadororq.infrastructure.persistence.entity.CompanySectionVerificationEntity;
 import com.negociadororq.infrastructure.persistence.repository.CompanySectionVerificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-
+/**
+ * Implementación de {@link CompanySectionVerificationOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class CompanySectionVerificationAdapter implements CompanySectionVerificationOutputPort {

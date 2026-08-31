@@ -21,10 +21,16 @@ public abstract class NegociadorException extends RuntimeException {
         this.codigo = codigo;
     }
 
+    /**
+     * @return el status HTTP con el que el GlobalExceptionHandler debe responder
+     */
     public HttpStatus getStatus() {
         return status;
     }
 
+    /**
+     * @return el código de error de dominio en SNAKE_UPPER_CASE
+     */
     public String getCodigo() {
         return codigo;
     }

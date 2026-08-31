@@ -1,8 +1,12 @@
 package com.negociadororq.application.port.output;
 
-import com.negociadororq.domain.model.DatosPersona;
 import java.util.Optional;
 
+import com.negociadororq.domain.model.DatosPersona;
+
+/**
+ * Puerto de solo lectura para datos de personas naturales.
+ */
 public interface PersonOutputPort {
 
     /**

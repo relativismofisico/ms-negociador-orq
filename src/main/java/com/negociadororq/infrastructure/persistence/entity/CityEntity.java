@@ -7,6 +7,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Persistencia JPA de una ciudad, referenciada por {@link CompanyEntity}.
+ */
 @Entity
 @Table(name = "city")
 @Getter

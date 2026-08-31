@@ -1,16 +1,22 @@
 package com.negociadororq.application.service;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.NegociacionResponseDto;
 import com.negociadororq.application.exception.AccionNoPermitidaException;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
-import com.negociadororq.domain.model.Company;
-import com.negociadororq.domain.model.Factura;
-import com.negociadororq.domain.model.FacturaNegociada;
-import com.negociadororq.domain.model.FondeadorAsignacion;
-import com.negociadororq.domain.model.Negociacion;
-import com.negociadororq.domain.enums.EstadoNegociacion;
 import com.negociadororq.application.port.output.CompanyOperationOutputPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.CompanySectionVerificationOutputPort;
@@ -18,22 +24,20 @@ import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
+import com.negociadororq.domain.enums.EstadoNegociacion;
+import com.negociadororq.domain.model.Company;
+import com.negociadororq.domain.model.Factura;
+import com.negociadororq.domain.model.FacturaNegociada;
+import com.negociadororq.domain.model.FondeadorAsignacion;
+import com.negociadororq.domain.model.Negociacion;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
-
+/**
+ * Implementación de {@link NegociacionFactoringComfirmingService}.
+ */
 @Log
 @Service
 @RequiredArgsConstructor
@@ -51,11 +55,14 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
 
     /**
-     * Crea una negociación procesando factura a factura:
-     * - valida cupo operador, empresa y cada fondeador-relación
-     * - si una factura no tiene cupo con algún actor, se marca como NO_NEGOCIADA (no se toca su estado en BD)
-     * - las facturas que si pasan, se actualizan y se descuentan cupos correspondientes
-     * - devuelve en errores la lista de facturas que no se negociaron y la razón
+     * Crea una negociación procesando factura a factura.
+     * <ul>
+     *   <li>Valida cupo operador, empresa y cada fondeador-relación.</li>
+     *   <li>Si una factura no tiene cupo con algún actor, se marca como NO_NEGOCIADA
+     *       (no se toca su estado en BD).</li>
+     *   <li>Las facturas que sí pasan se actualizan y se descuentan cupos correspondientes.</li>
+     *   <li>Devuelve en errores la lista de facturas que no se negociaron y la razón.</li>
+     * </ul>
      */
     @Override
     @Transactional
@@ -123,10 +130,10 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
         if ("PROVEEDOR".equalsIgnoreCase(request.getRolEmpresa())) {
             rutProveedor = request.getRutEmpresa();
+        } else if (facturasAceptadas.isEmpty()) {
+            rutProveedor = null;
         } else {
-            rutProveedor = facturasAceptadas.isEmpty()
-                    ? null
-                    : facturasAceptadas.get(0).getRutProveedor();
+            rutProveedor = facturasAceptadas.get(0).getRutProveedor();
         }
         negociacion.setRutProveedor(rutProveedor);
         negociacion.setFacturas(facturasAceptadas);
@@ -193,18 +200,26 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
      * antes del loop para que el fallo sea un error HTTP real, no una factura rechazada silenciosa.
      */
     private void validarOperacionHabilitada(NegociacionRequestDto request) {
-        String tipoOperacion = request.getTipoOperacion() != null ? request.getTipoOperacion().getTipo() : null;
+        String tipoOperacion = null;
+        if (request.getTipoOperacion() != null) {
+            tipoOperacion = request.getTipoOperacion().getTipo();
+        }
         if (tipoOperacion == null) {
             return;
         }
 
-        String tipoOperacionUpper = tipoOperacion.toUpperCase();
+        String tipoOperacionUpper = tipoOperacion.toUpperCase(Locale.ROOT);
 
         validarEmpresaHabilitada(request.getRutEmpresa(), tipoOperacionUpper);
 
         boolean esFactoring = "FACTORING".equals(tipoOperacionUpper);
         Set<String> contrapartes = request.getFacturas().stream()
-                .map(fn -> esFactoring ? fn.getRutPagador() : fn.getRutProveedor())
+                .map(fn -> {
+                    if (esFactoring) {
+                        return fn.getRutPagador();
+                    }
+                    return fn.getRutProveedor();
+                })
                 .filter(rut -> rut != null && !rut.isBlank())
                 .collect(Collectors.toSet());
 
@@ -221,19 +236,32 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
      * varias, debe hacerlo en solicitudes separadas, una por contraparte.
      */
     private void validarUnicaContraparte(NegociacionRequestDto request) {
-        String tipoOperacion = request.getTipoOperacion() != null ? request.getTipoOperacion().getTipo() : null;
+        String tipoOperacion = null;
+        if (request.getTipoOperacion() != null) {
+            tipoOperacion = request.getTipoOperacion().getTipo();
+        }
         if (tipoOperacion == null) {
             return;
         }
 
         boolean esFactoring = "FACTORING".equalsIgnoreCase(tipoOperacion);
         Set<String> contrapartes = request.getFacturas().stream()
-                .map(fn -> esFactoring ? fn.getRutPagador() : fn.getRutProveedor())
+                .map(fn -> {
+                    if (esFactoring) {
+                        return fn.getRutPagador();
+                    }
+                    return fn.getRutProveedor();
+                })
                 .filter(rut -> rut != null && !rut.isBlank())
                 .collect(Collectors.toSet());
 
         if (contrapartes.size() > 1) {
-            String tipoContraparte = esFactoring ? "pagador" : "proveedor";
+            String tipoContraparte;
+            if (esFactoring) {
+                tipoContraparte = "pagador";
+            } else {
+                tipoContraparte = "proveedor";
+            }
             throw new PeticionInvalidaException(
                     "Todas las facturas de una negociación deben tener el mismo " + tipoContraparte
                             + ". Se recibieron facturas de varios " + tipoContraparte + "es distintos: "

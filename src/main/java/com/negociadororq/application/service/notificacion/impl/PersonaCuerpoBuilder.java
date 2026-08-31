@@ -5,6 +5,9 @@ import com.negociadororq.application.service.notificacion.CuerpoNotificacionBuil
 import com.negociadororq.domain.model.User;
 import org.springframework.stereotype.Component;
 
+/**
+ * Cuerpo de notificación para el registro de una nueva persona/usuario.
+ */
 @Component
 public class PersonaCuerpoBuilder implements CuerpoNotificacionBuilder<User> {
 
@@ -15,9 +18,9 @@ public class PersonaCuerpoBuilder implements CuerpoNotificacionBuilder<User> {
 
     @Override
     public String construir(User user) {
-        return "Nueva persona registrada.\n\n" +
-                "Nombre: " + user.getUsername() + "\n" +
-                "Identificación: " + user.getIdeUser() + "\n";
+        return "Nueva persona registrada.\n\n"
+                + "Nombre: " + user.getUsername() + "\n"
+                + "Identificación: " + user.getIdeUser() + "\n";
     }
 }
 

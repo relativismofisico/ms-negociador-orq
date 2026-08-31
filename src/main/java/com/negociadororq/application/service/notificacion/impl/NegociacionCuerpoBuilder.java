@@ -4,6 +4,9 @@ import com.negociadororq.application.service.notificacion.CuerpoNotificacionBuil
 import com.negociadororq.domain.model.Negociacion;
 import org.springframework.stereotype.Component;
 
+/**
+ * Cuerpo de notificación para la creación de una nueva negociación.
+ */
 @Component
 public class NegociacionCuerpoBuilder implements CuerpoNotificacionBuilder<Negociacion> {
 
@@ -14,12 +17,12 @@ public class NegociacionCuerpoBuilder implements CuerpoNotificacionBuilder<Negoc
 
     @Override
     public String construir(Negociacion negociacion) {
-        return "Se ha creado una nueva negociación.\n\n" +
-                "ID: " + negociacion.getId() + "\n" +
-                "Tipo: " + negociacion.getTipoOperacion().getTipo() + "\n" +
-                "Total: " + negociacion.getTotalNegociado() + "\n" +
-                "Facturas: " + negociacion.getFacturas().size() + "\n\n" +
-                "Por favor ingrese a la plataforma para revisar.";
+        return "Se ha creado una nueva negociación.\n\n"
+                + "ID: " + negociacion.getId() + "\n"
+                + "Tipo: " + negociacion.getTipoOperacion().getTipo() + "\n"
+                + "Total: " + negociacion.getTotalNegociado() + "\n"
+                + "Facturas: " + negociacion.getFacturas().size() + "\n\n"
+                + "Por favor ingrese a la plataforma para revisar.";
     }
 }
 

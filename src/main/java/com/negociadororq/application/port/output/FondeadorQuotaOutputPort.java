@@ -1,11 +1,27 @@
 package com.negociadororq.application.port.output;
 
-import com.negociadororq.domain.model.FondeadorQuota;
-
 import java.util.Optional;
 
+import com.negociadororq.domain.model.FondeadorQuota;
+
+/**
+ * Puerto de persistencia de los parámetros de negociación de un fondeador
+ * ({@link com.negociadororq.domain.model.FondeadorQuota}).
+ */
 public interface FondeadorQuotaOutputPort {
+
+    /**
+     * @param funderId id de la empresa fondeadora
+     * @param payerId  id de la empresa pagadora
+     * @return la asignación fondeador-pagador, si existe
+     */
     Optional<FondeadorQuota> findByFunderIdAndPayerId(Long funderId, Long payerId);
+
+    /**
+     * @param funderId   id de la empresa fondeadora
+     * @param supplierId id de la empresa proveedora
+     * @return la asignación fondeador-proveedor, si existe
+     */
     Optional<FondeadorQuota> findByFunderIdAndSupplierId(Long funderId, Long supplierId);
 
     /**
@@ -18,5 +34,9 @@ public interface FondeadorQuotaOutputPort {
     /** Ver {@link #findByFunderIdAndPayerIdActivo}, para el lado proveedor. */
     Optional<FondeadorQuota> findByFunderIdAndSupplierIdActivo(Long funderId, Long supplierId);
 
+    /**
+     * @param quota asignación a persistir
+     * @return la asignación persistida
+     */
     FondeadorQuota save(FondeadorQuota quota);
 }

@@ -1,18 +1,22 @@
 package com.negociadororq.domain.model;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+
 import com.negociadororq.domain.enums.EstadoEndoso;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.enums.EstadoNegociacion;
-import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-import java.util.List;
 
-
+/**
+ * Estado de negociación de una factura puntual dentro de una {@link Negociacion}: en
+ * qué punto va su aprobación, su endoso y qué fondeador(es) tiene asociados.
+ */
 @Data
 @Builder
 @NoArgsConstructor

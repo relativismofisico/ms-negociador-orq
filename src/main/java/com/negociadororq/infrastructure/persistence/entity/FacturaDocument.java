@@ -1,9 +1,10 @@
 package com.negociadororq.infrastructure.persistence.entity;
 
-import com.negociadororq.domain.model.ActorFactura;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+
+import com.negociadororq.domain.model.ActorFactura;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,9 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
+/**
+ * Persistencia MongoDB de una {@link com.negociadororq.domain.model.Factura}.
+ */
 @Data
 @Document(collection = "Facturas")
 @RequiredArgsConstructor

@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.UserQuotaOutputPort;
 import com.negociadororq.domain.model.UserQuota;
 import com.negociadororq.infrastructure.persistence.entity.UserQuotaEntity;
@@ -7,8 +9,9 @@ import com.negociadororq.infrastructure.persistence.repository.UserQuotaReposito
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
-
+/**
+ * Implementación de {@link UserQuotaOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class UserQuotaAdapter implements UserQuotaOutputPort {
@@ -30,11 +33,16 @@ public class UserQuotaAdapter implements UserQuotaOutputPort {
     }
 
     private UserQuota toDomain(UserQuotaEntity entity) {
+        Long userId = null;
+        if (entity.getUser() != null) {
+            userId = entity.getUser().getIdeUser();
+        }
+
         return UserQuota.builder()
                 .id(entity.getId())
                 .quota(entity.getQuota())
                 .currentQuota(entity.getCurrentQuota())
-                .userId(entity.getUser() != null ? entity.getUser().getIdeUser() : null)
+                .userId(userId)
                 .build();
     }
 }

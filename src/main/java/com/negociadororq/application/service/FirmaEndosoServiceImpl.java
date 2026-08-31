@@ -1,17 +1,20 @@
 package com.negociadororq.application.service;
 
+import java.time.LocalDateTime;
+
+import com.negociadororq.application.port.output.EndosoOutputPort;
+import com.negociadororq.application.port.output.PdfFirmaOutputPort;
+import com.negociadororq.domain.enums.RolActor;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FirmaOtpMetadata;
 import com.negociadororq.domain.model.PendingOtp;
-import com.negociadororq.domain.enums.RolActor;
-import com.negociadororq.application.port.output.EndosoOutputPort;
-import com.negociadororq.application.port.output.PdfFirmaOutputPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-
+/**
+ * Implementación de {@link FirmaEndosoService}.
+ */
 @Service
 @RequiredArgsConstructor
 public class FirmaEndosoServiceImpl implements FirmaEndosoService {
@@ -35,7 +38,10 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
         // facturas comparten el mismo Endoso/documentoPdf pero cada una lleva su propio
         // contador de aprobaciones independiente — usar el de la factura hacía que cada
         // firma nueva reiniciara en índice 0 y se estampara encima de la anterior.
-        int indexFirma = endoso.getAprobaciones() != null ? endoso.getAprobaciones().size() : 0;
+        int indexFirma = 0;
+        if (endoso.getAprobaciones() != null) {
+            indexFirma = endoso.getAprobaciones().size();
+        }
 
         // 2. Metadata de firma
         FirmaOtpMetadata firma = FirmaOtpMetadata.builder()

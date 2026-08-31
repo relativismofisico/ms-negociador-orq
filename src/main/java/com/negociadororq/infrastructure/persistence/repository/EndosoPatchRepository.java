@@ -1,7 +1,9 @@
 package com.negociadororq.infrastructure.persistence.repository;
 
-import com.negociadororq.domain.model.AprobacionActorDto;
+import java.time.LocalDateTime;
+
 import com.negociadororq.domain.enums.EstadoEndoso;
+import com.negociadororq.domain.model.AprobacionActorDto;
 import com.negociadororq.infrastructure.persistence.entity.EndosoDocument;
 import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -10,17 +12,27 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
-
+/**
+ * Actualizaciones parciales (patch) de {@link EndosoDocument} vía {@link MongoTemplate},
+ * fuera del vocabulario de derivación de Spring Data.
+ */
 @Repository
 public class EndosoPatchRepository {
 
     private final MongoTemplate mongoTemplate;
 
+    /**
+     * @param mongoTemplate plantilla Mongo usada para las actualizaciones parciales
+     */
     public EndosoPatchRepository(MongoTemplate mongoTemplate) {
         this.mongoTemplate = mongoTemplate;
     }
 
+    /**
+     * @param idNegociacion id de la negociación
+     * @param numeroFactura número de la factura endosada
+     * @param estadoFirma   nuevo estado del endoso
+     */
     public void actualizarEstadoEndosoPorNoFactura(String idNegociacion, String numeroFactura, EstadoEndoso estadoFirma) {
 
         Query query = Query.query(
@@ -34,6 +46,12 @@ public class EndosoPatchRepository {
         mongoTemplate.updateFirst(query, update, EndosoDocument.class);
     }
 
+    /**
+     * @param idNegociacion id de la negociación
+     * @param numeroFactura número de la factura endosada
+     * @param aprobacion    aprobación del actor a registrar (reemplaza una previa del mismo actor)
+     * @param estado        nuevo estado del endoso tras registrar la aprobación
+     */
     public void registrarAprobacionActor(
             String idNegociacion,
             String numeroFactura,

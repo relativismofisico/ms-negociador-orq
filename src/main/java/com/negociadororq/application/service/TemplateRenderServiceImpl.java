@@ -1,11 +1,5 @@
 package com.negociadororq.application.service;
 
-import com.negociadororq.application.port.output.MessageTemplateOutputPort;
-import com.negociadororq.application.port.output.TemplateEngineOutputPort;
-import com.negociadororq.domain.model.MessageTemplate;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
@@ -18,7 +12,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.negociadororq.application.port.output.MessageTemplateOutputPort;
+import com.negociadororq.application.port.output.TemplateEngineOutputPort;
+import com.negociadororq.domain.model.MessageTemplate;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
+
+/**
+ * Implementación de {@link TemplateRenderService}.
+ */
 @Service
 @RequiredArgsConstructor
 public class TemplateRenderServiceImpl implements TemplateRenderService {
@@ -59,6 +62,7 @@ public class TemplateRenderServiceImpl implements TemplateRenderService {
     private final TemplateEngineOutputPort templateEnginePort;
 
     @Override
+    @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
     public String renderEndosoFormalTemplate(
             String nombrePagador,
             String rutPagador,
@@ -85,10 +89,23 @@ public class TemplateRenderServiceImpl implements TemplateRenderService {
         data.put("nombreProveedor", nombreProveedor);
         data.put("rutProveedor", rutProveedor);
         data.put("tipoOperacion", tipoOperacion);
-        data.put("claseOperacion", claseOperacion != null ? claseOperacion : "");
+        String claseOperacionTexto;
+        if (claseOperacion != null) {
+            claseOperacionTexto = claseOperacion;
+        } else {
+            claseOperacionTexto = "";
+        }
+        data.put("claseOperacion", claseOperacionTexto);
         data.put("nombreFondeador", nombreFondeador);
         data.put("rutFondeador", rutFondeador);
-        data.put("fechaOperacion", fechaOperacion != null ? fechaOperacion.format(FORMATO_FECHA) : "");
+
+        String fechaOperacionTexto;
+        if (fechaOperacion != null) {
+            fechaOperacionTexto = fechaOperacion.format(FORMATO_FECHA);
+        } else {
+            fechaOperacionTexto = "";
+        }
+        data.put("fechaOperacion", fechaOperacionTexto);
         data.put("esGrupal", facturas.size() > 1);
         data.put("cantidadFacturas", facturas.size());
 
@@ -96,12 +113,23 @@ public class TemplateRenderServiceImpl implements TemplateRenderService {
         // o Confirming (Descuento) — se resuelven acá para no repetir el
         // condicional dentro de la plantilla.
         data.put("esFactoring", esFactoring);
-        data.put("tituloDocumento", esFactoring ? "Endoso" : "Descuento");
-        data.put("verboOperacion", esFactoring ? "ENDOSAR" : "DESCONTAR");
+        if (esFactoring) {
+            data.put("tituloDocumento", "Endoso");
+            data.put("verboOperacion", "ENDOSAR");
+        } else {
+            data.put("tituloDocumento", "Descuento");
+            data.put("verboOperacion", "DESCONTAR");
+        }
 
-        data.put("nombreFirmante", firmante != null ? firmante.nombreCompleto() : "");
-        data.put("tipoDocumentoFirmante", firmante != null ? firmante.tipoDocumento() : "");
-        data.put("numeroDocumentoFirmante", firmante != null ? firmante.numeroDocumento() : "");
+        if (firmante != null) {
+            data.put("nombreFirmante", firmante.nombreCompleto());
+            data.put("tipoDocumentoFirmante", firmante.tipoDocumento());
+            data.put("numeroDocumentoFirmante", firmante.numeroDocumento());
+        } else {
+            data.put("nombreFirmante", "");
+            data.put("tipoDocumentoFirmante", "");
+            data.put("numeroDocumentoFirmante", "");
+        }
 
         data.put("tipoCuentaFondeador", CUENTA_NO_REGISTRADA);
         data.put("numeroCuentaFondeador", CUENTA_NO_REGISTRADA);

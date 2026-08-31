@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Optional;
+
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.domain.model.User;
 import com.negociadororq.infrastructure.persistence.entity.UserEntity;
@@ -7,8 +9,9 @@ import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
-
+/**
+ * Implementación de {@link UserOutputPort}.
+ */
 @Component
 @RequiredArgsConstructor
 public class UserAdapter implements UserOutputPort {

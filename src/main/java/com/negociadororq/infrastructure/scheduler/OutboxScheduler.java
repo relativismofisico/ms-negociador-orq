@@ -1,27 +1,32 @@
 package com.negociadororq.infrastructure.scheduler;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.negociadororq.infrastructure.kafka.producer.OutboxEventPublisher;
-import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
-import com.negociadororq.domain.event.NotificacionEmailEvent;
-import com.negociadororq.domain.event.OtpRequestEvent;
-import com.negociadororq.domain.event.OtpValidateRequestEvent;
-import com.negociadororq.domain.event.OtpValidateResponseEvent;
-import com.negociadororq.infrastructure.persistence.entity.OutboxEventEntity;
-import com.negociadororq.infrastructure.persistence.repository.OutboxEventRepository;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
+import com.negociadororq.domain.event.NotificacionEmailEvent;
+import com.negociadororq.domain.event.OtpRequestEvent;
+import com.negociadororq.domain.event.OtpValidateRequestEvent;
+import com.negociadororq.domain.event.OtpValidateResponseEvent;
+import com.negociadororq.infrastructure.kafka.producer.OutboxEventPublisher;
+import com.negociadororq.infrastructure.persistence.entity.OutboxEventEntity;
+import com.negociadororq.infrastructure.persistence.repository.OutboxEventRepository;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Publica periódicamente los eventos pendientes del patrón Outbox, reintentando hasta un máximo
+ * de intentos y descartando los eventos que no pertenecen a este servicio o que ya no reconoce.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -52,6 +57,9 @@ public class OutboxScheduler {
     private Map<String, Class<?>> eventMap;
     private static final int MAX_INTENTOS = 5;
 
+    /**
+     * Construye el mapa de topic → clase de evento usado para deserializar el payload guardado.
+     */
     @PostConstruct
     public void init() {
 
@@ -67,6 +75,8 @@ public class OutboxScheduler {
 
 
     @Scheduled(fixedDelay = 5000)
+    @SchedulerLock(name = "ms-negociador-orq_outboxScheduler_procesarOutbox",
+            lockAtLeastFor = "PT4S", lockAtMostFor = "PT55S")
     @Transactional
     public void procesarOutbox() {
 

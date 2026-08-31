@@ -6,6 +6,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Datos de un usuario operador, tal como los expone el microservicio de origen
+ * (rol, empresa y persona asociados).
+ */
 @Getter
 @Setter
 @NoArgsConstructor

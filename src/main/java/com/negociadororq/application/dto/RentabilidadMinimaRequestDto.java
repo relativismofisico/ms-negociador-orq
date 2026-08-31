@@ -1,13 +1,17 @@
 package com.negociadororq.application.dto;
 
+import java.math.BigDecimal;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Solicitud para activar/desactivar la rentabilidad mínima esperada del autofondeo, y su valor.
+ */
 @Schema(description = "Solicitud para activar/desactivar la rentabilidad mínima esperada del autofondeo, y su valor")
 @Data
 @Builder

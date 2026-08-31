@@ -15,6 +15,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Persistencia JPA de una {@link com.negociadororq.domain.model.Company}.
+ */
 @Entity
 @Table(name = "company")
 @Getter

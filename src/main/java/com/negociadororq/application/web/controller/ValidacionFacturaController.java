@@ -20,6 +20,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Consultas de estado y vencimiento de facturas.
+ */
 @Tag(name = "Validación de Facturas", description = "Consultas de estado y vencimiento de facturas")
 @RestController
 @RequestMapping("/validaciones/facturas")

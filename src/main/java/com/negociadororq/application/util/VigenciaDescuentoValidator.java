@@ -28,6 +28,14 @@ public final class VigenciaDescuentoValidator {
     private VigenciaDescuentoValidator() {
     }
 
+    /**
+     * @param hoy               fecha contra la que se evalúa la vigencia
+     * @param fechaNegociacion  fecha en que se negoció la factura, o {@code null} si aún no se negoció
+     * @param fechaVencimiento  fecha de vencimiento de la factura
+     * @param vigenciaDescuento TODO_EL_PLAZO, PRIMEROS_DIAS o DIAS_ANTES_VENCIMIENTO
+     * @param diasVigencia      días de la ventana, según {@code vigenciaDescuento}
+     * @return true si {@code hoy} todavía está dentro de la ventana permitida
+     */
     public static boolean dentroDeVigencia(
             LocalDate hoy,
             LocalDate fechaNegociacion,
@@ -40,17 +48,11 @@ public final class VigenciaDescuentoValidator {
         }
 
         if (PRIMEROS_DIAS.equals(vigenciaDescuento)) {
-            if (fechaNegociacion == null) {
-                return true;
-            }
-            return !hoy.isAfter(fechaNegociacion.plusDays(diasVigencia));
+            return fechaNegociacion == null || !hoy.isAfter(fechaNegociacion.plusDays(diasVigencia));
         }
 
         if (DIAS_ANTES_VENCIMIENTO.equals(vigenciaDescuento)) {
-            if (fechaVencimiento == null) {
-                return true;
-            }
-            return !hoy.isAfter(fechaVencimiento.minusDays(diasVigencia));
+            return fechaVencimiento == null || !hoy.isAfter(fechaVencimiento.minusDays(diasVigencia));
         }
 
         return true;

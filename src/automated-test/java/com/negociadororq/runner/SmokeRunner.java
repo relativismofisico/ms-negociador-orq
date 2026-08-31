@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Smoke: auth + validaciones básicas de contrato HTTP.
- * No requiere datos en BD. Apto para producción (combinado con ProdRunner).
+ * No requiere datos en BD. Apto para producción (combinado con ProductionRunner).
  * Ejecución: ./gradlew smokeTest
  */
 class SmokeRunner {

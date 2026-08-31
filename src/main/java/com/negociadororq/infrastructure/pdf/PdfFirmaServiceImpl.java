@@ -1,5 +1,9 @@
 package com.negociadororq.infrastructure.pdf;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.List;
+
 import com.negociadororq.application.port.output.PdfFirmaOutputPort;
 import com.negociadororq.domain.model.FirmaOtpMetadata;
 import lombok.extern.slf4j.Slf4j;
@@ -9,10 +13,10 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.springframework.stereotype.Service;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.List;
-
+/**
+ * Implementación de {@link PdfFirmaOutputPort}: estampa un bloque de texto con la metadata de
+ * la firma OTP sobre la última página del PDF, usando PDFBox.
+ */
 @Slf4j
 @Service
 public class PdfFirmaServiceImpl implements PdfFirmaOutputPort {
@@ -20,6 +24,8 @@ public class PdfFirmaServiceImpl implements PdfFirmaOutputPort {
     private static final float BASE_Y = 100f;
     private static final float LINE_HEIGHT = 10f;
     private static final float MARGEN_ENTRE_FIRMAS = 15f;
+    private static final float MARGEN_IZQUIERDO = 50f;
+    private static final int TAMANO_FUENTE = 8;
 
     @Override
     public byte[] agregarFirma(byte[] pdfBytes, FirmaOtpMetadata firma, int indexFirma) {
@@ -35,7 +41,7 @@ public class PdfFirmaServiceImpl implements PdfFirmaOutputPort {
             );
 
             contentStream.beginText();
-            contentStream.setFont(PDType1Font.HELVETICA_BOLD, 8);
+            contentStream.setFont(PDType1Font.HELVETICA_BOLD, TAMANO_FUENTE);
 
             List<String> lineas = construirLineasFirma(firma);
 
@@ -46,7 +52,7 @@ public class PdfFirmaServiceImpl implements PdfFirmaOutputPort {
             // bloque (9 líneas * 10 = 90), así que firmas consecutivas se solapaban
             // aunque el índice fuera el correcto. Se calcula a partir de lineas.size()
             // para que nunca vuelva a desincronizarse si se agregan/quitan líneas.
-            float x = 50;
+            float x = MARGEN_IZQUIERDO;
             float alturaBloque = lineas.size() * LINE_HEIGHT + MARGEN_ENTRE_FIRMAS;
             float y = BASE_Y + (indexFirma * alturaBloque);
 
@@ -72,16 +78,28 @@ public class PdfFirmaServiceImpl implements PdfFirmaOutputPort {
     }
 
     private List<String> construirLineasFirma(FirmaOtpMetadata firma) {
+        String resultado;
+        if (firma.isAprobado()) {
+            resultado = "APROBADO";
+        } else {
+            resultado = "RECHAZADO";
+        }
+
+        String observacion = firma.getObservacion();
+        if (observacion == null) {
+            observacion = "";
+        }
+
         return List.of(
                 "===== FIRMA ELECTRONICA =====",
                 "Actor: " + firma.getRolActor(),
                 "Empresa: " + firma.getRutEmpresa(),
                 "Operador: " + firma.getRutOperador(),
-                "Resultado: " + (firma.isAprobado() ? "APROBADO" : "RECHAZADO"),
+                "Resultado: " + resultado,
                 "OTP: " + firma.getOtp(),
                 "IP: " + firma.getIp(),
                 "Fecha: " + firma.getFecha(),
-                "Obs: " + (firma.getObservacion() != null ? firma.getObservacion() : "")
+                "Obs: " + observacion
         );
     }
 }
