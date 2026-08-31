@@ -22,4 +22,5 @@ public class EmpresaQuota {
     private Long companyId;
     private BigDecimal quota;
     private BigDecimal currentQuota;
+    private Long version;
 }

@@ -39,6 +39,7 @@ public class EmpresaQuotaAdapter implements EmpresaQuotaOutputPort {
                 .companyId(entity.getCompanyId())
                 .quota(entity.getQuota())
                 .currentQuota(entity.getCurrentQuota())
+                .version(entity.getVersion())
                 .build();
     }
 
@@ -48,6 +49,7 @@ public class EmpresaQuotaAdapter implements EmpresaQuotaOutputPort {
                 .companyId(quota.getCompanyId())
                 .quota(quota.getQuota())
                 .currentQuota(quota.getCurrentQuota())
+                .version(quota.getVersion())
                 .build();
     }
 }
