@@ -7,6 +7,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.repository.CrudRepository;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
@@ -29,7 +30,7 @@ public class ArchitectureTest {
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..domain..")
                 .should().dependOnClassesThat()
-                .resideInAnyPackage("..application..", "..infraestrutura..", "..web..");
+                .resideInAnyPackage("..application..", "..infrastructure..", "..web..");
 
         rule.check(classes);
     }
@@ -47,10 +48,14 @@ public class ArchitectureTest {
     @Test
     void infraestructura_solo_puede_depende_de_application_y_domain() {
         ArchRule rule = classes()
-                .that().resideInAPackage("..infraestrutura..")
+                .that().resideInAPackage("..infrastructure..")
                 .should().onlyDependOnClassesThat()
-                .resideInAnyPackage("..infraestrutura..", "..application..", "..domain..", "java..", "javax..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..")
-                .allowEmptyShould(true);
+                .resideInAnyPackage(
+                        "..infrastructure..", "..application..", "..domain..",
+                        "java..", "javax..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..",
+                        "com.factoring.commons..", "com.fasterxml.jackson..", "com.github.mustachejava..",
+                        "io.jsonwebtoken..", "net.javacrumbs.shedlock..", "org.apache.kafka..",
+                        "org.apache.pdfbox..", "org.slf4j..", "com.openhtmltopdf..", "org.bson..");
 
         rule.check(classes);
     }
@@ -121,6 +126,52 @@ public class ArchitectureTest {
     void controllers_no_dependen_de_impls() {
         noClasses().that().resideInAPackage("..web.controller..")
                 .should().dependOnClassesThat().haveSimpleNameEndingWith("Impl")
+                .check(classes);
+    }
+
+    @Test
+    void kafka_no_depende_de_impls() {
+        noClasses().that().resideInAPackage("..kafka..")
+                .should().dependOnClassesThat().haveSimpleNameEndingWith("Impl")
+                .check(classes);
+    }
+
+    @Test
+    void kafka_no_depende_de_scheduler() {
+        noClasses().that().resideInAPackage("..kafka..")
+                .should().dependOnClassesThat().resideInAPackage("..scheduler..")
+                .check(classes);
+    }
+
+    // ==================== REGLAS DE ARQUITECTURA HEXAGONAL REAL ====================
+    // Mismas 3 reglas en los 10 backends (pipeline de arquitectura hexagonal): el
+    // dominio no debe depender del framework de persistencia, la aplicación no debe
+    // inyectar un repositorio de Spring Data directo (solo puertos propios), y nadie
+    // fuera de infraestructura debe depender de un adaptador concreto.
+
+    @Test
+    void domain_no_debe_usar_anotaciones_de_persistencia() {
+        noClasses()
+                .that().resideInAPackage("..domain..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("jakarta.persistence..", "org.springframework.data..")
+                .check(classes);
+    }
+
+    @Test
+    void application_no_debe_depender_de_repositorios_framework_directo() {
+        noClasses()
+                .that().resideInAPackage("..application..")
+                .should().dependOnClassesThat()
+                .areAssignableTo(CrudRepository.class)
+                .check(classes);
+    }
+
+    @Test
+    void nadie_fuera_de_infraestructura_debe_depender_de_adapters() {
+        noClasses()
+                .that().resideOutsideOfPackage("..infrastructure..")
+                .should().dependOnClassesThat().haveSimpleNameEndingWith("Adapter")
                 .check(classes);
     }
 }

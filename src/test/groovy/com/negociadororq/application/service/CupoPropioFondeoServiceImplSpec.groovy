@@ -1,5 +1,6 @@
 package com.negociadororq.application.service
 
+import com.negociadororq.application.exception.ConflictoException
 import com.negociadororq.application.exception.PeticionInvalidaException
 import com.negociadororq.application.exception.RecursoNoEncontradoException
 import com.negociadororq.application.exception.ReglaDeNegocioException
@@ -7,6 +8,7 @@ import com.negociadororq.application.port.output.EmpresaQuotaOutputPort
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort
 import com.negociadororq.domain.model.EmpresaQuota
 import com.negociadororq.domain.model.FondeadorQuota
+import org.springframework.orm.ObjectOptimisticLockingFailureException
 import spock.lang.Specification
 
 import java.math.BigDecimal
@@ -86,7 +88,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
                 1L, new BigDecimal("500.00"), new BigDecimal("2.5"), "FIJO", null, null, "TODO_EL_PLAZO", null, new BigDecimal("0"))
 
         then:
-        1 * fondeadorQuotaPort.save(autofondeo) >> autofondeo
+        1 * fondeadorQuotaPort.saveAndFlush(autofondeo) >> autofondeo
         autofondeo.payerQuota == new BigDecimal("500.00")
         autofondeo.payerCurrentQuota == new BigDecimal("400.00")
         autofondeo.payerRate == new BigDecimal("2.5")
@@ -109,7 +111,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("1000.00")).build()
         fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
         empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
-        fondeadorQuotaPort.save(_) >> { FondeadorQuota fq -> fq }
+        fondeadorQuotaPort.saveAndFlush(_) >> { FondeadorQuota fq -> fq }
 
         when:
         service.actualizarCupoPropio(
@@ -137,7 +139,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
 
         then:
         thrown(ReglaDeNegocioException)
-        0 * fondeadorQuotaPort.save(_)
+        0 * fondeadorQuotaPort.saveAndFlush(_)
     }
 
     def "actualizarCupoPropio lanza RecursoNoEncontradoException si la empresa no es fondeadora de sí misma"() {
@@ -152,13 +154,30 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         thrown(RecursoNoEncontradoException)
     }
 
+    def "actualizarCupoPropio lanza ConflictoException si otra peticion concurrente ya modifico la misma configuracion"() {
+        given: "La configuración cambió entre el read y el saveAndFlush (otra pestaña de administrador la tocó primero)"
+        def autofondeo = FondeadorQuota.builder().funderId(1L).payerId(1L).payerQuota(new BigDecimal("300.00")).build()
+        def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("1000.00")).build()
+        fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
+        empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
+        fondeadorQuotaPort.saveAndFlush(_) >> { throw new ObjectOptimisticLockingFailureException(FondeadorQuota, 1L) }
+
+        when:
+        service.actualizarCupoPropio(
+                1L, new BigDecimal("400.00"), new BigDecimal("2.5"), "FIJO", null, null, "TODO_EL_PLAZO", null, new BigDecimal("0"))
+
+        then: "Se traduce a un 409 (no al 500 genérico), para que el frontend pueda ofrecer reintentar"
+        def ex = thrown(ConflictoException)
+        ex.codigo == "CUPO_PROPIO_CONCURRENCIA"
+    }
+
     def "actualizarCupoPropio maneja quota y disponible nulos como cero consumido"() {
         given:
         def autofondeo = FondeadorQuota.builder().funderId(1L).payerId(1L).build()
         def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("1000.00")).build()
         fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
         empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
-        fondeadorQuotaPort.save(_) >> { FondeadorQuota fq -> fq }
+        fondeadorQuotaPort.saveAndFlush(_) >> { FondeadorQuota fq -> fq }
 
         when:
         service.actualizarCupoPropio(
@@ -182,7 +201,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
                 "TODO_EL_PLAZO", null, new BigDecimal("0"))
 
         then:
-        1 * fondeadorQuotaPort.save(autofondeo) >> autofondeo
+        1 * fondeadorQuotaPort.saveAndFlush(autofondeo) >> autofondeo
         autofondeo.tipoDescuento == "FINANCIERO"
         autofondeo.tipoTasa == "TASA_MES_VENCIDO"
         autofondeo.tarifaPlena == null
@@ -202,7 +221,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
                 new BigDecimal("3.0"), "PRIMEROS_DIAS", 5, new BigDecimal("0"))
 
         then:
-        1 * fondeadorQuotaPort.save(autofondeo) >> autofondeo
+        1 * fondeadorQuotaPort.saveAndFlush(autofondeo) >> autofondeo
         autofondeo.tipoDescuento == "DINAMICO"
         autofondeo.tipoTasa == "TASA_EFECTIVA_ANUAL"
         autofondeo.tarifaPlena == new BigDecimal("3.0")
@@ -224,7 +243,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("1000.00")).build()
         fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
         empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
-        fondeadorQuotaPort.save(_) >> { FondeadorQuota fq -> fq }
+        fondeadorQuotaPort.saveAndFlush(_) >> { FondeadorQuota fq -> fq }
 
         when:
         service.actualizarCupoPropio(
@@ -242,7 +261,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("1000.00")).build()
         fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
         empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
-        fondeadorQuotaPort.save(_) >> { FondeadorQuota fq -> fq }
+        fondeadorQuotaPort.saveAndFlush(_) >> { FondeadorQuota fq -> fq }
 
         when:
         service.actualizarCupoPropio(1L, new BigDecimal("400.00"), new BigDecimal("2.5"), "FINANCIERO",
@@ -265,7 +284,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
 
         then:
         thrown(ReglaDeNegocioException)
-        0 * fondeadorQuotaPort.save(_)
+        0 * fondeadorQuotaPort.saveAndFlush(_)
 
         where:
         tipo << ["FINANCIERO", "DINAMICO"]
@@ -285,7 +304,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
 
         then:
         thrown(ReglaDeNegocioException)
-        0 * fondeadorQuotaPort.save(_)
+        0 * fondeadorQuotaPort.saveAndFlush(_)
     }
 
     def "actualizarCupoPropio lanza PeticionInvalidaException si tipoDescuento no es un valor soportado"() {
@@ -301,7 +320,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
 
         then:
         thrown(PeticionInvalidaException)
-        0 * fondeadorQuotaPort.save(_)
+        0 * fondeadorQuotaPort.saveAndFlush(_)
     }
 
     def "actualizarCupoPropio lanza PeticionInvalidaException si tipoTasa no es un valor soportado"() {
@@ -318,7 +337,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
 
         then:
         thrown(PeticionInvalidaException)
-        0 * fondeadorQuotaPort.save(_)
+        0 * fondeadorQuotaPort.saveAndFlush(_)
     }
 
     // ─── porcentajeReserva ────────────────────────────────────────────────────
@@ -336,7 +355,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
                 new BigDecimal("5"))
 
         then:
-        1 * fondeadorQuotaPort.save(autofondeo) >> autofondeo
+        1 * fondeadorQuotaPort.saveAndFlush(autofondeo) >> autofondeo
         autofondeo.porcentajeReserva == new BigDecimal("5")
         resultado.porcentajeReserva == new BigDecimal("5")
     }
@@ -349,7 +368,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("1000.00")).build()
         fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
         empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
-        fondeadorQuotaPort.save(_) >> { FondeadorQuota fq -> fq }
+        fondeadorQuotaPort.saveAndFlush(_) >> { FondeadorQuota fq -> fq }
 
         when:
         def resultado = service.actualizarCupoPropio(
@@ -367,7 +386,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("1000.00")).build()
         fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
         empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
-        fondeadorQuotaPort.save(_) >> { FondeadorQuota fq -> fq }
+        fondeadorQuotaPort.saveAndFlush(_) >> { FondeadorQuota fq -> fq }
 
         when:
         def resultado = service.actualizarCupoPropio(
@@ -394,7 +413,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
 
         then:
         thrown(ReglaDeNegocioException)
-        0 * fondeadorQuotaPort.save(_)
+        0 * fondeadorQuotaPort.saveAndFlush(_)
 
         where:
         vigencia << ["PRIMEROS_DIAS", "DIAS_ANTES_VENCIMIENTO"]
@@ -413,7 +432,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
 
         then:
         thrown(PeticionInvalidaException)
-        0 * fondeadorQuotaPort.save(_)
+        0 * fondeadorQuotaPort.saveAndFlush(_)
     }
 
     // ─── actualizarEndosoGrupal ───────────────────────────────────────────────
@@ -429,7 +448,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def resultado = service.actualizarEndosoGrupal(1L, true)
 
         then:
-        1 * fondeadorQuotaPort.save(autofondeo) >> autofondeo
+        1 * fondeadorQuotaPort.saveAndFlush(autofondeo) >> autofondeo
         autofondeo.endosoGrupal
         resultado.endosoGrupal
     }
@@ -461,7 +480,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def resultado = service.actualizarRentabilidadMinima(1L, true, new BigDecimal("12.5"))
 
         then:
-        1 * fondeadorQuotaPort.save(autofondeo) >> autofondeo
+        1 * fondeadorQuotaPort.saveAndFlush(autofondeo) >> autofondeo
         autofondeo.rentabilidadMinimaActiva
         autofondeo.rentabilidadMinima == new BigDecimal("12.5")
         resultado.rentabilidadMinimaActiva
@@ -483,7 +502,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def resultado = service.actualizarRentabilidadMinima(1L, false, null)
 
         then:
-        1 * fondeadorQuotaPort.save(autofondeo) >> autofondeo
+        1 * fondeadorQuotaPort.saveAndFlush(autofondeo) >> autofondeo
         !autofondeo.rentabilidadMinimaActiva
         autofondeo.rentabilidadMinima == null
         !resultado.rentabilidadMinimaActiva
@@ -501,7 +520,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
 
         then:
         thrown(ReglaDeNegocioException)
-        0 * fondeadorQuotaPort.save(_)
+        0 * fondeadorQuotaPort.saveAndFlush(_)
     }
 
     def "actualizarRentabilidadMinima lanza RecursoNoEncontradoException si la empresa no es fondeadora de sí misma"() {
@@ -534,7 +553,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def resultado = service.restablecerCupo(1L)
 
         then:
-        1 * fondeadorQuotaPort.save(autofondeo) >> autofondeo
+        1 * fondeadorQuotaPort.saveAndFlush(autofondeo) >> autofondeo
         autofondeo.payerQuota == new BigDecimal("10000.00")
         autofondeo.payerCurrentQuota == new BigDecimal("10000.00")
         autofondeo.payerRate == new BigDecimal("2.5")
@@ -552,7 +571,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("50000.00")).build()
         fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
         empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
-        fondeadorQuotaPort.save(_) >> { FondeadorQuota fq -> fq }
+        fondeadorQuotaPort.saveAndFlush(_) >> { FondeadorQuota fq -> fq }
 
         when:
         service.restablecerCupo(1L)

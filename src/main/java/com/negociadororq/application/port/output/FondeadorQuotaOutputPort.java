@@ -39,4 +39,16 @@ public interface FondeadorQuotaOutputPort {
      * @return la asignación persistida
      */
     FondeadorQuota save(FondeadorQuota quota);
+
+    /**
+     * Igual que {@link #save}, pero fuerza el flush inmediato a la base de
+     * datos. Necesario para que un conflicto de optimistic locking
+     * ({@code @Version}) se detecte en el momento del guardado, en vez de
+     * diferirse al commit de la transacción (donde ya no se puede traducir a
+     * una excepción de negocio dentro del propio método de servicio).
+     *
+     * @param quota asignación a persistir
+     * @return la asignación persistida
+     */
+    FondeadorQuota saveAndFlush(FondeadorQuota quota);
 }
