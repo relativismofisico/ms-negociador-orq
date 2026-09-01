@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
+import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
@@ -34,6 +35,7 @@ import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
 import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -158,7 +160,17 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         empresaQuota.setCurrentQuota(empresaQuota.getCurrentQuota().subtract(valorFactura));
 
-        empresaQuotaPort.save(empresaQuota);
+        // saveAndFlush (no save): fuerza que el conflicto de @Version se detecte acá
+        // mismo, no al hacer commit de la transacción (donde ya no se puede traducir
+        // a una excepción de negocio legible por el cliente).
+        try {
+            empresaQuotaPort.saveAndFlush(empresaQuota);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new ConflictoException(
+                    "El cupo de la empresa fue modificado por otra negociación concurrente. "
+                            + "Vuelve a intentar.",
+                    "CUPO_EMPRESA_CONCURRENCIA");
+        }
 
         descontarCupoFondeadores(request, factura, fondeadores, valorFactura);
 
@@ -389,7 +401,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
                     FondeadorQuota quota = asignacionDirecta.get();
                     quota.setSupplierCurrentQuota(quota.getSupplierCurrentQuota().subtract(valorFactura));
-                    fondeadorQuotaPort.save(quota);
+                    guardarCupoFondeadorConVersionado(quota, fon.getRutFondeador());
 
                 } else {
 
@@ -411,8 +423,26 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                         quota.getPayerCurrentQuota()
                                 .subtract(valorFactura));
 
-                fondeadorQuotaPort.save(quota);
+                guardarCupoFondeadorConVersionado(quota, fon.getRutFondeador());
             }
+        }
+    }
+
+    /**
+     * Guarda el cupo del fondeador forzando flush inmediato (para que un conflicto
+     * de {@code @Version} se detecte acá, no al hacer commit de la transacción) y
+     * traduce la pérdida de la carrera a una excepción de negocio distinguible de
+     * "sin cupo" — el frontend debe poder ofrecer "reintentar" en vez de "cupo
+     * insuficiente".
+     */
+    private void guardarCupoFondeadorConVersionado(FondeadorQuota quota, String rutFondeador) {
+        try {
+            fondeadorQuotaPort.saveAndFlush(quota);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new ConflictoException(
+                    "El cupo del fondeador " + rutFondeador
+                            + " fue modificado por otra negociación concurrente. Vuelve a intentar.",
+                    "CUPO_FONDEADOR_CONCURRENCIA");
         }
     }
 

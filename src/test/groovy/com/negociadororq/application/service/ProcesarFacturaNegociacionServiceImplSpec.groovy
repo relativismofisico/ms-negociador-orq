@@ -2,6 +2,7 @@ package com.negociadororq.application.service
 
 import com.negociadororq.application.dto.NegociacionRequestDto
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto
+import com.negociadororq.application.exception.ConflictoException
 import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
@@ -24,6 +25,7 @@ import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota
 import com.negociadororq.domain.model.Operacion
 import com.negociadororq.domain.model.User
 import com.negociadororq.domain.model.UserQuota
+import org.springframework.orm.ObjectOptimisticLockingFailureException
 import spock.lang.Specification
 
 import java.math.BigDecimal
@@ -128,8 +130,42 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         resultado.rutProveedor == "PROV-001"
         resultado.rutPagador == "PAG-001"
         1 * cupoConsumidorService.descontarCupo(1L, _)
-        1 * empresaQuotaPort.save(_)
+        1 * empresaQuotaPort.saveAndFlush(_)
         1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_CESION, _)
+    }
+
+    // ─── conflictos de concurrencia (optimistic locking, @Version) ────────────
+
+    def "procesarFactura lanza ConflictoException si otra negociacion concurrente ya modifico el cupo de la empresa"() {
+        given: "El cupo de la empresa cambió entre el read y el saveAndFlush (perdió la carrera contra otra negociación)"
+        setupMocksFactoring("FECI040", "PROV-001")
+        empresaQuotaPort.saveAndFlush(_) >> { throw new ObjectOptimisticLockingFailureException(EmpresaQuota, 10L) }
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when: "Se procesa"
+        service.procesarFactura(request, buildReqFact("FECI040"))
+
+        then: "Se traduce a una excepción de negocio distinguible de 'sin cupo' — el frontend puede ofrecer reintentar"
+        def ex = thrown(ConflictoException)
+        ex.codigo == "CUPO_EMPRESA_CONCURRENCIA"
+        0 * fondeadorQuotaPort.saveAndFlush(_)
+        0 * facturaPatchPort.marcarComoNegociada(_, _, _)
+    }
+
+    def "procesarFactura lanza ConflictoException si otra negociacion concurrente ya modifico el cupo del fondeador"() {
+        given: "El cupo del fondeador cambió entre el read y el saveAndFlush (perdió la carrera contra otra negociación)"
+        setupMocksFactoring("FECI041", "PROV-001")
+        fondeadorQuotaPort.saveAndFlush(_) >> { throw new ObjectOptimisticLockingFailureException(FondeadorQuota, 20L) }
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when: "Se procesa"
+        service.procesarFactura(request, buildReqFact("FECI041"))
+
+        then: "Se traduce a una excepción de negocio distinguible de 'sin cupo', mencionando al fondeador afectado"
+        def ex = thrown(ConflictoException)
+        ex.codigo == "CUPO_FONDEADOR_CONCURRENCIA"
+        ex.message.contains("FOND-001")
+        0 * facturaPatchPort.marcarComoNegociada(_, _, _)
     }
 
     // ─── flujo exitoso CONFIRMING ─────────────────────────────────────────────

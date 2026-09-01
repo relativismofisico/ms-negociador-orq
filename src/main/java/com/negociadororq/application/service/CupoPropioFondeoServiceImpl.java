@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.negociadororq.application.dto.CupoPropioFondeoDto;
+import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
@@ -13,6 +14,7 @@ import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
 import com.negociadororq.domain.model.EmpresaQuota;
 import com.negociadororq.domain.model.FondeadorQuota;
 import lombok.RequiredArgsConstructor;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -81,7 +83,7 @@ public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
         autofondeo.setDiasVigencia(diasVigenciaValidados);
         autofondeo.setPorcentajeReserva(porcentajeReserva);
 
-        FondeadorQuota guardado = fondeadorQuotaPort.save(autofondeo);
+        FondeadorQuota guardado = guardarConVersionado(autofondeo, companyId);
 
         return toDto(companyId, guardado, empresaQuota);
     }
@@ -171,7 +173,7 @@ public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
         EmpresaQuota empresaQuota = buscarCupoAdministrador(companyId);
 
         autofondeo.setEndosoGrupal(endosoGrupal);
-        FondeadorQuota guardado = fondeadorQuotaPort.save(autofondeo);
+        FondeadorQuota guardado = guardarConVersionado(autofondeo, companyId);
 
         return toDto(companyId, guardado, empresaQuota);
     }
@@ -189,7 +191,7 @@ public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
 
         autofondeo.setRentabilidadMinimaActiva(activa);
         autofondeo.setRentabilidadMinima(valor);
-        FondeadorQuota guardado = fondeadorQuotaPort.save(autofondeo);
+        FondeadorQuota guardado = guardarConVersionado(autofondeo, companyId);
 
         return toDto(companyId, guardado, empresaQuota);
     }
@@ -200,9 +202,27 @@ public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
         EmpresaQuota empresaQuota = buscarCupoAdministrador(companyId);
 
         autofondeo.setPayerCurrentQuota(Optional.ofNullable(autofondeo.getPayerQuota()).orElse(BigDecimal.ZERO));
-        FondeadorQuota guardado = fondeadorQuotaPort.save(autofondeo);
+        FondeadorQuota guardado = guardarConVersionado(autofondeo, companyId);
 
         return toDto(companyId, guardado, empresaQuota);
+    }
+
+    /**
+     * Guarda la configuración de autofondeo forzando flush inmediato (para que un
+     * conflicto de {@code @Version} se detecte acá, no al hacer commit de la
+     * transacción) y lo traduce a un 409 — dos ediciones concurrentes de la misma
+     * configuración (ej. dos pestañas de administrador) deben poder reintentar, no
+     * recibir un 500 genérico.
+     */
+    private FondeadorQuota guardarConVersionado(FondeadorQuota autofondeo, Long companyId) {
+        try {
+            return fondeadorQuotaPort.saveAndFlush(autofondeo);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new ConflictoException(
+                    "La configuración de autofondeo de la empresa " + companyId
+                            + " fue modificada por otra petición concurrente. Vuelve a intentar.",
+                    "CUPO_PROPIO_CONCURRENCIA");
+        }
     }
 
     private FondeadorQuota buscarAutofondeo(Long companyId) {
