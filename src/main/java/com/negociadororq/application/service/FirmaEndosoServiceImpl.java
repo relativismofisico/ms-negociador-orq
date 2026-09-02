@@ -1,7 +1,7 @@
 package com.negociadororq.application.service;
 
-import java.time.LocalDateTime;
 
+import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.EndosoOutputPort;
 import com.negociadororq.application.port.output.PdfFirmaOutputPort;
 import com.negociadororq.domain.enums.RolActor;
@@ -10,17 +10,16 @@ import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FirmaOtpMetadata;
 import com.negociadororq.domain.model.PendingOtp;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * Implementación de {@link FirmaEndosoService}.
  */
-@Service
 @RequiredArgsConstructor
 public class FirmaEndosoServiceImpl implements FirmaEndosoService {
 
     private final EndosoOutputPort endosoPort;
     private final PdfFirmaOutputPort pdfFirmaPort;
+    private final ClockPort clock;
 
     @Override
     public void firmarPdfEndoso(String idNegociacion, FacturaNegociada factura, PendingOtp pending, String rutEmpresa,
@@ -51,7 +50,7 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
                 .otp(pending.getOtp())
                 .ip(pending.getIp())
                 .aprobado(aprobado)
-                .fecha(LocalDateTime.now())
+                .fecha(clock.now())
                 .observacion(observacion)
                 .build();
 

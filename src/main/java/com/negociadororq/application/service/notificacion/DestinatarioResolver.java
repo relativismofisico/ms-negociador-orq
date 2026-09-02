@@ -7,7 +7,6 @@ import com.negociadororq.domain.event.DestinatarioEmail;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.Negociacion;
-import org.springframework.stereotype.Component;
 
 /**
  * Resuelve, para cada evento notificable del ciclo de vida de una
@@ -15,7 +14,6 @@ import org.springframework.stereotype.Component;
  * destinatarios (actor + RUT) a los que debe llegar la notificación, según
  * el tipo de operación (FACTORING o CONFIRMING).
  */
-@Component
 public class DestinatarioResolver {
 
     /**

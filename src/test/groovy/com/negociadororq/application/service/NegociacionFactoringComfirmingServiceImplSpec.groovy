@@ -4,6 +4,7 @@ import com.negociadororq.application.dto.NegociacionRequestDto
 import com.negociadororq.application.exception.AccionNoPermitidaException
 import com.negociadororq.application.exception.PeticionInvalidaException
 import com.negociadororq.application.exception.RecursoNoEncontradoException
+import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.CompanyOperationOutputPort
 import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.CompanySectionVerificationOutputPort
@@ -22,6 +23,7 @@ import com.negociadororq.domain.model.User
 import spock.lang.Specification
 
 import java.math.BigDecimal
+import java.time.LocalDateTime
 
 class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
 
@@ -34,10 +36,13 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
     NotificacionService notificacionService = Mock()
     ProcesarFacturaNegociacionService procesarFacturaNegociacionService = Mock()
     FacturaPatchOutputPort facturaPatchPort = Mock()
+    ClockPort clock = Mock() {
+        now() >> LocalDateTime.now()
+    }
 
     NegociacionFactoringComfirmingServiceImpl service = new NegociacionFactoringComfirmingServiceImpl(
             facturaPort, negociacionPort, userPort, companyPort, companyOperationPort, companySectionVerificationPort,
-            notificacionService, procesarFacturaNegociacionService, facturaPatchPort
+            notificacionService, procesarFacturaNegociacionService, facturaPatchPort, clock
     )
 
     // Controlan el comportamiento por defecto de companyPort/companyOperationPort: los tests

@@ -6,6 +6,7 @@ import com.negociadororq.application.dto.ConfirmacionOtpRequestDto
 import com.negociadororq.application.exception.ConflictoException
 import com.negociadororq.application.exception.RecursoNoEncontradoException
 import com.negociadororq.application.exception.ReglaDeNegocioException
+import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.EndosoPatchOutputPort
 import com.negociadororq.application.port.output.EndosoOutputPort
@@ -52,19 +53,19 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
     NotificacionService notificacionService = Mock()
     EndosoOutputPort endosoPort = Mock()
     DocumentoEndosoService documentoEndosoService = Mock()
+    ClockPort clock = Mock() {
+        now() >> LocalDateTime.now()
+    }
 
     AprobacionEndosoDescuentoServiceImpl service = new AprobacionEndosoDescuentoServiceImpl(
             negociacionPort, facturaPatchPort, endosoPatchPort, outboxService,
             cupoReversionService, companyPort, fondeadorQuotaPort, facturaPort,
             userPort, pendingOtpPort, firmaEndosoService, notificacionService, endosoPort,
-            documentoEndosoService
+            documentoEndosoService, clock,
+            "topic-otp-request", "topic-otp-validate", "topic-liquidacion"
     )
 
     def setup() {
-        service.topicRequestOtp = "topic-otp-request"
-        service.topicValidateOtp = "topic-otp-validate"
-        service.topicLiquidacionSolicitada = "topic-liquidacion"
-
         // Por defecto, cada factura tiene su propio Endoso sin agrupar (comportamiento
         // previo): así el recálculo de estado grupal de actualizarEstadoEndosoGrupal()
         // se reduce al caso de una sola factura, igual que antes de esta funcionalidad.

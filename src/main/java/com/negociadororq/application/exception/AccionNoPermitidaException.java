@@ -1,7 +1,5 @@
 package com.negociadororq.application.exception;
 
-import org.springframework.http.HttpStatus;
-
 /**
  * HTTP 403 Forbidden.
  * Usar cuando el solicitante no tiene permisos para ejecutar la operación,
@@ -20,7 +18,7 @@ public class AccionNoPermitidaException extends NegociadorException {
      * @param mensaje mensaje legible describiendo la acción no permitida
      */
     public AccionNoPermitidaException(String mensaje) {
-        super(mensaje, HttpStatus.FORBIDDEN, "ACCION_NO_PERMITIDA");
+        super(mensaje, "ACCION_NO_PERMITIDA");
     }
 
     /**
@@ -30,7 +28,7 @@ public class AccionNoPermitidaException extends NegociadorException {
      * @param codigo  código de error de dominio en SNAKE_UPPER_CASE
      */
     public AccionNoPermitidaException(String mensaje, String codigo) {
-        super(mensaje, HttpStatus.FORBIDDEN, codigo);
+        super(mensaje, codigo);
     }
 }
 
