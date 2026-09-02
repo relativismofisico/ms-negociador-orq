@@ -6,14 +6,12 @@ import java.util.Map;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 /**
  * Despacha la construcción del cuerpo de una notificación al
  * {@link CuerpoNotificacionBuilder} registrado para el tipo del objeto
  * recibido.
  */
-@Component
 @RequiredArgsConstructor
 public class CuerpoNotificacionFactory {
 

@@ -1,21 +1,22 @@
 package com.negociadororq.application.service
 
 import com.negociadororq.application.exception.RecursoNoEncontradoException
+import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.FacturaOutputPort
 import com.negociadororq.domain.model.Factura
 import spock.lang.Specification
 
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class ValidacionFacturaServiceImplSpec extends Specification {
 
     FacturaOutputPort facturaPort = Mock()
-    ValidacionFacturaServiceImpl service = new ValidacionFacturaServiceImpl(facturaPort)
-
-    def setup() {
-        // default diasMinimosVencimiento = 10 (from @Value)
-        service.diasMinimosVencimiento = 10L
+    ClockPort clock = Mock() {
+        now() >> LocalDateTime.now()
     }
+    // 10L: mismo default que tenía @Value("${negociacion.dias-minimos-vencimiento:10}")
+    ValidacionFacturaServiceImpl service = new ValidacionFacturaServiceImpl(facturaPort, clock, 10L)
 
     def "factura vigente con dias suficientes retorna valida=true"() {
         given:
@@ -114,7 +115,6 @@ class ValidacionFacturaServiceImplSpec extends Specification {
 
     def "factura con diasMinimosVencimiento en 11 dias queda vigente"() {
         given:
-        service.diasMinimosVencimiento = 10L
         def fechaProceso = LocalDate.of(2024, 1, 1)
         def factura = new Factura()
         factura.fechavencimientoFactura = LocalDate.of(2024, 1, 12) // 11 días -> > 10 -> válida

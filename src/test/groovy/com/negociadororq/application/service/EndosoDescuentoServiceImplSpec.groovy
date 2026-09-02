@@ -3,6 +3,7 @@ package com.negociadororq.application.service
 import com.negociadororq.application.dto.EndosoRequestDto
 import com.negociadororq.application.exception.PeticionInvalidaException
 import com.negociadororq.application.exception.RecursoNoEncontradoException
+import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.EndosoOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
@@ -23,6 +24,7 @@ import spock.lang.Specification
 
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class EndosoDescuentoServiceImplSpec extends Specification {
 
@@ -37,11 +39,14 @@ class EndosoDescuentoServiceImplSpec extends Specification {
     FondeadorQuotaOutputPort fondeadorQuotaPort = Mock()
     UserOutputPort userPort = Mock()
     CupoReversionService cupoReversionService = Mock()
+    ClockPort clock = Mock() {
+        now() >> LocalDateTime.now()
+    }
 
     EndosoDescuentoServiceImpl service = new EndosoDescuentoServiceImpl(
             negociacionPort, endosoPort, facturaPort, notificacionService,
             facturaPatchPort, documentoEndosoService, negociacionPatchPort,
-            companyPort, fondeadorQuotaPort, userPort, cupoReversionService
+            companyPort, fondeadorQuotaPort, userPort, cupoReversionService, clock
     )
 
     // idPorNit vacío por defecto -> companyPort.findByNit devuelve Optional.empty()

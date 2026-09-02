@@ -5,12 +5,10 @@ import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort;
 import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * Implementación de {@link IndirectFunderOfferSupplierQuotaRecargaService}.
  */
-@Service
 @RequiredArgsConstructor
 public class IndirectFunderOfferSupplierQuotaRecargaServiceImpl implements IndirectFunderOfferSupplierQuotaRecargaService {
 

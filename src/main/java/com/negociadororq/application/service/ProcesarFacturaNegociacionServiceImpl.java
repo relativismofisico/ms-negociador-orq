@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
 import com.negociadororq.application.exception.ConflictoException;
+import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
@@ -19,6 +20,7 @@ import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
 import com.negociadororq.application.port.output.IndirectFunderOfferOutputPort;
 import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort;
+import com.negociadororq.application.port.output.OptimisticLockConflictException;
 import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.application.util.VigenciaDescuentoValidator;
@@ -35,8 +37,6 @@ import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
 import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +44,6 @@ import org.springframework.transaction.annotation.Transactional;
  * Implementación de {@link ProcesarFacturaNegociacionService}.
  */
 @Log
-@Service
 @RequiredArgsConstructor
 public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNegociacionService {
 
@@ -59,6 +58,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
     private final PayerFundingVisibilityOutputPort payerFundingVisibilityPort;
     private final IndirectFunderOfferOutputPort indirectFunderOfferPort;
     private final IndirectFunderOfferSupplierQuotaOutputPort indirectFunderOfferSupplierQuotaPort;
+    private final ClockPort clock;
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -165,7 +165,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         // a una excepción de negocio legible por el cliente).
         try {
             empresaQuotaPort.saveAndFlush(empresaQuota);
-        } catch (ObjectOptimisticLockingFailureException e) {
+        } catch (OptimisticLockConflictException e) {
             throw new ConflictoException(
                     "El cupo de la empresa fue modificado por otra negociación concurrente. "
                             + "Vuelve a intentar.",
@@ -301,7 +301,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
     // EndosoDescuentoServiceImpl).
     private void validarVigenciaDescuento(FondeadorQuota quota, LocalDate fechaNegociacion, LocalDate fechaVencimiento) {
         boolean dentroDeVigencia = VigenciaDescuentoValidator.dentroDeVigencia(
-                LocalDate.now(), fechaNegociacion, fechaVencimiento,
+                clock.now().toLocalDate(), fechaNegociacion, fechaVencimiento,
                 quota.getVigenciaDescuento(), quota.getDiasVigencia());
 
         if (!dentroDeVigencia) {
@@ -438,7 +438,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
     private void guardarCupoFondeadorConVersionado(FondeadorQuota quota, String rutFondeador) {
         try {
             fondeadorQuotaPort.saveAndFlush(quota);
-        } catch (ObjectOptimisticLockingFailureException e) {
+        } catch (OptimisticLockConflictException e) {
             throw new ConflictoException(
                     "El cupo del fondeador " + rutFondeador
                             + " fue modificado por otra negociación concurrente. Vuelve a intentar.",

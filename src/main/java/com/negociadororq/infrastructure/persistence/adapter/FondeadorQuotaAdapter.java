@@ -3,10 +3,12 @@ package com.negociadororq.infrastructure.persistence.adapter;
 import java.util.Optional;
 
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
+import com.negociadororq.application.port.output.OptimisticLockConflictException;
 import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.infrastructure.persistence.entity.FondeadorQuotaEntity;
 import com.negociadororq.infrastructure.persistence.repository.FondeadorQuotaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -45,7 +47,12 @@ public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {
 
     @Override
     public FondeadorQuota saveAndFlush(FondeadorQuota quota) {
-        return toDomain(repository.saveAndFlush(toEntity(quota)));
+        try {
+            return toDomain(repository.saveAndFlush(toEntity(quota)));
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new OptimisticLockConflictException(
+                    "Conflicto de optimistic locking al guardar FondeadorQuota id=" + quota.getId(), e);
+        }
     }
 
     private FondeadorQuota toDomain(FondeadorQuotaEntity entity) {

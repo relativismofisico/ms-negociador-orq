@@ -1,9 +1,9 @@
-package com.negociadororq.application.web.controller;
+package com.negociadororq.web.controller;
 
 import com.negociadororq.application.dto.ValidacionFacturaRequestDto;
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
-import com.negociadororq.application.exception.dto.ErrorResponse;
 import com.negociadororq.application.service.ValidacionFacturaService;
+import com.negociadororq.web.exception.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;

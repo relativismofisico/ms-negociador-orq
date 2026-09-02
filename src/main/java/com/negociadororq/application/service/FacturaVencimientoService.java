@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
@@ -15,7 +16,6 @@ import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.Negociacion;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.stereotype.Service;
 
 /**
  * Job de negocio que marca como VENCIDA a las facturas negociadas próximas a
@@ -23,7 +23,6 @@ import org.springframework.stereotype.Service;
  * que quedaron abandonadas sin completarse.
  */
 @Log
-@Service
 @RequiredArgsConstructor
 public class FacturaVencimientoService {
 
@@ -36,6 +35,7 @@ public class FacturaVencimientoService {
     private final NegociacionOutputPort negociacionPort;
     private final CompanyOutputPort companyPort;
     private final CupoReversionService cupoReversionService;
+    private final ClockPort clock;
 
     /**
      * Marca facturas como VENCIDA
@@ -49,7 +49,7 @@ public class FacturaVencimientoService {
 
         int actualizadas = 0;
 
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = clock.now().toLocalDate();
 
         for (Factura factura : facturas) {
 

@@ -1,7 +1,6 @@
 package com.negociadororq.application.service;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -17,6 +16,7 @@ import com.negociadororq.application.dto.NegociacionResponseDto;
 import com.negociadororq.application.exception.AccionNoPermitidaException;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
+import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOperationOutputPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.CompanySectionVerificationOutputPort;
@@ -32,14 +32,12 @@ import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Negociacion;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementación de {@link NegociacionFactoringComfirmingService}.
  */
 @Log
-@Service
 @RequiredArgsConstructor
 public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFactoringComfirmingService {
 
@@ -52,7 +50,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final NotificacionService notificacionService;
     private final ProcesarFacturaNegociacionService procesarFacturaNegociacionService;
     private final FacturaPatchOutputPort facturaPatchPort;
-
+    private final ClockPort clock;
 
     /**
      * Crea una negociación procesando factura a factura.
@@ -163,8 +161,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
         // añadir motivos concretos de facturas rechazadas
         negociacion.setErrores(allErrores);
-        negociacion.setFechaCreacion(LocalDateTime.now());
-        negociacion.setFechaUltimaActualizacion(LocalDateTime.now());
+        negociacion.setFechaCreacion(clock.now());
+        negociacion.setFechaUltimaActualizacion(clock.now());
         negociacion = negociacionPort.save(negociacion);
 
         // El id de la negociación solo existe tras guardarla; se deja registrado en cada

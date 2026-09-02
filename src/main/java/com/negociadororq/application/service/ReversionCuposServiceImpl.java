@@ -18,14 +18,12 @@ import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementación de {@link ReversionCuposService}.
  */
 @Log
-@Service
 @RequiredArgsConstructor
 public class ReversionCuposServiceImpl
         implements ReversionCuposService {

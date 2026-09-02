@@ -1,5 +1,6 @@
 package com.negociadororq.application.service
 
+import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.PdfGeneradorOutputPort
 import com.negociadororq.application.port.output.PersonOutputPort
 import com.negociadororq.application.port.output.UserOutputPort
@@ -13,14 +14,19 @@ import com.negociadororq.domain.model.Operacion
 import com.negociadororq.domain.model.User
 import spock.lang.Specification
 
+import java.time.LocalDateTime
+
 class DocumentoEndosoServiceImplSpec extends Specification {
 
     TemplateRenderService templateRenderService = Mock()
     PdfGeneradorOutputPort pdfGeneradorPort = Mock()
     UserOutputPort userPort = Mock()
     PersonOutputPort personPort = Mock()
+    ClockPort clock = Mock() {
+        now() >> LocalDateTime.now()
+    }
     DocumentoEndosoServiceImpl service =
-            new DocumentoEndosoServiceImpl(templateRenderService, pdfGeneradorPort, userPort, personPort)
+            new DocumentoEndosoServiceImpl(templateRenderService, pdfGeneradorPort, userPort, personPort, clock)
 
     private static Factura factura(String numero, String nombrePagador = "Pagador SA", String rutProveedor = "900000001", String nombreProveedor = "Proveedor Ltda") {
         def f = new Factura()

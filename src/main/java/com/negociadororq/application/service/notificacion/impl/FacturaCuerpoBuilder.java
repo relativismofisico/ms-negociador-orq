@@ -2,12 +2,10 @@ package com.negociadororq.application.service.notificacion.impl;
 
 import com.negociadororq.application.service.notificacion.CuerpoNotificacionBuilder;
 import com.negociadororq.domain.model.Factura;
-import org.springframework.stereotype.Component;
 
 /**
  * Cuerpo de notificación para el registro de una nueva factura.
  */
-@Component
 public class FacturaCuerpoBuilder implements CuerpoNotificacionBuilder<Factura> {
 
     @Override

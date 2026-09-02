@@ -6,9 +6,9 @@ import com.negociadororq.application.exception.RecursoNoEncontradoException
 import com.negociadororq.application.exception.ReglaDeNegocioException
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort
+import com.negociadororq.application.port.output.OptimisticLockConflictException
 import com.negociadororq.domain.model.EmpresaQuota
 import com.negociadororq.domain.model.FondeadorQuota
-import org.springframework.orm.ObjectOptimisticLockingFailureException
 import spock.lang.Specification
 
 import java.math.BigDecimal
@@ -160,7 +160,7 @@ class CupoPropioFondeoServiceImplSpec extends Specification {
         def empresaQuota = EmpresaQuota.builder().companyId(1L).quota(new BigDecimal("1000.00")).build()
         fondeadorQuotaPort.findByFunderIdAndPayerId(1L, 1L) >> Optional.of(autofondeo)
         empresaQuotaPort.findByCompanyId(1L) >> Optional.of(empresaQuota)
-        fondeadorQuotaPort.saveAndFlush(_) >> { throw new ObjectOptimisticLockingFailureException(FondeadorQuota, 1L) }
+        fondeadorQuotaPort.saveAndFlush(_) >> { throw new OptimisticLockConflictException("conflicto de prueba", null) }
 
         when:
         service.actualizarCupoPropio(

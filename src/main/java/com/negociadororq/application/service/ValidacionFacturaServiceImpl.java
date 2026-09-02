@@ -5,25 +5,22 @@ import java.time.temporal.ChronoUnit;
 
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
+import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.domain.model.Factura;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 
 /**
  * Implementación de {@link ValidacionFacturaService}.
  */
 @Log
-@Service
 @RequiredArgsConstructor
 public class ValidacionFacturaServiceImpl implements ValidacionFacturaService {
 
     private final FacturaOutputPort facturaPort;
-
-    @Value("${negociacion.dias-minimos-vencimiento:10}")
-    private long diasMinimosVencimiento;
+    private final ClockPort clock;
+    private final long diasMinimosVencimiento;
 
     @Override
     public ValidacionFacturaResponseDto validarFacturaVencida(String numeroFactura, LocalDate fechaProceso) {
@@ -32,7 +29,7 @@ public class ValidacionFacturaServiceImpl implements ValidacionFacturaService {
         if (fechaProceso != null) {
             fechaValidacion = fechaProceso;
         } else {
-            fechaValidacion = LocalDate.now();
+            fechaValidacion = clock.now().toLocalDate();
         }
 
         Factura factura = facturaPort

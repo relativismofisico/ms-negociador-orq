@@ -3,10 +3,12 @@ package com.negociadororq.infrastructure.persistence.adapter;
 import java.util.Optional;
 
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
+import com.negociadororq.application.port.output.OptimisticLockConflictException;
 import com.negociadororq.domain.model.EmpresaQuota;
 import com.negociadororq.infrastructure.persistence.entity.EmpresaQuotaEntity;
 import com.negociadororq.infrastructure.persistence.repository.EmpresaQuotaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,7 +32,12 @@ public class EmpresaQuotaAdapter implements EmpresaQuotaOutputPort {
 
     @Override
     public EmpresaQuota saveAndFlush(EmpresaQuota quota) {
-        return toDomain(repository.saveAndFlush(toEntity(quota)));
+        try {
+            return toDomain(repository.saveAndFlush(toEntity(quota)));
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new OptimisticLockConflictException(
+                    "Conflicto de optimistic locking al guardar EmpresaQuota id=" + quota.getId(), e);
+        }
     }
 
     private EmpresaQuota toDomain(EmpresaQuotaEntity entity) {

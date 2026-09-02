@@ -1,8 +1,6 @@
 package com.negociadororq.application.service;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,6 +12,7 @@ import com.negociadororq.application.dto.EndosoRequestDto;
 import com.negociadororq.application.dto.EndosoResponseDto;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
+import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.EndosoOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
@@ -36,14 +35,12 @@ import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
 /**
  * Implementación de {@link EndosoDescuentoService}.
  */
-@Service
 @RequiredArgsConstructor
 @Log
 public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
@@ -59,6 +56,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     private final FondeadorQuotaOutputPort fondeadorQuotaPort;
     private final UserOutputPort userPort;
     private final CupoReversionService cupoReversionService;
+    private final ClockPort clock;
 
     private record FacturaValidada(String numeroFactura, Factura factura, FacturaNegociada facturaNegociada) {
     }
@@ -223,8 +221,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                 .rutPagador(primera.facturaNegociada().getRutPagador())
                 .rutFondeador(rutFondeador)
                 .estado(EstadoEndoso.EN_REVISION)
-                .fechaCreacion(LocalDateTime.now())
-                .fechaActualizacion(LocalDateTime.now())
+                .fechaCreacion(clock.now())
+                .fechaActualizacion(clock.now())
                 .build();
 
         // El firmante (usuario individual de la empresa proveedora) solo se conoce
@@ -299,7 +297,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
         String rutFondeador = facturaNegociada.getFondeadores().get(0).getRutFondeador();
         return resolverFondeadorQuota(rutFondeador, factura, tipoOperacion)
                 .map(quota -> VigenciaDescuentoValidator.dentroDeVigencia(
-                        LocalDate.now(), factura.getFechaNegociacionFactura(), factura.getFechavencimientoFactura(),
+                        clock.now().toLocalDate(), factura.getFechaNegociacionFactura(), factura.getFechavencimientoFactura(),
                         quota.getVigenciaDescuento(), quota.getDiasVigencia()))
                 .orElse(true);
     }

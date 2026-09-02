@@ -3,6 +3,7 @@ package com.negociadororq.application.service
 import com.negociadororq.application.dto.NegociacionRequestDto
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto
 import com.negociadororq.application.exception.ConflictoException
+import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
@@ -10,6 +11,7 @@ import com.negociadororq.application.port.output.FacturaPatchOutputPort
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort
 import com.negociadororq.application.port.output.IndirectFunderOfferOutputPort
 import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort
+import com.negociadororq.application.port.output.OptimisticLockConflictException
 import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPort
 import com.negociadororq.application.port.output.UserOutputPort
 import com.negociadororq.domain.enums.EstadoFirma
@@ -25,11 +27,11 @@ import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota
 import com.negociadororq.domain.model.Operacion
 import com.negociadororq.domain.model.User
 import com.negociadororq.domain.model.UserQuota
-import org.springframework.orm.ObjectOptimisticLockingFailureException
 import spock.lang.Specification
 
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
 
@@ -44,11 +46,14 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     PayerFundingVisibilityOutputPort payerFundingVisibilityPort = Mock()
     IndirectFunderOfferOutputPort indirectFunderOfferPort = Mock()
     IndirectFunderOfferSupplierQuotaOutputPort indirectFunderOfferSupplierQuotaPort = Mock()
+    ClockPort clock = Mock() {
+        now() >> LocalDateTime.now()
+    }
 
     ProcesarFacturaNegociacionServiceImpl service = new ProcesarFacturaNegociacionServiceImpl(
             facturaPort, cupoConsumidorService, userPort, companyPort,
             empresaQuotaPort, fondeadorQuotaPort, facturaPatchPort, validacionFacturaService,
-            payerFundingVisibilityPort, indirectFunderOfferPort, indirectFunderOfferSupplierQuotaPort
+            payerFundingVisibilityPort, indirectFunderOfferPort, indirectFunderOfferSupplierQuotaPort, clock
     )
 
     def buildFactura(String numero, String rutProv, String rutPag) {
@@ -139,7 +144,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura lanza ConflictoException si otra negociacion concurrente ya modifico el cupo de la empresa"() {
         given: "El cupo de la empresa cambió entre el read y el saveAndFlush (perdió la carrera contra otra negociación)"
         setupMocksFactoring("FECI040", "PROV-001")
-        empresaQuotaPort.saveAndFlush(_) >> { throw new ObjectOptimisticLockingFailureException(EmpresaQuota, 10L) }
+        empresaQuotaPort.saveAndFlush(_) >> { throw new OptimisticLockConflictException("conflicto de prueba", null) }
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when: "Se procesa"
@@ -155,7 +160,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura lanza ConflictoException si otra negociacion concurrente ya modifico el cupo del fondeador"() {
         given: "El cupo del fondeador cambió entre el read y el saveAndFlush (perdió la carrera contra otra negociación)"
         setupMocksFactoring("FECI041", "PROV-001")
-        fondeadorQuotaPort.saveAndFlush(_) >> { throw new ObjectOptimisticLockingFailureException(FondeadorQuota, 20L) }
+        fondeadorQuotaPort.saveAndFlush(_) >> { throw new OptimisticLockConflictException("conflicto de prueba", null) }
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when: "Se procesa"

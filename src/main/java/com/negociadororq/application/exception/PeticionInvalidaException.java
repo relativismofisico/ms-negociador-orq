@@ -1,7 +1,5 @@
 package com.negociadororq.application.exception;
 
-import org.springframework.http.HttpStatus;
-
 /**
  * HTTP 400 Bad Request.
  * Usar cuando la petición del cliente tiene datos faltantes, mal formados
@@ -20,7 +18,7 @@ public class PeticionInvalidaException extends NegociadorException {
      * @param mensaje mensaje legible describiendo qué dato de la petición es inválido
      */
     public PeticionInvalidaException(String mensaje) {
-        super(mensaje, HttpStatus.BAD_REQUEST, "PETICION_INVALIDA");
+        super(mensaje, "PETICION_INVALIDA");
     }
 
     /**
@@ -30,7 +28,7 @@ public class PeticionInvalidaException extends NegociadorException {
      * @param codigo  código de error de dominio en SNAKE_UPPER_CASE
      */
     public PeticionInvalidaException(String mensaje, String codigo) {
-        super(mensaje, HttpStatus.BAD_REQUEST, codigo);
+        super(mensaje, codigo);
     }
 }
 

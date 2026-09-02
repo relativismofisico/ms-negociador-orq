@@ -1,7 +1,5 @@
 package com.negociadororq.application.exception;
 
-import org.springframework.http.HttpStatus;
-
 /**
  * HTTP 409 Conflict.
  * Usar cuando la petición no puede completarse debido a un conflicto con
@@ -19,7 +17,7 @@ public class ConflictoException extends NegociadorException {
      * @param mensaje mensaje legible describiendo el conflicto
      */
     public ConflictoException(String mensaje) {
-        super(mensaje, HttpStatus.CONFLICT, "CONFLICTO");
+        super(mensaje, "CONFLICTO");
     }
 
     /**
@@ -29,7 +27,7 @@ public class ConflictoException extends NegociadorException {
      * @param codigo  código de error de dominio en SNAKE_UPPER_CASE
      */
     public ConflictoException(String mensaje, String codigo) {
-        super(mensaje, HttpStatus.CONFLICT, codigo);
+        super(mensaje, codigo);
     }
 }
 

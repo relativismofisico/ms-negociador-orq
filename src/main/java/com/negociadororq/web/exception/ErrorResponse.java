@@ -1,4 +1,4 @@
-package com.negociadororq.application.exception.dto;
+package com.negociadororq.web.exception;
 
 import java.time.LocalDateTime;
 import java.util.List;
