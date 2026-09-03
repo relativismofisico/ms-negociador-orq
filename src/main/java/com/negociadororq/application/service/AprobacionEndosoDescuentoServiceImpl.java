@@ -1,7 +1,6 @@
 package com.negociadororq.application.service;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -15,6 +14,7 @@ import com.negociadororq.application.dto.ConfirmacionOtpRequestDto;
 import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
+import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.EndosoOutputPort;
 import com.negociadororq.application.port.output.EndosoPatchOutputPort;
@@ -45,15 +45,12 @@ import com.negociadororq.domain.model.PendingOtp;
 import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementación de {@link AprobacionEndosoDescuentoService} y {@link AprobacionInternaService}.
  */
 @Log
-@Service
 @RequiredArgsConstructor
 public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDescuentoService, AprobacionInternaService {
 
@@ -71,15 +68,10 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final NotificacionService notificacionService;
     private final EndosoOutputPort endosoPort;
     private final DocumentoEndosoService documentoEndosoService;
-
-    @Value("${topics.otp-request}")
-    private String topicRequestOtp;
-
-    @Value("${topics.otp-validate}")
-    private String topicValidateOtp;
-
-    @Value("${topics.liquidacion}")
-    private String topicLiquidacionSolicitada;
+    private final ClockPort clock;
+    private final String topicRequestOtp;
+    private final String topicValidateOtp;
+    private final String topicLiquidacionSolicitada;
 
     @Override
     public void solicitarOtp(AprobacionRequestDto request) {
@@ -103,7 +95,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         .rutEmpresa(request.getRutEmpresa())
                         .rutOperador(request.getRutOperador())
                         .rolActor(request.getRolActor())
-                        .fechaSolicitud(LocalDateTime.now())
+                        .fechaSolicitud(clock.now())
                         .build()
         );
     }
@@ -185,7 +177,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             AprobacionActorDto aprobacion = new AprobacionActorDto(
                     request.getRutEmpresa(), rolActor, factReq.isAprobado(),
-                    request.getObservacion(), LocalDateTime.now());
+                    request.getObservacion(), clock.now());
 
             // En Confirming, el firmante del documento (usuario de la empresa
             // proveedora) recién se conoce en este punto: quien solicitó el
@@ -216,7 +208,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
         EstadoNegociacion estadoGlobal = calcularEstadoNegociacion(negociacion);
         negociacion.setEstado(estadoGlobal.name());
-        negociacion.setFechaUltimaActualizacion(LocalDateTime.now());
+        negociacion.setFechaUltimaActualizacion(clock.now());
         negociacionPort.save(negociacion);
 
         AprobacionResponseDto response = new AprobacionResponseDto();
@@ -279,7 +271,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     .build();
 
             LiquidacionSolicitadaEvent event = new LiquidacionSolicitadaEvent(
-                    idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, LocalDateTime.now());
+                    idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, clock.now());
 
             outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
         } else if (alguienAprobo) {

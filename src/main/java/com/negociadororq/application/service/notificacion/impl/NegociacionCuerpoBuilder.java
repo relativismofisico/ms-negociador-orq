@@ -2,12 +2,10 @@ package com.negociadororq.application.service.notificacion.impl;
 
 import com.negociadororq.application.service.notificacion.CuerpoNotificacionBuilder;
 import com.negociadororq.domain.model.Negociacion;
-import org.springframework.stereotype.Component;
 
 /**
  * Cuerpo de notificación para la creación de una nueva negociación.
  */
-@Component
 public class NegociacionCuerpoBuilder implements CuerpoNotificacionBuilder<Negociacion> {
 
     @Override

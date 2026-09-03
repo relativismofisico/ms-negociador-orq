@@ -3,12 +3,10 @@ package com.negociadororq.application.service.notificacion.impl;
 
 import com.negociadororq.application.service.notificacion.CuerpoNotificacionBuilder;
 import com.negociadororq.domain.model.User;
-import org.springframework.stereotype.Component;
 
 /**
  * Cuerpo de notificación para el registro de una nueva persona/usuario.
  */
-@Component
 public class PersonaCuerpoBuilder implements CuerpoNotificacionBuilder<User> {
 
     @Override

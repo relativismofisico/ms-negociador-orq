@@ -1,5 +1,6 @@
 package com.negociadororq.application.service
 
+import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
 import com.negociadororq.application.port.output.NegociacionOutputPort
@@ -26,13 +27,15 @@ class NotificacionServiceImplSpec extends Specification {
     DestinatarioResolver destinatarioResolver = Mock()
     CompanyOutputPort companyPort = Mock()
     FacturaOutputPort facturaPort = Mock()
+    ClockPort clock = Mock() {
+        now() >> LocalDateTime.now()
+    }
     NotificacionServiceImpl service
 
     def setup() {
         service = new NotificacionServiceImpl(
-                outboxService, cuerpoFactory, negociacionPort, destinatarioResolver, companyPort, facturaPort)
-        service.topicNotificacionEmail = "topic-email"
-        service.urlPlataformaOperador = "http://localhost:4800"
+                outboxService, cuerpoFactory, negociacionPort, destinatarioResolver, companyPort, facturaPort,
+                clock, "topic-email", "http://localhost:4800")
         // sin stub explícito, companyPort.findByNit/facturaPort.findByNumeroFactura
         // devuelven null (no Optional.empty()) en un Mock() de Spock: hay que
         // estubarlos explícitamente en cada test que los alcance.

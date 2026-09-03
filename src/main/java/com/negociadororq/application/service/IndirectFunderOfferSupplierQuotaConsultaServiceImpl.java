@@ -7,12 +7,10 @@ import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPor
 import com.negociadororq.domain.model.IndirectFunderOffer;
 import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * Implementación de {@link IndirectFunderOfferSupplierQuotaConsultaService}.
  */
-@Service
 @RequiredArgsConstructor
 public class IndirectFunderOfferSupplierQuotaConsultaServiceImpl
         implements IndirectFunderOfferSupplierQuotaConsultaService {

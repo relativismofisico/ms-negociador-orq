@@ -1,5 +1,6 @@
 package com.negociadororq.application.service
 
+import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
 import com.negociadororq.application.port.output.NegociacionOutputPort
@@ -7,6 +8,7 @@ import com.negociadororq.domain.model.Factura
 import spock.lang.Specification
 
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class FacturaVencimientoServiceSpec extends Specification {
 
@@ -14,8 +16,11 @@ class FacturaVencimientoServiceSpec extends Specification {
     NegociacionOutputPort negociacionPort = Mock()
     CompanyOutputPort companyPort = Mock()
     CupoReversionService cupoReversionService = Mock()
+    ClockPort clock = Mock() {
+        now() >> LocalDateTime.now()
+    }
     FacturaVencimientoService service = new FacturaVencimientoService(
-            facturaPort, negociacionPort, companyPort, cupoReversionService)
+            facturaPort, negociacionPort, companyPort, cupoReversionService, clock)
 
     def "marca facturas con dias <= 10 como VENCIDA"() {
         given:

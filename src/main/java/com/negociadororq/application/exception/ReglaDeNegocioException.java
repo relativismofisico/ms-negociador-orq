@@ -1,7 +1,5 @@
 package com.negociadororq.application.exception;
 
-import org.springframework.http.HttpStatus;
-
 /**
  * HTTP 422 Unprocessable Entity.
  * Usar cuando la petición es sintácticamente válida pero viola una regla de negocio.
@@ -21,7 +19,7 @@ public class ReglaDeNegocioException extends NegociadorException {
      * @param mensaje mensaje legible describiendo la regla de negocio violada
      */
     public ReglaDeNegocioException(String mensaje) {
-        super(mensaje, HttpStatus.UNPROCESSABLE_ENTITY, "REGLA_DE_NEGOCIO_VIOLADA");
+        super(mensaje, "REGLA_DE_NEGOCIO_VIOLADA");
     }
 
     /**
@@ -31,7 +29,7 @@ public class ReglaDeNegocioException extends NegociadorException {
      * @param codigo  código de error de dominio en SNAKE_UPPER_CASE
      */
     public ReglaDeNegocioException(String mensaje, String codigo) {
-        super(mensaje, HttpStatus.UNPROCESSABLE_ENTITY, codigo);
+        super(mensaje, codigo);
     }
 }
 

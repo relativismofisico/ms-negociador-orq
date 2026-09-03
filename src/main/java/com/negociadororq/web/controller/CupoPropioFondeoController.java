@@ -1,11 +1,11 @@
-package com.negociadororq.application.web.controller;
+package com.negociadororq.web.controller;
 
 import com.negociadororq.application.dto.ActualizarCupoPropioRequestDto;
 import com.negociadororq.application.dto.CupoPropioFondeoDto;
 import com.negociadororq.application.dto.EndosoGrupalRequestDto;
 import com.negociadororq.application.dto.RentabilidadMinimaRequestDto;
-import com.negociadororq.application.exception.dto.ErrorResponse;
 import com.negociadororq.application.service.CupoPropioFondeoService;
+import com.negociadororq.web.exception.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

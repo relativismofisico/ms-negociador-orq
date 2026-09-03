@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
@@ -35,13 +36,10 @@ import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Negociacion;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 
 /**
  * Implementación de {@link NotificacionService}.
  */
-@Service
 @RequiredArgsConstructor
 public class NotificacionServiceImpl implements NotificacionService {
 
@@ -54,12 +52,9 @@ public class NotificacionServiceImpl implements NotificacionService {
     private final DestinatarioResolver destinatarioResolver;
     private final CompanyOutputPort companyPort;
     private final FacturaOutputPort facturaPort;
-
-    @Value("${topics.notificacion-email}")
-    private String topicNotificacionEmail;
-
-    @Value("${platform.operador.url:http://localhost:4800}")
-    private String urlPlataformaOperador;
+    private final ClockPort clock;
+    private final String topicNotificacionEmail;
+    private final String urlPlataformaOperador;
 
     @Override
     public void notificarCreacionNegociacion(Negociacion negociacion) {
@@ -90,7 +85,7 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .asunto("NEGOCIACION")
                 .data(data)
                 .tipoNotificacion(TipoNotificacion.NEGOCIACION_CREADA.name())
-                .fecha(LocalDateTime.now())
+                .fecha(clock.now())
                 .build();
 
         outboxService.guardarEvento(negociacion.getId(), topicNotificacionEmail, event);
@@ -240,7 +235,7 @@ public class NotificacionServiceImpl implements NotificacionService {
                 "mensajeIntro", mensajeIntro,
                 "textoBoton", textoBoton,
                 "urlAprobacion", urlPlataformaOperador,
-                "anio", String.valueOf(LocalDateTime.now().getYear())
+                "anio", String.valueOf(clock.now().getYear())
         );
 
         NotificacionEmailEvent event = NotificacionEmailEvent.builder()
@@ -249,7 +244,7 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .asunto("ENDOSO")
                 .data(data)
                 .tipoNotificacion(TipoNotificacion.ENDOSO_CREADO.name())
-                .fecha(LocalDateTime.now())
+                .fecha(clock.now())
                 .build();
 
         outboxService.guardarEvento(endoso.getNegociacionId(), topicNotificacionEmail, event);
@@ -343,7 +338,7 @@ public class NotificacionServiceImpl implements NotificacionService {
                 "mensajeIntro", mensajeIntro,
                 "textoBoton", textoBoton,
                 "urlAprobacion", urlPlataformaOperador,
-                "anio", String.valueOf(LocalDateTime.now().getYear())
+                "anio", String.valueOf(clock.now().getYear())
         );
 
         NotificacionEmailEvent event = NotificacionEmailEvent.builder()
@@ -352,7 +347,7 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .asunto("ENDOSO")
                 .data(data)
                 .tipoNotificacion(TipoNotificacion.ENDOSO_CREADO.name())
-                .fecha(LocalDateTime.now())
+                .fecha(clock.now())
                 .build();
 
         outboxService.guardarEvento(representante.getNegociacionId(), topicNotificacionEmail, event);
@@ -466,7 +461,7 @@ public class NotificacionServiceImpl implements NotificacionService {
                 "claseOperacion", claseOperacion,
                 "nombreActor", nombreCompania(aprobacion.getRutEmpresa()),
                 "facturas", facturas,
-                "anio", String.valueOf(LocalDateTime.now().getYear())
+                "anio", String.valueOf(clock.now().getYear())
         );
 
         NotificacionEmailEvent event = NotificacionEmailEvent.builder()
@@ -475,7 +470,7 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .asunto("FIRMA_ENDOSO")
                 .data(data)
                 .tipoNotificacion(TipoNotificacion.ENDOSO_FIRMADO.name())
-                .fecha(LocalDateTime.now())
+                .fecha(clock.now())
                 .build();
 
         outboxService.guardarEvento(negociacion.getId(), topicNotificacionEmail, event);
@@ -512,7 +507,7 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .destinatarios(destinatarios)
                 .asunto("LIQUIDACION_FALLIDA")
                 .data(data)
-                .fecha(LocalDateTime.now())
+                .fecha(clock.now())
                 .build();
 
         outboxService.guardarEvento(negociacion.getId(), topicNotificacionEmail, event);

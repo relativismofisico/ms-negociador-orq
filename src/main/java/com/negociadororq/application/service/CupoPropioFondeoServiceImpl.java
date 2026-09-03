@@ -11,16 +11,14 @@ import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
+import com.negociadororq.application.port.output.OptimisticLockConflictException;
 import com.negociadororq.domain.model.EmpresaQuota;
 import com.negociadororq.domain.model.FondeadorQuota;
 import lombok.RequiredArgsConstructor;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.stereotype.Service;
 
 /**
  * Implementación de {@link CupoPropioFondeoService}.
  */
-@Service
 @RequiredArgsConstructor
 public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
 
@@ -217,7 +215,7 @@ public class CupoPropioFondeoServiceImpl implements CupoPropioFondeoService {
     private FondeadorQuota guardarConVersionado(FondeadorQuota autofondeo, Long companyId) {
         try {
             return fondeadorQuotaPort.saveAndFlush(autofondeo);
-        } catch (ObjectOptimisticLockingFailureException e) {
+        } catch (OptimisticLockConflictException e) {
             throw new ConflictoException(
                     "La configuración de autofondeo de la empresa " + companyId
                             + " fue modificada por otra petición concurrente. Vuelve a intentar.",
