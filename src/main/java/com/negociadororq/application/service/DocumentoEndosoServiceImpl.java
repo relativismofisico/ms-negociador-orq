@@ -1,8 +1,8 @@
 package com.negociadororq.application.service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
+import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.PdfGeneradorOutputPort;
 import com.negociadororq.application.port.output.PersonOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
@@ -14,13 +14,11 @@ import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.stereotype.Service;
 
 /**
  * Implementación de {@link DocumentoEndosoService}.
  */
 @Log
-@Service
 @RequiredArgsConstructor
 public class DocumentoEndosoServiceImpl implements DocumentoEndosoService {
 
@@ -28,6 +26,7 @@ public class DocumentoEndosoServiceImpl implements DocumentoEndosoService {
     private final PdfGeneradorOutputPort pdfGeneradorPort;
     private final UserOutputPort userPort;
     private final PersonOutputPort personPort;
+    private final ClockPort clock;
 
     @Override
     public void generarDocumentoFormal(
@@ -56,7 +55,7 @@ public class DocumentoEndosoServiceImpl implements DocumentoEndosoService {
                 negociacion.getTipoOperacion().getClase(),
                 primeraNegociada.getFondeadores().get(0).getNombreFondeador(),
                 primeraNegociada.getFondeadores().get(0).getRutFondeador(),
-                LocalDateTime.now(),
+                clock.now(),
                 firmante
         );
 

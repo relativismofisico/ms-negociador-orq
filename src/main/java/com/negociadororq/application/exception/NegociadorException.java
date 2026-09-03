@@ -1,31 +1,22 @@
 package com.negociadororq.application.exception;
 
-import org.springframework.http.HttpStatus;
-
 /**
  * Excepción base corporativa para todos los microservicios de la plataforma.
- * Toda excepción de dominio debe extender esta clase para garantizar un
- * mapeo HTTP consistente a través del GlobalExceptionHandler.
+ * Toda excepción de dominio debe extender esta clase; el mapeo a un status
+ * HTTP concreto es responsabilidad exclusiva de web/exception/GlobalExceptionHandler
+ * (por tipo de excepción), no de esta jerarquía — application/ no debe conocer
+ * el framework HTTP.
  *
  * Convención de códigos de error: SNAKE_UPPER_CASE, descriptivo del recurso/acción.
  * Ejemplos: FACTURA_NO_ENCONTRADA, CUPO_INSUFICIENTE, ENDOSO_DUPLICADO
  */
 public abstract class NegociadorException extends RuntimeException {
 
-    private final HttpStatus status;
     private final String codigo;
 
-    protected NegociadorException(String mensaje, HttpStatus status, String codigo) {
+    protected NegociadorException(String mensaje, String codigo) {
         super(mensaje);
-        this.status = status;
         this.codigo = codigo;
-    }
-
-    /**
-     * @return el status HTTP con el que el GlobalExceptionHandler debe responder
-     */
-    public HttpStatus getStatus() {
-        return status;
     }
 
     /**

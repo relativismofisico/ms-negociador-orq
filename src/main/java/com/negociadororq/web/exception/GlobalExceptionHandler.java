@@ -1,11 +1,15 @@
-package com.negociadororq.application.exception.handler;
+package com.negociadororq.web.exception;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.negociadororq.application.exception.AccionNoPermitidaException;
+import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.NegociadorException;
-import com.negociadororq.application.exception.dto.ErrorResponse;
+import com.negociadororq.application.exception.PeticionInvalidaException;
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
+import com.negociadororq.application.exception.ReglaDeNegocioException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.java.Log;
 import org.springframework.http.HttpStatus;
@@ -32,7 +36,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * 5. Toda excepción de dominio debe extender NegociadorException.
  *
  * Jerarquía de manejo (orden de precedencia):
- *   NegociadorException     → código HTTP definido en la excepción (4xx)
+ *   NegociadorException     → código HTTP resuelto en este handler según el subtipo (4xx)
  *   MethodArgumentNotValid  → 400 (falló @Valid en el body)
  *   HttpMessageNotReadable  → 400 (body malformado / JSON inválido)
  *   MethodNotSupported      → 405 (verbo HTTP incorrecto)
@@ -46,17 +50,60 @@ public class GlobalExceptionHandler {
 
     // =========================================================================
     // Excepciones de dominio (NegociadorException y subclases)
+    //
+    // NegociadorException (application/) no conoce HttpStatus a propósito —
+    // es este handler, en web/, el único responsable de decidir a qué status
+    // HTTP corresponde cada subtipo de excepción de dominio.
     // =========================================================================
 
+    @ExceptionHandler(RecursoNoEncontradoException.class)
+    public ResponseEntity<ErrorResponse> handleRecursoNoEncontrado(
+            RecursoNoEncontradoException ex, HttpServletRequest request) {
+        return handleNegociadorException(ex, HttpStatus.NOT_FOUND, request);
+    }
+
+    @ExceptionHandler(ConflictoException.class)
+    public ResponseEntity<ErrorResponse> handleConflicto(
+            ConflictoException ex, HttpServletRequest request) {
+        return handleNegociadorException(ex, HttpStatus.CONFLICT, request);
+    }
+
+    @ExceptionHandler(PeticionInvalidaException.class)
+    public ResponseEntity<ErrorResponse> handlePeticionInvalida(
+            PeticionInvalidaException ex, HttpServletRequest request) {
+        return handleNegociadorException(ex, HttpStatus.BAD_REQUEST, request);
+    }
+
+    @ExceptionHandler(ReglaDeNegocioException.class)
+    public ResponseEntity<ErrorResponse> handleReglaDeNegocio(
+            ReglaDeNegocioException ex, HttpServletRequest request) {
+        return handleNegociadorException(ex, HttpStatus.UNPROCESSABLE_ENTITY, request);
+    }
+
+    @ExceptionHandler(AccionNoPermitidaException.class)
+    public ResponseEntity<ErrorResponse> handleAccionNoPermitida(
+            AccionNoPermitidaException ex, HttpServletRequest request) {
+        return handleNegociadorException(ex, HttpStatus.FORBIDDEN, request);
+    }
+
+    /**
+     * Red de seguridad para cualquier {@link NegociadorException} futura que no tenga
+     * todavía su propio {@code @ExceptionHandler} específico más arriba.
+     */
     @ExceptionHandler(NegociadorException.class)
-    public ResponseEntity<ErrorResponse> handleNegociadorException(
+    public ResponseEntity<ErrorResponse> handleNegociadorExceptionGenerica(
             NegociadorException ex, HttpServletRequest request) {
+        return handleNegociadorException(ex, HttpStatus.BAD_REQUEST, request);
+    }
+
+    private ResponseEntity<ErrorResponse> handleNegociadorException(
+            NegociadorException ex, HttpStatus status, HttpServletRequest request) {
 
         log.warning(String.format("Excepcion de dominio [%s] en %s: %s", ex.getCodigo(), request.getRequestURI(), ex.getMessage()));
 
         return ResponseEntity
-                .status(ex.getStatus())
-                .body(buildError(ex.getStatus(), ex.getCodigo(), ex.getMessage(), request.getRequestURI(), null));
+                .status(status)
+                .body(buildError(status, ex.getCodigo(), ex.getMessage(), request.getRequestURI(), null));
     }
 
     // =========================================================================

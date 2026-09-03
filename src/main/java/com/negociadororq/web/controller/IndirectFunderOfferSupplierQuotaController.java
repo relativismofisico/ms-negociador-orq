@@ -1,4 +1,4 @@
-package com.negociadororq.application.web.controller;
+package com.negociadororq.web.controller;
 
 import com.negociadororq.application.dto.IndirectFunderOfferSupplierQuotaDto;
 import com.negociadororq.application.dto.IndirectFunderOfferSupplierQuotaRecargaDto;

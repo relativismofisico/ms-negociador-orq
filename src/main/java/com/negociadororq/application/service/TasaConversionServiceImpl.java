@@ -6,7 +6,6 @@ import java.util.Set;
 
 import com.negociadororq.application.dto.TasaConversionResponseDto;
 import com.negociadororq.application.exception.PeticionInvalidaException;
-import org.springframework.stereotype.Service;
 
 /**
  * Convierte una tasa entre Tasa Efectiva Anual (EA), Tasa Mes Vencido (interés compuesto pagado
@@ -24,7 +23,6 @@ import org.springframework.stereotype.Service;
  *   <li>Mes Vencido → Mes Anticipado: i_ma = i_mv / (1 + i_mv)</li>
  * </ul>
  */
-@Service
 public class TasaConversionServiceImpl implements TasaConversionService {
 
     private static final Set<String> TIPOS_VALIDOS =

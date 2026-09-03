@@ -1,5 +1,6 @@
 package com.negociadororq.application.service
 
+import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.EndosoOutputPort
 import com.negociadororq.application.port.output.PdfFirmaOutputPort
 import com.negociadororq.domain.enums.RolActor
@@ -9,11 +10,16 @@ import com.negociadororq.domain.model.FacturaNegociada
 import com.negociadororq.domain.model.PendingOtp
 import spock.lang.Specification
 
+import java.time.LocalDateTime
+
 class FirmaEndosoServiceImplSpec extends Specification {
 
     EndosoOutputPort endosoPort = Mock()
     PdfFirmaOutputPort pdfFirmaPort = Mock()
-    FirmaEndosoServiceImpl service = new FirmaEndosoServiceImpl(endosoPort, pdfFirmaPort)
+    ClockPort clock = Mock() {
+        now() >> LocalDateTime.now()
+    }
+    FirmaEndosoServiceImpl service = new FirmaEndosoServiceImpl(endosoPort, pdfFirmaPort, clock)
 
     def "firmarPdfEndoso actualiza documentoPdf del endoso y guarda"() {
         given:

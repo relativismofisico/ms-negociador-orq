@@ -2,14 +2,12 @@ package com.negociadororq.application.service;
 
 import com.negociadororq.application.port.output.OutboxOutputPort;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Fachada del patrón Outbox usada por los servicios de negocio para guardar
  * un evento junto con su cambio de negocio, en la misma transacción.
  */
-@Service
 @RequiredArgsConstructor
 public class OutboxService {
 

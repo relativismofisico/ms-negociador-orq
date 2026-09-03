@@ -1,6 +1,5 @@
-package com.negociadororq.application.exception.handler
+package com.negociadororq.web.exception
 
-import com.negociadororq.application.exception.dto.ErrorResponse
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.core.MethodParameter
 import org.springframework.http.HttpStatus

@@ -11,7 +11,6 @@ import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.domain.model.UserQuota;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
  * (agregadas en {@link OperadorService}).
  */
 @Log
-@Service
 @RequiredArgsConstructor
 public class OperadorServiceImpl implements CupoConsumidorService, CupoReversionService {
 

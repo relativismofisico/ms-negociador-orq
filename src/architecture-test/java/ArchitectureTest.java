@@ -9,6 +9,8 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.repository.CrudRepository;
 
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
@@ -37,12 +39,35 @@ public class ArchitectureTest {
 
     @Test
     void application_solo_puede_depende_de_domain() {
+        // org.springframework.. NO va acá en general (ver
+        // application_y_domain_no_deben_depender_de_frameworks): la única excepción real
+        // es org.springframework.transaction.., porque @Transactional necesita estar en
+        // el método real que Spring AOP proxya, no se puede mover a infraestructura.
         ArchRule rule = classes()
                 .that().resideInAPackage("..application..")
                 .should().onlyDependOnClassesThat()
-                .resideInAnyPackage("..application..", "..domain..", "java..", "javax..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..", "com.factoring.commons..");
+                .resideInAnyPackage("..application..", "..domain..", "java..", "javax..", "jakarta..", "org.springframework.transaction..", "io.swagger.v3.oas..", "com.factoring.commons..");
 
         rule.check(classes);
+    }
+
+    @Test
+    void application_y_domain_no_deben_depender_de_frameworks() {
+        // Regla a nivel de paquete (no de lista de tipos): cualquier clase de
+        // org.springframework../feign../org.apache.kafka.. que aparezca en domain/ o
+        // application/ es una violación, la conozcamos o no de antemano.
+        ArchRule ruleDomain = noClasses()
+                .that().resideInAPackage("..domain..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("org.springframework..", "jakarta.persistence..", "feign..", "org.apache.kafka..");
+        ruleDomain.check(classes);
+
+        ArchRule ruleApplication = noClasses()
+                .that().resideInAPackage("..application..")
+                .should().dependOnClassesThat(
+                        resideInAnyPackage("org.springframework..", "jakarta.persistence..", "feign..", "org.apache.kafka..")
+                        .and(DescribedPredicate.not(resideInAPackage("org.springframework.transaction.."))));
+        ruleApplication.check(classes);
     }
 
     @Test

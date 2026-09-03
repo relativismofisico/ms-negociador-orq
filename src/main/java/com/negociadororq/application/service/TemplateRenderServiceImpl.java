@@ -16,13 +16,11 @@ import com.negociadororq.application.port.output.MessageTemplateOutputPort;
 import com.negociadororq.application.port.output.TemplateEngineOutputPort;
 import com.negociadororq.domain.model.MessageTemplate;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 
 /**
  * Implementación de {@link TemplateRenderService}.
  */
-@Service
 @RequiredArgsConstructor
 public class TemplateRenderServiceImpl implements TemplateRenderService {
 

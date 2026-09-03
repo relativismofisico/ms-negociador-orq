@@ -1,7 +1,5 @@
 package com.negociadororq.application.exception;
 
-import org.springframework.http.HttpStatus;
-
 /**
  * HTTP 404 Not Found.
  * Usar cuando una entidad buscada no existe en el sistema.
@@ -19,7 +17,7 @@ public class RecursoNoEncontradoException extends NegociadorException {
      * @param mensaje mensaje legible describiendo qué recurso no se encontró
      */
     public RecursoNoEncontradoException(String mensaje) {
-        super(mensaje, HttpStatus.NOT_FOUND, "RECURSO_NO_ENCONTRADO");
+        super(mensaje, "RECURSO_NO_ENCONTRADO");
     }
 
     /**
@@ -29,7 +27,7 @@ public class RecursoNoEncontradoException extends NegociadorException {
      * @param codigo  código de error de dominio en SNAKE_UPPER_CASE
      */
     public RecursoNoEncontradoException(String mensaje, String codigo) {
-        super(mensaje, HttpStatus.NOT_FOUND, codigo);
+        super(mensaje, codigo);
     }
 }
 
