@@ -2,27 +2,9 @@
  * Copyright (c). Todos los derechos reservados.
  */
 
-sourceSets {
-    automatedTest {
-        java {
-            srcDirs = ['src/automated-test/java']
-            compileClasspath += sourceSets.main.output + sourceSets.test.output
-            runtimeClasspath += sourceSets.main.output + sourceSets.test.output
-        }
-        resources {
-            srcDirs = ['src/automated-test/resources']
-        }
-    }
-
-    architectureTest {
-        java {
-            compileClasspath += main.output
-            runtimeClasspath += main.output
-            srcDir file('src/architecture-test/java')
-        }
-        resources.srcDir file('src/architecture-test/resources')
-    }
-}
+// Los source sets automatedTest/architectureTest se definen en build.gradle,
+// antes del bloque configurations {} — obligatorio en Gradle 9 (ver comentario
+// allí). Este script solo los consume.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: resuelve el ambiente activo.
