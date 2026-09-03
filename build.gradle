@@ -13,7 +13,13 @@ plugins {
 
 version = '1.0.0'
 group = 'com.negociadororq'
-sourceCompatibility = '17'
+
+// Gradle 9 quitó `sourceCompatibility`/`targetCompatibility` como propiedades
+// a nivel de proyecto; van dentro del bloque `java {}`. Mismo valor y
+// comportamiento, sin migrar a toolchain (eso es un cambio aparte).
+java {
+    sourceCompatibility = '17'
+}
 
 jacoco {
     toolVersion = '0.8.13'
@@ -51,6 +57,32 @@ repositories {
     // se publica a GitHub Packages, se prueba vía mavenLocal() hasta que se
     // decida esa parte.
     mavenLocal()
+}
+
+// Los source sets deben definirse ANTES del bloque configurations {}: si no,
+// la referencia a automatedTestImplementation/architectureTestImplementation
+// crea esas configuraciones con un nombre reservado (Gradle las crearía al
+// registrar el source set). Deprecado en Gradle 8, ERROR en Gradle 9.
+sourceSets {
+    automatedTest {
+        java {
+            srcDirs = ['src/automated-test/java']
+            compileClasspath += sourceSets.main.output + sourceSets.test.output
+            runtimeClasspath += sourceSets.main.output + sourceSets.test.output
+        }
+        resources {
+            srcDirs = ['src/automated-test/resources']
+        }
+    }
+
+    architectureTest {
+        java {
+            compileClasspath += sourceSets.main.output
+            runtimeClasspath += sourceSets.main.output
+            srcDir file('src/architecture-test/java')
+        }
+        resources.srcDir file('src/architecture-test/resources')
+    }
 }
 
 configurations {
