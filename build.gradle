@@ -14,11 +14,10 @@ plugins {
 version = '1.0.0'
 group = 'com.negociadororq'
 
-// Gradle 9 quitó `sourceCompatibility`/`targetCompatibility` como propiedades
-// a nivel de proyecto; van dentro del bloque `java {}`. Mismo valor y
-// comportamiento, sin migrar a toolchain (eso es un cambio aparte).
 java {
-    sourceCompatibility = '17'
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 }
 
 jacoco {
