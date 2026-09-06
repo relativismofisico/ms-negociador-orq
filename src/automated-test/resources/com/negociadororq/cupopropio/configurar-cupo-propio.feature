@@ -1,118 +1,209 @@
 @regression @full
 Feature: PUT/PATCH /companies/{companyId}/cupo-propio-fondeo — Configurar cupo propio de autofondeo
 
-  # PUT (definir), PATCH .../endoso-grupal, PATCH .../rentabilidad-minima, PATCH .../restablecer.
-  # Rol permitido (security.rol.cupo-propio en application.yml): ADMINISTRADOR, EMPRESA.
-  # Los 4 modifican estado real — igual que negociacion.feature/endoso.feature, NUNCA @production-safe
-  # ni @smoke. Devuelven 404 si la empresa no está habilitada como fondeadora de sí misma; con
-  # companyId de prueba (no necesariamente habilitada en el ambiente), el happy path acepta 200,
-  # 404 o 422 según corresponda, mismo patrón que validacion.feature.
+  # PUT (definir) + PATCH .../endoso-grupal, .../rentabilidad-minima, .../restablecer.
+  # Rol (security.rol.cupo-propio): ADMINISTRADOR, EMPRESA. + CompanyOwnershipGuard
+  #   (EMPRESA solo su propia empresa). Los 4 mutan estado real: NUNCA @production-safe.
+  # Seed: empresa 7004 con autofondeo `funder` 7380 + parametrization quota 1e9.
 
   Background:
     * url baseUrl
-    * def companyId = 1
-    * def basePath = '/companies/' + companyId + '/cupo-propio-fondeo'
+    * def JwtGen = Java.type('com.negociadororq.auth.JwtTestHelper')
+    * def bearer = function(sub, rol){ return { Authorization: 'Bearer ' + JwtGen.generate(sub, rol, jwtSecret) } }
+    * def authPropia = bearer('KARATE-DESTINO', 'EMPRESA')
+    * def authAjena = bearer('KARATE-AJENA', 'EMPRESA')
+    * def companyPropiaId = 7004
+    * def basePath = '/companies/' + companyPropiaId + '/cupo-propio-fondeo'
+    * def politicaFija = { cupoPropio: 400000, tasa: 2.5, tipoDescuento: 'FIJO', vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
 
-  # ─── PUT — definir cupo propio ──────────────────────────────────
+  # ─── PUT — definir el cupo propio ──────────────────────────────
+
   @regression @full
-  Scenario: ADMINISTRADOR define el cupo propio (tipoDescuento FIJO) — 200, 404 o 422 según datos reales
+  Scenario: La empresa define su cupo propio de autofondeo (200)
     Given path basePath
-    And header Authorization = 'Bearer ' + tokenAdmin
-    And request { cupoPropio: 50000000, tasa: 2.5, tipoDescuento: 'FIJO', vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
+    And headers authPropia
+    And request politicaFija
     When method PUT
-    Then assert responseStatus != 500
-    * match [200, 404, 422] contains responseStatus
+    Then status 200
+    And match response.cupoPropio == 400000
+    And match response.tipoDescuento == 'FIJO'
 
   @regression @full
-  Scenario: PUT sin tipoDescuento (campo obligatorio) — 400 de validación
+  Scenario: PUT sin tipoDescuento (obligatorio) devuelve 400
     Given path basePath
-    And header Authorization = 'Bearer ' + tokenAdmin
-    And request { cupoPropio: 50000000, tasa: 2.5, vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
+    And headers authPropia
+    And request { cupoPropio: 400000, tasa: 2.5, vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
     When method PUT
     Then status 400
 
+  # ── Bean Validation del body (@Valid + @NotNull/@PositiveOrZero del DTO) ──
+  # Un caso por constraint real. Antes de agregar spring-boot-starter-validation
+  # estas 5 pasaban con 200 (o 500 en el caso null); ahora dan 400 VALIDACION_FALLIDA.
+
   @regression @full
-  Scenario: PUT con cupoPropio negativo — 400 de validación
+  Scenario: PUT con cupoPropio negativo devuelve 400 VALIDACION_FALLIDA
     Given path basePath
-    And header Authorization = 'Bearer ' + tokenAdmin
+    And headers authPropia
     And request { cupoPropio: -1, tasa: 2.5, tipoDescuento: 'FIJO', vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
     When method PUT
     Then status 400
+    And match response.codigo == 'VALIDACION_FALLIDA'
 
   @regression @full
-  Scenario: OPERARIO no puede definir el cupo propio — rechazado
+  Scenario: PUT con cupoPropio nulo devuelve 400 VALIDACION_FALLIDA (antes 500)
     Given path basePath
-    And header Authorization = 'Bearer ' + tokenOperario
-    And request { cupoPropio: 50000000, tasa: 2.5, tipoDescuento: 'FIJO', vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
+    And headers authPropia
+    And request { tasa: 2.5, tipoDescuento: 'FIJO', vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
     When method PUT
-    Then assert responseStatus >= 400
+    Then status 400
+    And match response.codigo == 'VALIDACION_FALLIDA'
 
   @regression @full
-  Scenario: Definir cupo propio sin Authorization — 401 TOKEN_AUSENTE
+  Scenario: PUT con tasa negativa devuelve 400 VALIDACION_FALLIDA
     Given path basePath
-    And request { cupoPropio: 50000000, tasa: 2.5, tipoDescuento: 'FIJO', vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
+    And headers authPropia
+    And request { cupoPropio: 400000, tasa: -5, tipoDescuento: 'FIJO', vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
+    When method PUT
+    Then status 400
+    And match response.codigo == 'VALIDACION_FALLIDA'
+
+  @regression @full
+  Scenario: PUT con porcentajeReserva negativo devuelve 400 VALIDACION_FALLIDA
+    Given path basePath
+    And headers authPropia
+    And request { cupoPropio: 400000, tasa: 2.5, tipoDescuento: 'FIJO', vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: -1 }
+    When method PUT
+    Then status 400
+    And match response.codigo == 'VALIDACION_FALLIDA'
+
+  @regression @full
+  Scenario: PUT con diasVigencia negativo devuelve 400 VALIDACION_FALLIDA
+    Given path basePath
+    And headers authPropia
+    And request { cupoPropio: 400000, tasa: 2.5, tipoDescuento: 'FIJO', vigenciaDescuento: 'PRIMEROS_DIAS', diasVigencia: -3, porcentajeReserva: 0 }
+    When method PUT
+    Then status 400
+    And match response.codigo == 'VALIDACION_FALLIDA'
+
+  @regression @full
+  Scenario: PUT con tipoDescuento FINANCIERO sin tipoTasa devuelve 422
+    Given path basePath
+    And headers authPropia
+    And request { cupoPropio: 400000, tasa: 2.5, tipoDescuento: 'FINANCIERO', vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
+    When method PUT
+    Then status 422
+
+  @regression @full
+  Scenario: PUT con cupoPropio por encima del cupo del administrador devuelve 422
+    Given path basePath
+    And headers authPropia
+    And request { cupoPropio: 9999999999, tasa: 2.5, tipoDescuento: 'FIJO', vigenciaDescuento: 'TODO_EL_PLAZO', porcentajeReserva: 0 }
+    When method PUT
+    Then status 422
+
+  @regression @full
+  Scenario: Una empresa ajena no puede definir el cupo propio de otra (403)
+    Given path basePath
+    And headers authAjena
+    And request politicaFija
+    When method PUT
+    Then status 403
+    And match response.codigo == 'ACCION_NO_PERMITIDA'
+
+  @regression @full
+  Scenario: Definir el cupo propio sin Authorization devuelve 401 TOKEN_AUSENTE
+    Given path basePath
+    And request politicaFija
     When method PUT
     Then status 401
     And match response.codigo == 'TOKEN_AUSENTE'
 
-  # ─── PATCH .../endoso-grupal ─────────────────────────────────────
-  @regression @full
-  Scenario: ADMINISTRADOR activa el endoso grupal — 200 o 404
-    Given path basePath, 'endoso-grupal'
-    And header Authorization = 'Bearer ' + tokenAdmin
-    And request { endosoGrupal: true }
-    When method PATCH
-    Then assert responseStatus != 500
-    * match [200, 404] contains responseStatus
+  # ─── PATCH .../endoso-grupal ───────────────────────────────────
 
   @regression @full
-  Scenario: endoso-grupal sin el campo obligatorio — 400 de validación
+  Scenario: La empresa activa el endoso grupal de su autofondeo (200)
     Given path basePath, 'endoso-grupal'
-    And header Authorization = 'Bearer ' + tokenAdmin
+    And headers authPropia
+    And request { endosoGrupal: true }
+    When method PATCH
+    Then status 200
+    And match response.endosoGrupal == true
+
+  @regression @full
+  Scenario: endoso-grupal de otra empresa devuelve 403
+    Given path basePath, 'endoso-grupal'
+    And headers authAjena
+    And request { endosoGrupal: true }
+    When method PATCH
+    Then status 403
+
+  @regression @full
+  Scenario: PATCH endoso-grupal sin el campo endosoGrupal devuelve 400 VALIDACION_FALLIDA
+    Given path basePath, 'endoso-grupal'
+    And headers authPropia
     And request {}
     When method PATCH
     Then status 400
+    And match response.codigo == 'VALIDACION_FALLIDA'
 
-  # ─── PATCH .../rentabilidad-minima ───────────────────────────────
+  # ─── PATCH .../rentabilidad-minima ─────────────────────────────
+
   @regression @full
-  Scenario: ADMINISTRADOR activa la rentabilidad mínima con valor — 200 o 404
+  Scenario: La empresa activa la rentabilidad mínima con valor (200)
     Given path basePath, 'rentabilidad-minima'
-    And header Authorization = 'Bearer ' + tokenAdmin
+    And headers authPropia
     And request { activa: true, valor: 12.5 }
     When method PATCH
-    Then assert responseStatus != 500
-    * match [200, 404] contains responseStatus
+    Then status 200
+    And match response.rentabilidadMinimaActiva == true
 
   @regression @full
-  Scenario: Activar rentabilidad mínima sin indicar el valor — 422 (aunque la empresa esté habilitada)
+  Scenario: Activar la rentabilidad mínima sin el valor devuelve 422
     Given path basePath, 'rentabilidad-minima'
-    And header Authorization = 'Bearer ' + tokenAdmin
+    And headers authPropia
     And request { activa: true }
     When method PATCH
-    Then assert responseStatus != 500
-    * match [404, 422] contains responseStatus
+    Then status 422
 
   @regression @full
-  Scenario: Desactivar la rentabilidad mínima no exige valor — 200 o 404
+  Scenario: PATCH rentabilidad-minima sin el campo activa devuelve 400 VALIDACION_FALLIDA
     Given path basePath, 'rentabilidad-minima'
-    And header Authorization = 'Bearer ' + tokenAdmin
+    And headers authPropia
+    And request { valor: 12.5 }
+    When method PATCH
+    Then status 400
+    And match response.codigo == 'VALIDACION_FALLIDA'
+
+  @regression @full
+  Scenario: Desactivar la rentabilidad mínima no exige valor (200)
+    Given path basePath, 'rentabilidad-minima'
+    And headers authPropia
     And request { activa: false }
     When method PATCH
-    Then assert responseStatus != 500
-    * match [200, 404] contains responseStatus
-
-  # ─── PATCH .../restablecer ───────────────────────────────────────
-  @regression @full
-  Scenario: ADMINISTRADOR restablece el cupo disponible — 200 o 404
-    Given path basePath, 'restablecer'
-    And header Authorization = 'Bearer ' + tokenAdmin
-    When method PATCH
-    Then assert responseStatus != 500
-    * match [200, 404] contains responseStatus
+    Then status 200
+    And match response.rentabilidadMinimaActiva == false
 
   @regression @full
-  Scenario: FONDEADOR no puede restablecer el cupo propio de otra empresa — rechazado
-    Given path basePath, 'restablecer'
-    And header Authorization = 'Bearer ' + tokenFondeador
+  Scenario: rentabilidad-minima de otra empresa devuelve 403
+    Given path basePath, 'rentabilidad-minima'
+    And headers authAjena
+    And request { activa: false }
     When method PATCH
-    Then assert responseStatus >= 400
+    Then status 403
+
+  # ─── PATCH .../restablecer ─────────────────────────────────────
+
+  @regression @full
+  Scenario: La empresa restablece su cupo disponible (200)
+    Given path basePath, 'restablecer'
+    And headers authPropia
+    When method PATCH
+    Then status 200
+    And match response.cupoDisponible == response.cupoPropio
+
+  @regression @full
+  Scenario: restablecer el cupo de otra empresa devuelve 403
+    Given path basePath, 'restablecer'
+    And headers authAjena
+    When method PATCH
+    Then status 403

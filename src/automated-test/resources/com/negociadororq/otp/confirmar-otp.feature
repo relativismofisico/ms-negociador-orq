@@ -10,6 +10,9 @@ Feature: POST /negociaciones/confirmar-otp — Confirmar OTP y Aprobar Endoso
     * url baseUrl
     * def endpoint = '/negociaciones/confirmar-otp'
     * def idNeg = testData.negociacionId || 'NEG-TEST-00001'
+    # Guard exigirActorEsLlamador (suplantación). Solo dev/qa (usa jwtSecret).
+    * def JwtGen = jwtSecret ? Java.type('com.negociadororq.auth.JwtTestHelper') : null
+    * def bearer = function(sub, rol){ return { Authorization: 'Bearer ' + JwtGen.generate(sub, rol, jwtSecret) } }
     * def bodyConfirmar =
       """
       {
@@ -126,3 +129,43 @@ Feature: POST /negociaciones/confirmar-otp — Confirmar OTP y Aprobar Endoso
     When method GET
     Then status 405
     And match response.codigo == 'METODO_NO_PERMITIDO'
+
+  # ─── Suplantación de empresa (CompanyOwnershipGuard.exigirActorEsLlamador) ──────
+
+  @full
+  Scenario: La empresa 7005 no puede confirmar OTP declarando rutEmpresa de la 7004 — 403
+    Given path endpoint
+    And headers bearer('KARATE-AJENA', 'EMPRESA')
+    And request
+      """
+      {
+        "idNegociacion": "NEG-SUP-OTP",
+        "rutEmpresa":    "KARATE-DESTINO",
+        "rutOperador":   "KARATE-DESTINO",
+        "otp":           "000000",
+        "facturas":      [ { "numeroFactura": "FAC-SUP-1", "aprobado": true } ]
+      }
+      """
+    When method POST
+    Then status 403
+    And match response.codigo == 'ACCION_NO_PERMITIDA'
+    And match response.mensaje == 'No tiene permisos para operar sobre esta empresa.'
+
+  @full
+  Scenario: La empresa propia confirma OTP para sí misma — pasa el guard (async, no 5xx)
+    Given path endpoint
+    And headers bearer('KARATE-DESTINO', 'EMPRESA')
+    And request
+      """
+      {
+        "idNegociacion": "NEG-SUP-OTP",
+        "rutEmpresa":    "KARATE-DESTINO",
+        "rutOperador":   "KARATE-DESTINO",
+        "otp":           "000000",
+        "facturas":      [ { "numeroFactura": "FAC-SUP-1", "aprobado": true } ]
+      }
+      """
+    When method POST
+    Then assert responseStatus != 500
+    * def esGuard403 = responseStatus == 403 && response.mensaje == 'No tiene permisos para operar sobre esta empresa.'
+    And match esGuard403 == false

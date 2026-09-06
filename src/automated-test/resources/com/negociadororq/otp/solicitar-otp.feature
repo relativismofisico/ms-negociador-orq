@@ -9,6 +9,21 @@ Feature: POST /negociaciones/solicitar-otp — Solicitar OTP para Aprobacion
     * url baseUrl
     * def endpoint = '/negociaciones/solicitar-otp'
     * def idNeg = testData.negociacionId || 'NEG-TEST-00001'
+    # Guard exigirActorEsLlamador (suplantación). Solo dev/qa (usa jwtSecret).
+    # Seed _e2e-infra: empresa 7004 (NIT KARATE-DESTINO), 7005 (NIT KARATE-AJENA);
+    #   operario sombra del asesor opshadow-8000-7004 con company_ide 7004.
+    * def JwtGen = jwtSecret ? Java.type('com.negociadororq.auth.JwtTestHelper') : null
+    * def bearer = function(sub, rol){ return { Authorization: 'Bearer ' + JwtGen.generate(sub, rol, jwtSecret) } }
+    * def bodySup =
+      """
+      {
+        "idNegociacion": "NEG-SUP-OTP",
+        "rutEmpresa":    "KARATE-DESTINO",
+        "rutOperador":   "KARATE-DESTINO",
+        "rolActor":      "EMPRESA",
+        "facturas":      [ { "numeroFactura": "FAC-SUP-1", "aprobado": true } ]
+      }
+      """
     * def bodyOtp =
       """
       {
@@ -108,3 +123,51 @@ Feature: POST /negociaciones/solicitar-otp — Solicitar OTP para Aprobacion
     When method GET
     Then status 405
     And match response.codigo == 'METODO_NO_PERMITIDO'
+
+  # ─── Suplantación de empresa (CompanyOwnershipGuard.exigirActorEsLlamador) ──────
+
+  @regression @full
+  Scenario: La empresa 7005 no puede solicitar OTP declarando rutEmpresa de la 7004 — 403
+    Given path endpoint
+    And headers bearer('KARATE-AJENA', 'EMPRESA')
+    And request bodySup
+    When method POST
+    Then status 403
+    And match response.codigo == 'ACCION_NO_PERMITIDA'
+    And match response.mensaje == 'No tiene permisos para operar sobre esta empresa.'
+
+  @regression @full
+  Scenario: La empresa propia declarando un rutOperador de otra empresa — 403
+    Given path endpoint
+    And headers bearer('KARATE-DESTINO', 'EMPRESA')
+    And request
+      """
+      {
+        "idNegociacion": "NEG-SUP-OTP",
+        "rutEmpresa":    "KARATE-DESTINO",
+        "rutOperador":   "KARATE-AJENA",
+        "rolActor":      "EMPRESA",
+        "facturas":      [ { "numeroFactura": "FAC-SUP-2", "aprobado": true } ]
+      }
+      """
+    When method POST
+    Then status 403
+    And match response.codigo == 'ACCION_NO_PERMITIDA'
+
+  @regression @full
+  Scenario: La empresa propia solicita OTP para sí misma — pasa el guard (202)
+    Given path endpoint
+    And headers bearer('KARATE-DESTINO', 'EMPRESA')
+    And request bodySup
+    When method POST
+    Then status 202
+    And match response == 'OTP solicitado'
+
+  @regression @full
+  Scenario: El operario sombra del asesor (opshadow-8000-7004) pasa el guard como 7004 (202)
+    Given path endpoint
+    And headers bearer('opshadow-8000-7004', 'OPERARIO')
+    And request bodySup
+    When method POST
+    Then status 202
+    And match response == 'OTP solicitado'
