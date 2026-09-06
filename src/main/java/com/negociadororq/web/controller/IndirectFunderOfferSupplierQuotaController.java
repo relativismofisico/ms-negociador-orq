@@ -4,6 +4,7 @@ import com.negociadororq.application.dto.IndirectFunderOfferSupplierQuotaDto;
 import com.negociadororq.application.dto.IndirectFunderOfferSupplierQuotaRecargaDto;
 import com.negociadororq.application.service.IndirectFunderOfferSupplierQuotaConsultaService;
 import com.negociadororq.application.service.IndirectFunderOfferSupplierQuotaRecargaService;
+import com.negociadororq.web.security.CompanyOwnershipGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -33,6 +34,7 @@ public class IndirectFunderOfferSupplierQuotaController {
 
     private final IndirectFunderOfferSupplierQuotaConsultaService consultaService;
     private final IndirectFunderOfferSupplierQuotaRecargaService recargaService;
+    private final CompanyOwnershipGuard companyOwnership;
 
     @Operation(
         summary = "Consulta el cupo disponible de un proveedor contra una oferta de fondeo indirecta",
@@ -50,6 +52,7 @@ public class IndirectFunderOfferSupplierQuotaController {
             @Parameter(description = "Id de la empresa fondeadora", required = true) @PathVariable Long funderId,
             @Parameter(description = "Id de la empresa pagadora", required = true) @PathVariable Long payerId) {
 
+        companyOwnership.exigirParteDeOfertaIndirecta(funderId, payerId, supplierId);
         return ResponseEntity.ok(consultaService.obtenerCupo(funderId, payerId, supplierId));
     }
 
@@ -71,6 +74,7 @@ public class IndirectFunderOfferSupplierQuotaController {
             @Parameter(description = "Id de la empresa proveedora", required = true) @PathVariable Long supplierId,
             @Parameter(description = "Id de la oferta de fondeo indirecta", required = true) @PathVariable Long offerId) {
 
+        companyOwnership.exigirFondeadorDeOferta(offerId);
         return ResponseEntity.ok(recargaService.recargarCupo(offerId, supplierId));
     }
 }
