@@ -20,5 +20,12 @@ public class LiquidacionSolicitadaEvent {
     private String numeroFactura;
     private Operacion tipoOperacion;
     private LocalDateTime fecha;
+
+    /**
+     * Marca de trazabilidad: la solicitud de OTP que derivó en esta liquidación
+     * pasó el guard de ownership de origen (CompanyOwnershipGuard). El consumidor
+     * (ms-liquidador-neg) no revalida, pero puede alertar si llega en false.
+     */
+    private boolean validadoEnOrigen;
 }
 
