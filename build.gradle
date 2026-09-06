@@ -145,6 +145,15 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
 
+    // Testcontainers — MySQL real y efímero para el test de concurrencia de
+    // descontarCupo (la carrera de INSERT duplicado y la de dos UPDATE
+    // concurrentes solo se reproducen contra InnoDB real, no contra H2).
+    // Versiones administradas por el BOM de Spring Boot. Requiere Docker en el
+    // runner (los runners GitHub-hosted `ubuntu-latest` ya lo traen).
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:mysql'
+
     // Spock Framework — pruebas unitarias en Groovy
     testImplementation 'org.apache.groovy:groovy-all:4.0.21'
     testImplementation('org.spockframework:spock-core:2.4-groovy-4.0') {
