@@ -5,6 +5,7 @@ import com.negociadororq.application.dto.AprobacionRequestDto;
 import com.negociadororq.application.dto.ConfirmacionOtpRequestDto;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoService;
 import com.negociadororq.web.exception.ErrorResponse;
+import com.negociadororq.web.security.CompanyOwnershipGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -32,6 +33,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class AprobarEndosoDescuentoController {
 
     private final AprobacionEndosoDescuentoService service;
+
+    private final CompanyOwnershipGuard companyOwnership;
 
     @Operation(
         summary = "Solicitar código OTP para aprobación",
@@ -64,6 +67,7 @@ public class AprobarEndosoDescuentoController {
     @PreAuthorize("@sec.tieneRol(authentication, 'otp')")
     @PostMapping("/solicitar-otp")
     public ResponseEntity<String> solicitarOtp(@RequestBody AprobacionRequestDto request) {
+        companyOwnership.exigirActorEsLlamador(request.getRutEmpresa(), request.getRutOperador());
         service.solicitarOtp(request);
         return ResponseEntity.accepted().body("OTP solicitado");
     }
@@ -106,6 +110,7 @@ public class AprobarEndosoDescuentoController {
             HttpServletRequest httpRequest) {
         String ip = IpUtils.obtenerIp(httpRequest);
         request.setIpAprobacion(ip);
+        companyOwnership.exigirActorEsLlamador(request.getRutEmpresa(), request.getRutOperador());
         service.confirmarOtp(request);
         return ResponseEntity.accepted().body("Validando OTP...");
     }

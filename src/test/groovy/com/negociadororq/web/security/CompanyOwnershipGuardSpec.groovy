@@ -2,8 +2,10 @@ package com.negociadororq.web.security
 
 import com.negociadororq.application.exception.AccionNoPermitidaException
 import com.negociadororq.application.exception.RecursoNoEncontradoException
+import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.IndirectFunderOfferOutputPort
 import com.negociadororq.application.port.output.UserOutputPort
+import com.negociadororq.domain.model.Company
 import com.negociadororq.domain.model.IndirectFunderOffer
 import com.negociadororq.domain.model.User
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
@@ -20,8 +22,9 @@ class CompanyOwnershipGuardSpec extends Specification {
 
     UserOutputPort userPort = Mock()
     IndirectFunderOfferOutputPort indirectFunderOfferPort = Mock()
+    CompanyOutputPort companyPort = Mock()
 
-    CompanyOwnershipGuard guard = new CompanyOwnershipGuard(userPort, indirectFunderOfferPort)
+    CompanyOwnershipGuard guard = new CompanyOwnershipGuard(userPort, indirectFunderOfferPort, companyPort)
 
     static final long PROPIA = 100L
     static final long AJENA = 555L
@@ -199,6 +202,102 @@ class CompanyOwnershipGuardSpec extends Specification {
         then:
         noExceptionThrown()
         0 * indirectFunderOfferPort.findById(_)
+        0 * userPort.findByUsername(_)
+    }
+
+    // ── exigirActorEsLlamador (suplantacion en negociar / endoso / OTP) ───────
+
+    def "exigirActorEsLlamador: la empresa y el operador propios pasan"() {
+        given:
+        autenticar("NIT-A", "EMPRESA")
+        userPort.findByUsername("NIT-A") >> Optional.of(User.builder().companyIde(PROPIA).build())
+        companyPort.findByNit("NIT-A") >> Optional.of(new Company(ideCompany: PROPIA, nit: "NIT-A"))
+        userPort.findByUsername("op-a") >> Optional.of(User.builder().companyIde(PROPIA).build())
+
+        when:
+        guard.exigirActorEsLlamador("NIT-A", "op-a")
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "exigirActorEsLlamador: el asesor operando como sombra (opshadow) pasa"() {
+        given:
+        autenticar("opshadow-42-100", "OPERARIO")
+        // el shadow user tiene company_ide = empresa cliente
+        userPort.findByUsername("opshadow-42-100") >> Optional.of(User.builder().companyIde(PROPIA).build())
+        companyPort.findByNit("NIT-A") >> Optional.of(new Company(ideCompany: PROPIA, nit: "NIT-A"))
+
+        when:
+        guard.exigirActorEsLlamador("NIT-A", "opshadow-42-100")
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "exigirActorEsLlamador: rutEmpresa de OTRA empresa (suplantacion) -> 403"() {
+        given:
+        autenticar("NIT-A", "EMPRESA")
+        userPort.findByUsername("NIT-A") >> Optional.of(User.builder().companyIde(PROPIA).build())
+        companyPort.findByNit("NIT-B") >> Optional.of(new Company(ideCompany: AJENA, nit: "NIT-B"))
+
+        when:
+        guard.exigirActorEsLlamador("NIT-B", "op-a")
+
+        then:
+        thrown(AccionNoPermitidaException)
+    }
+
+    def "exigirActorEsLlamador: rutOperador de otra empresa -> 403 (aunque la empresa actuante sea propia)"() {
+        given:
+        autenticar("NIT-A", "EMPRESA")
+        userPort.findByUsername("NIT-A") >> Optional.of(User.builder().companyIde(PROPIA).build())
+        companyPort.findByNit("NIT-A") >> Optional.of(new Company(ideCompany: PROPIA, nit: "NIT-A"))
+        userPort.findByUsername("op-b") >> Optional.of(User.builder().companyIde(AJENA).build())
+
+        when:
+        guard.exigirActorEsLlamador("NIT-A", "op-b")
+
+        then:
+        thrown(AccionNoPermitidaException)
+    }
+
+    def "exigirActorEsLlamador: NIT actuante inexistente -> 403"() {
+        given:
+        autenticar("NIT-A", "EMPRESA")
+        userPort.findByUsername("NIT-A") >> Optional.of(User.builder().companyIde(PROPIA).build())
+        companyPort.findByNit("NIT-X") >> Optional.empty()
+
+        when:
+        guard.exigirActorEsLlamador("NIT-X", "op-a")
+
+        then:
+        thrown(AccionNoPermitidaException)
+    }
+
+    def "exigirActorEsLlamador: sub que no resuelve a empresa -> 403 (fail-closed)"() {
+        given:
+        autenticar("fantasma", "EMPRESA")
+        userPort.findByUsername("fantasma") >> Optional.empty()
+
+        when:
+        guard.exigirActorEsLlamador("NIT-A", "op-a")
+
+        then:
+        thrown(AccionNoPermitidaException)
+        0 * companyPort.findByNit(_)
+    }
+
+    def "exigirActorEsLlamador: ADMINISTRADOR bypasa sin resolver nada"() {
+        given:
+        autenticar("admin", "ADMINISTRADOR")
+
+        when:
+        guard.exigirActorEsLlamador("NIT-B", "op-b")
+
+        then:
+        noExceptionThrown()
+        0 * companyPort.findByNit(_)
         0 * userPort.findByUsername(_)
     }
 }

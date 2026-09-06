@@ -4,6 +4,7 @@ import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.NegociacionResponseDto;
 import com.negociadororq.application.service.NegociacionFactoringComfirmingService;
 import com.negociadororq.web.exception.ErrorResponse;
+import com.negociadororq.web.security.CompanyOwnershipGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -31,6 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class CrearNegociacionFactoringComfirmingController {
 
     private final NegociacionFactoringComfirmingService negociacionFactoringComfirmingService;
+
+    private final CompanyOwnershipGuard companyOwnership;
 
     @Operation(
         summary = "Crear negociación Factoring / Confirming",
@@ -68,6 +71,7 @@ public class CrearNegociacionFactoringComfirmingController {
     public ResponseEntity<NegociacionResponseDto> crearNegociacion(
             @RequestBody NegociacionRequestDto request) {
 
+        companyOwnership.exigirActorEsLlamador(request.getRutEmpresa(), request.getRutOperador());
         NegociacionResponseDto response = negociacionFactoringComfirmingService.crearNegociacion(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

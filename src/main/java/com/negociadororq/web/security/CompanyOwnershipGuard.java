@@ -4,8 +4,10 @@ import java.util.logging.Logger;
 
 import com.negociadororq.application.exception.AccionNoPermitidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
+import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.IndirectFunderOfferOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
+import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.IndirectFunderOffer;
 import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,11 @@ import org.springframework.stereotype.Component;
  * <p>La empresa del llamador se resuelve por {@code user.company_ide} (no por el
  * NIT del {@code sub}): el {@code sub} de un OPERARIO es su username, no el NIT.
  * ADMINISTRADOR pasa siempre (Integrity opera en nombre de cualquiera).</p>
+ *
+ * <p>{@link #exigirActorEsLlamador(String, String)} cierra además la suplantación
+ * en el flujo transaccional (negociar / endoso / OTP): esos endpoints toman la
+ * empresa actuante y el operador del <em>body</em> ({@code rutEmpresa}/
+ * {@code rutActor}/{@code rutOperador}) sin compararlos con el JWT.</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -39,6 +46,7 @@ public class CompanyOwnershipGuard {
 
     private final UserOutputPort userPort;
     private final IndirectFunderOfferOutputPort indirectFunderOfferPort;
+    private final CompanyOutputPort companyPort;
 
     /**
      * El llamador solo puede operar sobre su propia empresa
@@ -90,6 +98,40 @@ public class CompanyOwnershipGuard {
         final Long propia = empresaDelLlamador();
         if (propia == null || !propia.equals(oferta.getFunderId())) {
             denegar(propia, oferta.getFunderId());
+        }
+    }
+
+    /**
+     * La empresa actuante y el operador declarados en el body deben pertenecer a
+     * la empresa del llamador. Para {@code POST /negociar/factura},
+     * {@code POST /negociaciones/{id}/endosos}, {@code solicitar-otp} y
+     * {@code confirmar-otp}. ADMINISTRADOR pasa.
+     *
+     * @param rutActorNit     NIT de la empresa actuante (rutEmpresa / rutActor del body)
+     * @param rutOperadorUser username del operador (rutOperador del body)
+     * @throws AccionNoPermitidaException (→ 403) si actor u operador no son de la empresa del llamador.
+     */
+    public void exigirActorEsLlamador(final String rutActorNit, final String rutOperadorUser) {
+        if (esAdministrador()) {
+            return;
+        }
+        final Long empresaLlamador = empresaDelLlamador();
+        if (empresaLlamador == null) {
+            denegar(null, null);
+        }
+
+        final Long empresaActor = companyPort.findByNit(rutActorNit)
+                .map(Company::getIdeCompany)
+                .orElse(null);
+        if (empresaActor == null || !empresaActor.equals(empresaLlamador)) {
+            denegar(empresaLlamador, empresaActor);
+        }
+
+        final Long empresaOperador = userPort.findByUsername(rutOperadorUser)
+                .map(User::getCompanyIde)
+                .orElse(null);
+        if (empresaOperador == null || !empresaOperador.equals(empresaLlamador)) {
+            denegar(empresaLlamador, empresaOperador);
         }
     }
 
