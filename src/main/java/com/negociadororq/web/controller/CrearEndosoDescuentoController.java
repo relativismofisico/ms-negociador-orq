@@ -4,6 +4,7 @@ import com.negociadororq.application.dto.EndosoRequestDto;
 import com.negociadororq.application.dto.EndosoResponseDto;
 import com.negociadororq.application.service.EndosoDescuentoService;
 import com.negociadororq.web.exception.ErrorResponse;
+import com.negociadororq.web.security.CompanyOwnershipGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -33,6 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class CrearEndosoDescuentoController {
 
     private final EndosoDescuentoService endosoDescuentoService;
+
+    private final CompanyOwnershipGuard companyOwnership;
 
     @Operation(
         summary = "Registrar endoso de descuento",
@@ -72,6 +75,7 @@ public class CrearEndosoDescuentoController {
             @RequestBody EndosoRequestDto request) {
 
         request.setIdNegociacion(idNegociacion);
+        companyOwnership.exigirActorEsLlamador(request.getRutActor(), request.getRutOperador());
         EndosoResponseDto response = endosoDescuentoService.registrarEndoso(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
