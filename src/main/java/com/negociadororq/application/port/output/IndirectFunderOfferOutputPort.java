@@ -20,4 +20,14 @@ public interface IndirectFunderOfferOutputPort {
      * @return oferta si existe y es utilizable
      */
     Optional<IndirectFunderOffer> findActivaAprobada(Long funderId, Long payerId);
+
+    /**
+     * Busca una oferta por su id, en cualquier estado. Se usa para resolver la
+     * empresa fondeadora dueña de la oferta en el guard de ownership de la
+     * recarga de cupo (que solo puede dispararla el fondeador).
+     *
+     * @param offerId id de la oferta indirecta
+     * @return la oferta si existe
+     */
+    Optional<IndirectFunderOffer> findById(Long offerId);
 }
