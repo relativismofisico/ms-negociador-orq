@@ -83,6 +83,10 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 .rutEmpresa(request.getRutEmpresa())
                 .rolActor(request.getRolActor())
                 .request(domainRequest)
+                // Si este método corre, el CompanyOwnershipGuard del controller ya
+                // pasó (es la única vía de entrada): marca de trazabilidad que se
+                // propaga hasta el evento de liquidación.
+                .validadoEnOrigen(true)
                 .build();
 
         pendingOtpPort.save(pending);
@@ -201,7 +205,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             actualizarEstadosFacturaEndosoNegociacion(
                     negociacion, negociacion.getId(), factura,
-                    negociacion.getTipoOperacion(), request.getRutOperador());
+                    negociacion.getTipoOperacion(), request.getRutOperador(),
+                    Boolean.TRUE.equals(pending.getValidadoEnOrigen()));
         }
 
         notificacionService.notificarFirmaEndoso(request);
@@ -223,7 +228,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                                                            String idNegociacion,
                                                            FacturaNegociada factura,
                                                            Operacion tipoOperacion,
-                                                           String rutOperador) {
+                                                           String rutOperador,
+                                                           boolean validadoEnOrigen) {
 
         Set<RolActor> actoresRequeridos = obtenerActoresRequeridos(tipoOperacion.getTipo());
 
@@ -271,7 +277,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     .build();
 
             LiquidacionSolicitadaEvent event = new LiquidacionSolicitadaEvent(
-                    idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, clock.now());
+                    idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, clock.now(),
+                    validadoEnOrigen);
 
             outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
         } else if (alguienAprobo) {

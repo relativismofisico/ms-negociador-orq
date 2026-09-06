@@ -28,4 +28,5 @@ public class PendingOtpDocument {
     private String otp;
     private Boolean aprobado;
     private AprobacionRequest request;
+    private Boolean validadoEnOrigen;
 }
