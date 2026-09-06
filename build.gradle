@@ -95,6 +95,10 @@ dependencies {
     // Web
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // Bean Validation — sin este starter (hibernate-validator) el @Valid de los
+    // controllers no ejecuta las constraints del DTO: Spring omite la validacion
+    // en silencio. Los otros 9 backends de Integrity ya lo tienen.
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
 
     // MongoDB (quita JPA/Postgres/MySQL)
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
