@@ -684,14 +684,15 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         ex.message.contains("Fondeador sin cupo factoring")
     }
 
-    def "procesarFactura FACTORING indirecto exitoso (primera negociacion) crea la fila de consumo con el cupo integro y descuenta"() {
+    def "procesarFactura FACTORING indirecto exitoso (primera negociacion) crea la fila de consumo con el cupo integro y descuenta atomicamente"() {
         given:
         setupMocksIndirecto("FECI023", new BigDecimal("5000.00"))
         payerFundingVisibilityPort.estaHabilitado(30L) >> true
         def oferta = IndirectFunderOffer.builder().id(77L).funderId(20L).payerId(30L)
                 .payerRate(new BigDecimal("2.5")).supplierQuotaTemplate(new BigDecimal("10000.00")).build()
         indirectFunderOfferPort.findActivaAprobada(20L, 30L) >> Optional.of(oferta)
-        // Primera negociación de este proveedor contra la oferta: aún no existe fila de consumo.
+        // Primera negociación de este proveedor contra la oferta: aún no existe fila de consumo
+        // (la fase de validación consulta el cupo disponible y cae al template).
         indirectFunderOfferSupplierQuotaPort.find(77L, 10L) >> Optional.empty()
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
@@ -701,17 +702,14 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
 
         then:
         resultado.numeroFactura == "FECI023"
-        1 * indirectFunderOfferSupplierQuotaPort.crear(77L, 10L, new BigDecimal("2.5"), new BigDecimal("10000.00")) >>
-                IndirectFunderOfferSupplierQuota.builder().id(1L).offerId(77L).supplierId(10L)
-                        .rate(new BigDecimal("2.5")).quota(new BigDecimal("10000.00"))
-                        .currentQuota(new BigDecimal("10000.00")).originalQuota(new BigDecimal("10000.00")).build()
-        1 * indirectFunderOfferSupplierQuotaPort.save({ IndirectFunderOfferSupplierQuota q ->
-            q.currentQuota == new BigDecimal("5000.00")
-        })
+        // El primer descuento no toca nada (fila inexistente) -> se crea -> el segundo descuenta.
+        2 * indirectFunderOfferSupplierQuotaPort.descontarCupo(77L, 10L, new BigDecimal("5000.00")) >>> [0, 1]
+        1 * indirectFunderOfferSupplierQuotaPort.crear(77L, 10L, new BigDecimal("2.5"), new BigDecimal("10000.00"))
+        0 * indirectFunderOfferSupplierQuotaPort.save(_)
         1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_CESION, _)
     }
 
-    def "procesarFactura FACTORING indirecto exitoso (segunda negociacion) descuenta sobre la fila de consumo existente sin recrearla"() {
+    def "procesarFactura FACTORING indirecto exitoso (segunda negociacion) descuenta sobre la fila existente sin recrearla"() {
         given:
         setupMocksIndirecto("FECI024", new BigDecimal("2000.00"))
         payerFundingVisibilityPort.estaHabilitado(30L) >> true
@@ -729,10 +727,55 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         service.procesarFactura(request, buildReqFact("FECI024"))
 
         then:
+        1 * indirectFunderOfferSupplierQuotaPort.descontarCupo(77L, 10L, new BigDecimal("2000.00")) >> 1
         0 * indirectFunderOfferSupplierQuotaPort.crear(_, _, _, _)
-        1 * indirectFunderOfferSupplierQuotaPort.save({ IndirectFunderOfferSupplierQuota q ->
-            q.currentQuota == new BigDecimal("6000.00")
-        })
+        0 * indirectFunderOfferSupplierQuotaPort.save(_)
+    }
+
+    def "procesarFactura FACTORING indirecto: creacion concurrente (crear lanza ConflictoException) se absorbe y el descuento se aplica igual"() {
+        given:
+        setupMocksIndirecto("FECI023B", new BigDecimal("5000.00"))
+        payerFundingVisibilityPort.estaHabilitado(30L) >> true
+        def oferta = IndirectFunderOffer.builder().id(77L).funderId(20L).payerId(30L)
+                .payerRate(new BigDecimal("2.5")).supplierQuotaTemplate(new BigDecimal("10000.00")).build()
+        indirectFunderOfferPort.findActivaAprobada(20L, 30L) >> Optional.of(oferta)
+        indirectFunderOfferSupplierQuotaPort.find(77L, 10L) >> Optional.empty()
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        def resultado = service.procesarFactura(request, buildReqFact("FECI023B"))
+
+        then:
+        resultado.numeroFactura == "FECI023B"
+        2 * indirectFunderOfferSupplierQuotaPort.descontarCupo(77L, 10L, new BigDecimal("5000.00")) >>> [0, 1]
+        1 * indirectFunderOfferSupplierQuotaPort.crear(77L, 10L, _, _) >> {
+            throw new ConflictoException("creación concurrente", "CUPO_PROVEEDOR_CONCURRENCIA")
+        }
+        noExceptionThrown()
+    }
+
+    def "procesarFactura FACTORING indirecto: si tras crear el descuento sigue sin afectar filas, lanza ConflictoException (sin filtrar tabla/constraint)"() {
+        given:
+        setupMocksIndirecto("FECI023C", new BigDecimal("5000.00"))
+        payerFundingVisibilityPort.estaHabilitado(30L) >> true
+        def oferta = IndirectFunderOffer.builder().id(77L).funderId(20L).payerId(30L)
+                .payerRate(new BigDecimal("2.5")).supplierQuotaTemplate(new BigDecimal("10000.00")).build()
+        indirectFunderOfferPort.findActivaAprobada(20L, 30L) >> Optional.of(oferta)
+        indirectFunderOfferSupplierQuotaPort.find(77L, 10L) >> Optional.empty()
+        indirectFunderOfferSupplierQuotaPort.descontarCupo(77L, 10L, _) >> 0
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI023C"))
+
+        then:
+        1 * indirectFunderOfferSupplierQuotaPort.crear(77L, 10L, _, _)
+        def ex = thrown(ConflictoException)
+        ex.codigo == "CUPO_PROVEEDOR_CONCURRENCIA"
+        !ex.message.toLowerCase().contains("constraint")
+        !ex.message.contains("indirect_funder_offer_supplier_quota")
     }
 
     def "procesarFactura CONFIRMING no consulta el fallback indirecto (fuera de alcance para Confirming)"() {
