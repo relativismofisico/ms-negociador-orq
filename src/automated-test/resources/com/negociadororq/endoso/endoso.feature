@@ -24,6 +24,7 @@ Feature: POST /negociaciones/{idNegociacion}/endosos — Registrar Endoso de Des
         "idNegociacion":       "#string",
         "estadoEndoso":        "#string",
         "facturasEndosadas":   "##array",
+        "cufesEndosadas":      "##array",
         "facturasRechazadas":  "##array",
         "plantillaHtml":       "##string"
       }
@@ -41,6 +42,21 @@ Feature: POST /negociaciones/{idNegociacion}/endosos — Registrar Endoso de Des
     * assert mr.pass
     * def mrEstado = responseStatus != 201 ? { pass: true } : karate.match(response.estadoEndoso, '#regex (PENDIENTE|ENDOSADO|RECHAZADO)')
     * assert mrEstado.pass
+
+  # Happy path REAL contra el seed Mongo _e2e-infra/seed/ms-negociador-orq.mongo.js
+  # (negociación NEG-END-CUFE + factura FE-END-CUFE-1 con su CUFE). Verifica que el
+  # endoso creado transporta el cufe de la factura — hilo cross-repo con
+  # ms-consultasFacturas-neg, que lo usa para resolver la factura exacta.
+  @regression @full
+  Scenario: El endoso creado transporta el CUFE de la factura (cufesEndosadas)
+    Given path '/negociaciones/NEG-END-CUFE/endosos'
+    And header Authorization = 'Bearer ' + tokenAdmin
+    And request { rutActor: 'KARATE-CF-PROV', rutOperador: 'KARATE-CF-PROV', numerosFactura: ['FE-END-CUFE-1'] }
+    When method POST
+    Then status 201
+    And match response.facturasEndosadas == ['FE-END-CUFE-1']
+    And match response.cufesEndosadas == ['CUFE-END-CUFE-0001-abcdef0123456789']
+    And match response.facturasRechazadas == []
 
   @regression @full
   Scenario: EMPRESA puede registrar endoso (rol permitido)
