@@ -555,4 +555,92 @@ class EndosoDescuentoServiceImplSpec extends Specification {
         1 * cupoReversionService.revertirCupoFondeadorFactoring(1L, 2L, new BigDecimal("3000.00"))
         0 * facturaPort.save(_)
     }
+
+    // ─── cufes en el endoso (hilo de unicidad de cufe, cross-repo con consultasFacturas) ───
+
+    def "registrarEndoso puebla cufes en el endoso guardado, tomado de la factura ya cargada"() {
+        given:
+        def fn = buildNegFactoring("FECI050", "RUT-PROV")
+        def neg = buildNegociacion("FACTORING", [fn])
+        def factura = buildFactura("FECI050", "RUT-PROV")
+        factura.cufe = "CUFE-50-abcdef"
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        facturaPort.findByNumeroFactura("FECI050") >> Optional.of(factura)
+        endosoPort.existsByNegociacionIdAndNumeroFactura("neg-001", "FECI050") >> false
+
+        def request = EndosoRequestDto.builder()
+                .idNegociacion("neg-001")
+                .rutActor("RUT-PROV")
+                .numerosFactura(["FECI050"])
+                .build()
+
+        when:
+        def resultado = service.registrarEndoso(request)
+
+        then:
+        1 * endosoPort.save({ Endoso e -> e.numerosFactura == ["FECI050"] && e.cufes == ["CUFE-50-abcdef"] })
+        resultado.cufesEndosadas == ["CUFE-50-abcdef"]
+    }
+
+    def "cufes queda paralelo a numerosFactura cuando un endoso grupal cubre varias facturas"() {
+        given:
+        def fn1 = buildNegFactoring("FECI051", "RUT-PROV")
+        def fn2 = buildNegFactoring("FECI052", "RUT-PROV")
+        def neg = buildNegociacion("FACTORING", [fn1, fn2])
+        def f1 = buildFactura("FECI051", "RUT-PROV"); f1.cufe = "CUFE-51"
+        def f2 = buildFactura("FECI052", "RUT-PROV"); f2.cufe = "CUFE-52"
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        facturaPort.findByNumeroFactura("FECI051") >> Optional.of(f1)
+        facturaPort.findByNumeroFactura("FECI052") >> Optional.of(f2)
+        endosoPort.existsByNegociacionIdAndNumeroFactura(_, _) >> false
+        idPorNit["FOND-001"] = 1L
+        idPorNit["RUT-PROV"] = 2L
+        fondeadorQuotaPort.findByFunderIdAndSupplierId(1L, 2L) >>
+                Optional.of(FondeadorQuota.builder().endosoGrupal(true).build())
+
+        def request = EndosoRequestDto.builder()
+                .idNegociacion("neg-001")
+                .rutActor("RUT-PROV")
+                .numerosFactura(["FECI051", "FECI052"])
+                .build()
+
+        when:
+        def resultado = service.registrarEndoso(request)
+
+        then:
+        1 * endosoPort.save({ Endoso e ->
+            e.numerosFactura.size() == 2 && e.cufes.size() == 2 &&
+                    e.cufes[e.numerosFactura.indexOf("FECI051")] == "CUFE-51" &&
+                    e.cufes[e.numerosFactura.indexOf("FECI052")] == "CUFE-52"
+        })
+        (resultado.cufesEndosadas as Set) == (["CUFE-51", "CUFE-52"] as Set)
+    }
+
+    def "una factura sin cufe deja un elemento null en cufes, sin romper el endoso"() {
+        given:
+        def fn = buildNegFactoring("FECI053", "RUT-PROV")
+        def neg = buildNegociacion("FACTORING", [fn])
+        def factura = buildFactura("FECI053", "RUT-PROV")
+        factura.cufe = null
+
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        facturaPort.findByNumeroFactura("FECI053") >> Optional.of(factura)
+        endosoPort.existsByNegociacionIdAndNumeroFactura("neg-001", "FECI053") >> false
+
+        def request = EndosoRequestDto.builder()
+                .idNegociacion("neg-001")
+                .rutActor("RUT-PROV")
+                .numerosFactura(["FECI053"])
+                .build()
+
+        when:
+        def resultado = service.registrarEndoso(request)
+
+        then:
+        1 * endosoPort.save({ Endoso e -> e.numerosFactura == ["FECI053"] && e.cufes == [null] })
+        resultado.estadoEndoso == "PENDIENTE"
+        resultado.cufesEndosadas == [null]
+    }
 }

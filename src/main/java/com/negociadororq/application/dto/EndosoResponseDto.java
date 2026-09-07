@@ -28,6 +28,11 @@ public class EndosoResponseDto {
     @Schema(description = "Números de factura incluidos exitosamente en el endoso.")
     private List<String> facturasEndosadas;
 
+    @Schema(description = "CUFE (clave única global) de cada factura endosada exitosamente. "
+        + "Array paralelo a facturasEndosadas: mismo orden y tamaño. Un elemento puede ser "
+        + "null si la factura no tiene CUFE registrado.")
+    private List<String> cufesEndosadas;
+
     @Schema(description = "Números de factura que no pudieron ser endosadas.")
     private List<String> facturasRechazadas;
 
