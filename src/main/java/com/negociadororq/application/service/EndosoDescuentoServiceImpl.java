@@ -153,6 +153,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                         Collectors.toList()));
 
         List<String> facturasCreadas = new ArrayList<>();
+        List<String> cufesCreados = new ArrayList<>();
         List<Endoso> endososCreados = new ArrayList<>();
 
         for (Map.Entry<String, List<FacturaValidada>> entry : porFondeador.entrySet()) {
@@ -175,6 +176,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
 
                 for (FacturaValidada fv : lote) {
                     facturasCreadas.add(fv.numeroFactura());
+                    cufesCreados.add(fv.factura().getCufe());
 
                     facturaPatchPort.actualizarEstadoPorId(
                             fv.factura().getId(), EstadoFirma.EN_REVISION, EstadoNegociacion.ENDOSADA);
@@ -204,6 +206,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                 .idNegociacion(request.getIdNegociacion())
                 .estadoEndoso(estadoGlobal)
                 .facturasEndosadas(facturasCreadas)
+                .cufesEndosadas(cufesCreados)
                 .facturasRechazadas(facturasRechazadas)
                 .build();
     }
@@ -215,6 +218,9 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
         Endoso endoso = Endoso.builder()
                 .negociacionId(request.getIdNegociacion())
                 .numerosFactura(lote.stream().map(FacturaValidada::numeroFactura).toList())
+                // cufes: array paralelo a numerosFactura, mismo orden. La factura ya
+                // está en memoria (fue validada arriba), así que no hay query nueva.
+                .cufes(lote.stream().map(fv -> fv.factura().getCufe()).toList())
                 .rutActorEndosa(request.getRutActor())
                 .rutProveedor(primera.factura().getRutProveedor())
                 .tipoOperacion(negociacion.getTipoOperacion())

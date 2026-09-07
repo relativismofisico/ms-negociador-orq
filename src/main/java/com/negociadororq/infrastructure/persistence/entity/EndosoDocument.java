@@ -35,6 +35,8 @@ public class EndosoDocument {
     private String id;
     private String negociacionId;
     private List<String> numerosFactura;
+    /** CUFE de cada factura, array paralelo a {@link #numerosFactura}. Ver {@link com.negociadororq.domain.model.Endoso#getCufes()}. */
+    private List<String> cufes;
     private String rutActorEndosa;
     private String rutProveedor;
     private String rutPagador;
