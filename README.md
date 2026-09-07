@@ -471,10 +471,18 @@ O genere un token manualmente con el secret del entorno de desarrollo:
   "idNegociacion": "NEG-2026-001",
   "estadoEndoso": "PENDIENTE",
   "facturasEndosadas": ["FECI3566"],
+  "cufesEndosadas": ["a1b2c3d4e5f6...8f384"],
   "facturasRechazadas": ["FECI3567"],
   "plantillaHtml": "<html>...</html>"
 }
 ```
+
+`cufesEndosadas` es un array **paralelo** a `facturasEndosadas`: `cufesEndosadas[i]`
+es el CUFE (`//cbc:UUID` del XML DIAN, clave única global) de la factura
+`facturasEndosadas[i]`. Un elemento puede ser `null` si esa factura no tiene CUFE
+registrado. El endoso persiste estos CUFE en `EndosoDocument.cufes`; los consume
+ms-consultasFacturas-neg para resolver la factura exacta sin depender del
+`numeroFactura`, que es el consecutivo del emisor y no es único global.
 
 | Código | Descripción |
 |---|---|
@@ -758,7 +766,8 @@ Los cupos se descuentan únicamente cuando todos los niveles son válidos.
 {
   _id: ObjectId,
   negociacionId: String,
-  numeroFactura: String,
+  numerosFactura: [String],      // 1+ facturas (varias si endosoGrupal=true)
+  cufes: [String],               // CUFE de cada factura, array paralelo a numerosFactura
   rutActorEndosa: String,
   rutProveedor: String,
   rutPagador: String,
