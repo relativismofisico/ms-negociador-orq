@@ -59,10 +59,20 @@ sonarqube {
 
 repositories {
     mavenCentral()
-    // PILOTO Fase 11 (pipeline de mantenibilidad) — ms-commons-util todavía no
-    // se publica a GitHub Packages, se prueba vía mavenLocal() hasta que se
-    // decida esa parte.
+    // ms-commons-util (Fase 11 del pipeline de mantenibilidad) se publica en
+    // GitHub Packages: repo publico relativismofisico/ms-commons-util. En CI el
+    // GITHUB_TOKEN del workflow lo resuelve sin PAT; en local lo cubre mavenLocal()
+    // tras un `publishToMavenLocal` en ms-commons-util, o gpr.user/gpr.token en
+    // ~/.gradle/gradle.properties.
     mavenLocal()
+    maven {
+        name = 'GitHubPackages'
+        url = uri('https://maven.pkg.github.com/relativismofisico/ms-commons-util')
+        credentials {
+            username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
+            password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
+        }
+    }
 }
 
 // Los source sets deben definirse ANTES del bloque configurations {}: si no,
@@ -145,7 +155,7 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
     // ms-commons-util — IpUtils/RateLimitFilter extraídos en la Fase 11 del
-    // pipeline de mantenibilidad (PILOTO vía mavenLocal(), ver repositories{})
+    // pipeline de mantenibilidad; se resuelve desde GitHub Packages (ver repositories{})
     implementation 'com.factoring:ms-commons-util:0.2.0'
 
     // Tests
