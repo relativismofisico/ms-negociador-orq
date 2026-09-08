@@ -14,6 +14,13 @@ plugins {
 version = '1.0.0'
 group = 'com.negociadororq'
 
+// El BOM de Spring Boot 3.5.4 fija Testcontainers 1.21.3, que NO negocia bien con
+// Docker Desktop 29.x (Engine 29): su cliente recibe "Status 400" de /info y no
+// detecta un entorno Docker válido (rompe IndirectFunderOfferSupplierQuotaConcurrencyIT
+// y cualquier otro @Testcontainers). 1.21.4 lo arregla en la raíz -> reemplaza el
+// workaround de DOCKER_API_VERSION que había en test.gradle.
+ext['testcontainers.version'] = '1.21.4'
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
@@ -95,6 +102,10 @@ dependencies {
     // Web
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // Bean Validation — sin este starter (hibernate-validator) el @Valid de los
+    // controllers no ejecuta las constraints del DTO: Spring omite la validacion
+    // en silencio. Los otros 9 backends de Integrity ya lo tienen.
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
 
     // MongoDB (quita JPA/Postgres/MySQL)
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
@@ -140,6 +151,15 @@ dependencies {
     // Tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+
+    // Testcontainers — MySQL real y efímero para el test de concurrencia de
+    // descontarCupo (la carrera de INSERT duplicado y la de dos UPDATE
+    // concurrentes solo se reproducen contra InnoDB real, no contra H2).
+    // Versiones administradas por el BOM de Spring Boot. Requiere Docker en el
+    // runner (los runners GitHub-hosted `ubuntu-latest` ya lo traen).
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:mysql'
 
     // Spock Framework — pruebas unitarias en Groovy
     testImplementation 'org.apache.groovy:groovy-all:4.0.21'

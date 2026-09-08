@@ -6,6 +6,7 @@ import com.negociadororq.application.dto.EndosoGrupalRequestDto;
 import com.negociadororq.application.dto.RentabilidadMinimaRequestDto;
 import com.negociadororq.application.service.CupoPropioFondeoService;
 import com.negociadororq.web.exception.ErrorResponse;
+import com.negociadororq.web.security.CompanyOwnershipGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -38,6 +39,8 @@ public class CupoPropioFondeoController {
 
     private final CupoPropioFondeoService cupoPropioFondeoService;
 
+    private final CompanyOwnershipGuard companyOwnership;
+
     @Operation(
         summary = "Consultar el cupo propio de autofondeo de la empresa",
         description = "Retorna el cupo de autofondeo actual de la empresa junto con el tope máximo "
@@ -61,6 +64,7 @@ public class CupoPropioFondeoController {
     public ResponseEntity<CupoPropioFondeoDto> obtenerCupoPropio(
             @Parameter(description = "Identificador de la empresa", example = "1", required = true)
             @PathVariable Long companyId) {
+        companyOwnership.exigirEmpresaPropia(companyId);
         return ResponseEntity.ok(cupoPropioFondeoService.obtenerCupoPropio(companyId));
     }
 
@@ -100,6 +104,7 @@ public class CupoPropioFondeoController {
             @Parameter(description = "Identificador de la empresa", example = "1", required = true)
             @PathVariable Long companyId,
             @Valid @RequestBody ActualizarCupoPropioRequestDto request) {
+        companyOwnership.exigirEmpresaPropia(companyId);
         return ResponseEntity.ok(
                 cupoPropioFondeoService.actualizarCupoPropio(companyId, request.getCupoPropio(), request.getTasa(),
                         request.getTipoDescuento(), request.getTipoTasa(), request.getTarifaPlena(),
@@ -127,6 +132,7 @@ public class CupoPropioFondeoController {
             @Parameter(description = "Identificador de la empresa", example = "1", required = true)
             @PathVariable Long companyId,
             @Valid @RequestBody EndosoGrupalRequestDto request) {
+        companyOwnership.exigirEmpresaPropia(companyId);
         return ResponseEntity.ok(
                 cupoPropioFondeoService.actualizarEndosoGrupal(companyId, Boolean.TRUE.equals(request.getEndosoGrupal())));
     }
@@ -156,6 +162,7 @@ public class CupoPropioFondeoController {
             @Parameter(description = "Identificador de la empresa", example = "1", required = true)
             @PathVariable Long companyId,
             @Valid @RequestBody RentabilidadMinimaRequestDto request) {
+        companyOwnership.exigirEmpresaPropia(companyId);
         return ResponseEntity.ok(cupoPropioFondeoService.actualizarRentabilidadMinima(
                 companyId, Boolean.TRUE.equals(request.getActiva()), request.getValor()));
     }
@@ -180,6 +187,7 @@ public class CupoPropioFondeoController {
     public ResponseEntity<CupoPropioFondeoDto> restablecerCupo(
             @Parameter(description = "Identificador de la empresa", example = "1", required = true)
             @PathVariable Long companyId) {
+        companyOwnership.exigirEmpresaPropia(companyId);
         return ResponseEntity.ok(cupoPropioFondeoService.restablecerCupo(companyId));
     }
 }

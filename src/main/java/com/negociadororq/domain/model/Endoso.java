@@ -33,6 +33,19 @@ public class Endoso {
      */
     private List<String> numerosFactura;
 
+    /**
+     * CUFE (//cbc:UUID del XML DIAN, clave única global de cada factura) de las
+     * facturas cubiertas por este endoso. Array PARALELO a {@link #numerosFactura}:
+     * mismo orden y tamaño, {@code cufes.get(i)} es el CUFE de
+     * {@code numerosFactura.get(i)}. Se puebla al crear el endoso a partir de la
+     * factura ya cargada. Un elemento puede ser {@code null} si esa factura no
+     * tiene CUFE (dato legacy); en endosos creados antes de esta versión la lista
+     * entera viene {@code null}. Lo consume ms-consultasFacturas-neg para resolver
+     * la factura exacta sin depender del {@code numeroFactura}, que es el
+     * consecutivo del emisor y no es único global.
+     */
+    private List<String> cufes;
+
     private String rutActorEndosa;
     private String rutProveedor;
     private String rutPagador;

@@ -71,6 +71,7 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
                 .otp(doc.getOtp())
                 .aprobado(doc.getAprobado())
                 .request(doc.getRequest())
+                .validadoEnOrigen(doc.getValidadoEnOrigen())
                 .build();
     }
 
@@ -84,6 +85,7 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
                 .otp(p.getOtp())
                 .aprobado(p.getAprobado())
                 .request(p.getRequest())
+                .validadoEnOrigen(p.getValidadoEnOrigen())
                 .build();
     }
 }

@@ -23,4 +23,11 @@ public class PendingOtp {
     private String otp;
     private Boolean aprobado;
     private AprobacionRequest request;
+
+    /**
+     * La solicitud de OTP que creó este pendiente pasó el guard de ownership
+     * (CompanyOwnershipGuard) en el controller. Se propaga al evento de
+     * liquidación como marca de trazabilidad.
+     */
+    private Boolean validadoEnOrigen;
 }
