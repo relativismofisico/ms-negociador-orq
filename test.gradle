@@ -118,17 +118,6 @@ task productionTest(type: Test) {
 test {
     jvmArgs "-Xms128m", "-Xmx512m", "-XX:+DisableExplicitGC"
     finalizedBy jacocoTestReport
-
-    // Docker Desktop >= 29 responde HTTP 400 al probe GET /info de Testcontainers
-    // cuando docker-java no fija la versión de la API. Si DOCKER_API_VERSION está
-    // en el entorno, se reenvía al JVM de test como env var y system property
-    // (docker-java lee cualquiera de las dos). No-op en CI con Docker Engine
-    // estándar, donde la autodetección de Testcontainers ya funciona sola.
-    def dockerApiVersion = providers.environmentVariable('DOCKER_API_VERSION')
-    if (dockerApiVersion.present) {
-        environment 'DOCKER_API_VERSION', dockerApiVersion.get()
-        systemProperty 'api.version', dockerApiVersion.get()
-    }
 }
 
 tasks.register('architectureTest', Test) {

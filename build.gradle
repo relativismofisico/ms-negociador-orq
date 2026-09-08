@@ -14,6 +14,13 @@ plugins {
 version = '1.0.0'
 group = 'com.negociadororq'
 
+// El BOM de Spring Boot 3.5.4 fija Testcontainers 1.21.3, que NO negocia bien con
+// Docker Desktop 29.x (Engine 29): su cliente recibe "Status 400" de /info y no
+// detecta un entorno Docker válido (rompe IndirectFunderOfferSupplierQuotaConcurrencyIT
+// y cualquier otro @Testcontainers). 1.21.4 lo arregla en la raíz -> reemplaza el
+// workaround de DOCKER_API_VERSION que había en test.gradle.
+ext['testcontainers.version'] = '1.21.4'
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
