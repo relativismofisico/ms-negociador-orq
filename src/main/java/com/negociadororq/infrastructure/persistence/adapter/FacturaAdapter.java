@@ -22,7 +22,9 @@ public class FacturaAdapter implements FacturaOutputPort {
 
     @Override
     public Optional<Factura> findByNumeroFactura(String numeroFactura) {
-        return repository.findByNumeroFactura(numeroFactura).map(this::toDomain);
+        // findFirst...OrderByIdDesc: numeroFactura no es único global (consecutivo por
+        // emisor). Ante colisión devuelve la más reciente en vez de reventar con 500.
+        return repository.findFirstByNumeroFacturaOrderByIdDesc(numeroFactura).map(this::toDomain);
     }
 
     @Override

@@ -15,10 +15,19 @@ import org.springframework.stereotype.Repository;
 public interface FacturaRepository extends MongoRepository<FacturaDocument, String> {
 
     /**
+     * {@code findFirst ... OrderByIdDesc} y no {@code findBy...}: {@code numeroFactura}
+     * (//cbc:ID del XML DIAN) es el consecutivo del EMISOR, NO global — dos proveedores
+     * distintos emiten legítimamente su factura {@code 1}. El {@code @Indexed(unique=true)}
+     * incorrecto se quitó de este campo (674d6f7), así que la colisión quedó alcanzable:
+     * un {@code findBy...} que devuelve {@code Optional} degradaría a
+     * {@code IncorrectResultSizeDataAccessException} → 500 en el loop de creación de endoso
+     * y en el resto del flujo de negociación/reversión. Mismo backstop que
+     * ms-consultasFacturas-neg (1dfae0d). La clave única global real es {@code cufe}.
+     *
      * @param numeroFactura número de la factura
-     * @return la factura, si existe
+     * @return la factura más reciente con ese número, si existe
      */
-    Optional<FacturaDocument> findByNumeroFactura(String numeroFactura);
+    Optional<FacturaDocument> findFirstByNumeroFacturaOrderByIdDesc(String numeroFactura);
 
     /**
      * @param cufe CUFE de la factura
