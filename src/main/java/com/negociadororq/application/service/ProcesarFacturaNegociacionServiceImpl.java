@@ -453,6 +453,14 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
      * tasa/cupo vigentes de la oferta en ese instante). El cupo íntegro de la
      * oferta ({@code supplierQuotaTemplate}) queda fijo como techo, nunca se
      * descuenta ahí.
+     *
+     * <p>El descuento es un {@code UPDATE ... SET current_quota = current_quota -
+     * valor} atómico (no leer-modificar-escribir): dos negociaciones concurrentes
+     * del mismo par ya no pueden pisarse el resultado. Si la fila todavía no
+     * existe ({@code descontarCupo} devuelve 0), se crea con el snapshot vigente
+     * y se reintenta el descuento; una creación concurrente que gane la carrera
+     * del UNIQUE se traduce a {@link ConflictoException} en el adapter y se
+     * absorbe acá — la fila ya existe, el reintento la descuenta.</p>
      */
     private void descontarCupoIndirecto(Long funderId, Long payerId, Long supplierId, BigDecimal valorFactura) {
 
@@ -461,14 +469,28 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 .orElseThrow(() -> new RuntimeException(
                         "No se encontró la oferta de fondeo indirecta al descontar cupo"));
 
-        IndirectFunderOfferSupplierQuota cupoProveedor = indirectFunderOfferSupplierQuotaPort
-                .find(oferta.getId(), supplierId)
-                .orElseGet(() -> indirectFunderOfferSupplierQuotaPort.crear(
-                        oferta.getId(), supplierId, oferta.getPayerRate(), oferta.getSupplierQuotaTemplate()));
+        int filas = indirectFunderOfferSupplierQuotaPort.descontarCupo(oferta.getId(), supplierId, valorFactura);
+        if (filas > 0) {
+            return;
+        }
 
-        cupoProveedor.setCurrentQuota(cupoProveedor.getCurrentQuota().subtract(valorFactura));
+        try {
+            indirectFunderOfferSupplierQuotaPort.crear(
+                    oferta.getId(), supplierId, oferta.getPayerRate(), oferta.getSupplierQuotaTemplate());
+        } catch (ConflictoException e) {
+            // Otra negociación concurrente del mismo par creó la fila primero.
+            // No es un error: existe, el descuento de abajo la alcanza.
+            log.fine(() -> "Fila de consumo del par (oferta=" + oferta.getId() + ", proveedor=" + supplierId
+                    + ") creada por una negociación concurrente; se reintenta el descuento.");
+        }
 
-        indirectFunderOfferSupplierQuotaPort.save(cupoProveedor);
+        filas = indirectFunderOfferSupplierQuotaPort.descontarCupo(oferta.getId(), supplierId, valorFactura);
+        if (filas == 0) {
+            throw new ConflictoException(
+                    "No se pudo registrar el consumo de cupo del proveedor contra la oferta de fondeo "
+                            + "indirecta. Vuelve a intentar.",
+                    "CUPO_PROVEEDOR_CONCURRENCIA");
+        }
     }
 
     private List<ActorFactura> construirActores(

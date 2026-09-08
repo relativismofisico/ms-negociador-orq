@@ -29,9 +29,22 @@ public interface IndirectFunderOfferSupplierQuotaOutputPort {
      * @param rate       tasa vigente de la oferta al crear
      * @param quota      cupo vigente de la oferta al crear (íntegro, no repartido)
      * @return el consumo recién creado
+     * @throws com.negociadororq.application.exception.ConflictoException si otra
+     *         negociación concurrente ya creó la fila del mismo par
+     *         {@code (offerId, supplierId)} (choque del UNIQUE).
      */
     IndirectFunderOfferSupplierQuota crear(Long offerId, Long supplierId,
             java.math.BigDecimal rate, java.math.BigDecimal quota);
+
+    /**
+     * Descuenta {@code valor} del cupo disponible de la fila de consumo del par
+     * {@code (offerId, supplierId)} de forma atómica en la base de datos. No hace
+     * leer-modificar-escribir: dos descuentos concurrentes sobre la misma fila se
+     * aplican ambos (la BD serializa el {@code SET current = current - valor}).
+     *
+     * @return filas afectadas — 0 si la fila de consumo todavía no existe.
+     */
+    int descontarCupo(Long offerId, Long supplierId, java.math.BigDecimal valor);
 
     /**
      * Persiste el consumo actualizado (tras descontar cupo).

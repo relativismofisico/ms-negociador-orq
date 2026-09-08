@@ -3,11 +3,13 @@ package com.negociadororq.infrastructure.persistence.adapter;
 import java.math.BigDecimal;
 import java.util.Optional;
 
+import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort;
 import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
 import com.negociadororq.infrastructure.persistence.entity.IndirectFunderOfferSupplierQuotaEntity;
 import com.negociadororq.infrastructure.persistence.repository.IndirectFunderOfferSupplierQuotaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -35,7 +37,22 @@ public class IndirectFunderOfferSupplierQuotaAdapter implements IndirectFunderOf
                 .originalQuota(quota)
                 .build();
 
-        return toDomain(repository.save(entity));
+        try {
+            return toDomain(repository.save(entity));
+        } catch (DataIntegrityViolationException e) {
+            // El UNIQUE (offer_id, supplier_id) de la tabla lo cubrió otra
+            // negociación concurrente entre nuestro chequeo y este INSERT. Se
+            // traduce a un error de negocio legible, sin filtrar tabla/constraint.
+            throw new ConflictoException(
+                    "El proveedor ya tiene un cupo abierto contra esta oferta de fondeo indirecta "
+                            + "(creación concurrente). Vuelve a intentar.",
+                    "CUPO_PROVEEDOR_CONCURRENCIA");
+        }
+    }
+
+    @Override
+    public int descontarCupo(Long offerId, Long supplierId, BigDecimal valor) {
+        return repository.descontarCupo(offerId, supplierId, valor);
     }
 
     @Override

@@ -8,6 +8,12 @@ Feature: POST /negociar/factura — Crear Negociacion Factoring/Confirming
   Background:
     * url baseUrl
     * def endpoint = '/negociar/factura'
+    # ── Guard CompanyOwnershipGuard.exigirActorEsLlamador (suplantación de empresa) ──
+    # Solo disponible en dev/qa: usa JwtTestHelper + jwtSecret. Seed _e2e-infra:
+    #   empresas 7004 (NIT KARATE-DESTINO) y 7005 (NIT KARATE-AJENA), usuarios EMPRESA
+    #   homónimos, operario op-destino con company_ide 7004.
+    * def JwtGen = jwtSecret ? Java.type('com.negociadororq.auth.JwtTestHelper') : null
+    * def bearer = function(sub, rol){ return { Authorization: 'Bearer ' + JwtGen.generate(sub, rol, jwtSecret) } }
     * def fondeador = { rutFondeador: '#(testData.rutFondeador)', nombreFondeador: 'Fondeador Test' }
     * def facturaBase =
       """
@@ -132,3 +138,61 @@ Feature: POST /negociar/factura — Crear Negociacion Factoring/Confirming
     When method GET
     Then status 405
     And match response.codigo == 'METODO_NO_PERMITIDO'
+
+  # ─── Suplantación de empresa (CompanyOwnershipGuard.exigirActorEsLlamador) ──────
+  # El guard corre ANTES del servicio: rechaza que la empresa A negocie declarando
+  # en el body rutEmpresa/rutOperador de la empresa B.
+
+  @regression @full
+  Scenario: La empresa 7005 no puede negociar declarando rutEmpresa de la 7004 — 403
+    Given path endpoint
+    And headers bearer('KARATE-AJENA', 'EMPRESA')
+    And request
+      """
+      {
+        "rutEmpresa":    "KARATE-DESTINO",
+        "rolEmpresa":    "PROVEEDOR",
+        "tipoOperacion": { "tipo": "FACTORING", "clase": "NORMAL" },
+        "facturas":      [ { "numeroFactura": "FAC-SUP-1", "valorFactura": 1000000, "fondeadores": [ { "rutFondeador": "KARATE-FUNDER", "nombreFondeador": "F" } ] } ],
+        "rutOperador":   "KARATE-DESTINO"
+      }
+      """
+    When method POST
+    Then status 403
+    And match response.codigo == 'ACCION_NO_PERMITIDA'
+
+  @regression @full
+  Scenario: La empresa propia con un rutOperador de otra empresa — 403
+    Given path endpoint
+    And headers bearer('KARATE-DESTINO', 'EMPRESA')
+    And request
+      """
+      {
+        "rutEmpresa":    "KARATE-DESTINO",
+        "rolEmpresa":    "PROVEEDOR",
+        "tipoOperacion": { "tipo": "FACTORING", "clase": "NORMAL" },
+        "facturas":      [ { "numeroFactura": "FAC-SUP-2", "valorFactura": 1000000, "fondeadores": [ { "rutFondeador": "KARATE-FUNDER", "nombreFondeador": "F" } ] } ],
+        "rutOperador":   "KARATE-AJENA"
+      }
+      """
+    When method POST
+    Then status 403
+    And match response.codigo == 'ACCION_NO_PERMITIDA'
+
+  @regression @full
+  Scenario: El mensaje del 403 de suplantación no filtra ids ni nombres internos
+    Given path endpoint
+    And headers bearer('KARATE-AJENA', 'EMPRESA')
+    And request
+      """
+      {
+        "rutEmpresa":    "KARATE-DESTINO",
+        "rolEmpresa":    "PROVEEDOR",
+        "tipoOperacion": { "tipo": "FACTORING", "clase": "NORMAL" },
+        "facturas":      [ { "numeroFactura": "FAC-SUP-3", "valorFactura": 1000000, "fondeadores": [ { "rutFondeador": "KARATE-FUNDER", "nombreFondeador": "F" } ] } ],
+        "rutOperador":   "KARATE-DESTINO"
+      }
+      """
+    When method POST
+    Then status 403
+    And match response.mensaje == 'No tiene permisos para operar sobre esta empresa.'

@@ -26,6 +26,11 @@ public class IndirectFunderOfferAdapter implements IndirectFunderOfferOutputPort
                 .map(this::toDomain);
     }
 
+    @Override
+    public Optional<IndirectFunderOffer> findById(Long offerId) {
+        return repository.findById(offerId).map(this::toDomain);
+    }
+
     private IndirectFunderOffer toDomain(IndirectFunderOfferEntity entity) {
         return IndirectFunderOffer.builder()
                 .id(entity.getId())

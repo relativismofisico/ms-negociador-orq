@@ -25,8 +25,11 @@ public class FacturaDocument {
     @Id
     private String id;
 
+    // numeroFactura (//cbc:ID del XML DIAN) es el consecutivo del EMISOR: único por
+    // emisor, NO global. La clave única global es `cufe` (//cbc:UUID). El
+    // @Indexed(unique=true) que estaba acá era incorrecto (y además inerte:
+    // auto-index-creation está apagado).
     @Field("numeroFactura")
-    @Indexed(unique = true)
     private String numeroFactura;
 
     private String codigoAlternoFactura;
