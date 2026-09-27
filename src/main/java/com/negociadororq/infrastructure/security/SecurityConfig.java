@@ -1,5 +1,6 @@
 package com.negociadororq.infrastructure.security;
 
+import java.util.Arrays;
 import java.util.List;
 
 import com.factoring.commons.web.RateLimitFilter;
@@ -7,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.negociadororq.application.service.LoginLockoutService;
 import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
@@ -117,19 +119,20 @@ public class SecurityConfig {
         return new JjwtDecoder(securityProperties.getJwt().getSecret(), objectMapper, userRepository);
     }
 
+    /**
+     * Única fuente de CORS de la app — mismo patrón que {@code ms-loadfiles-neg}. A diferencia
+     * de repos con uso amplio, este servicio solo lo llama {@code ms-operator-front-neg}
+     * (puerto 4800): el default se restringe a ese único origen en vez de habilitar los 8
+     * puertos genéricos de la plataforma. Override real por ambiente vía
+     * {@code cors.allowed-origins} ({@code CORS_ALLOWED_ORIGINS} en qa/prod).
+     */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${cors.allowed-origins:http://localhost:4800}") String allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:4200",
-                "http://localhost:4300",
-                "http://localhost:4400",
-                "http://localhost:4500",
-                "http://localhost:4700",
-                "http://localhost:4800"
-        ));
+        configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
