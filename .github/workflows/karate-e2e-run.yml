@@ -167,7 +167,7 @@ jobs:
       # Post-seed: se aplica DESPUÉS de que ddl-auto creó funder/parametrization/
       # indirect_funder_offer/indirect_funder_offer_supplier_quota/
       # payer_funding_visibility/user_quota/messages_templates completas.
-      - name: Post-seed MySQL (anclas propias: autofondeo, cupos, plantilla)
+      - name: "Post-seed MySQL (anclas propias: autofondeo, cupos, plantilla)"
         run: |
           mysql -h127.0.0.1 -P3306 -uroot -pe2e-root --default-character-set=utf8mb4 dbcompany < .github/ci/post-seed.sql
 
