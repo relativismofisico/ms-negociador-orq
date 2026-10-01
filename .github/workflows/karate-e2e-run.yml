@@ -1,0 +1,193 @@
+name: Karate E2E run (reusable)
+
+# Job reutilizable: levanta MySQL/Mongo/Redis/Kafka + la propia app en el
+# runner y corre la tarea de Gradle indicada contra esa infra efimera. Hoy
+# este repo no tiene NINGUN CI propio -- solo corre DENTRO del pipeline de
+# ms-liquidador-neg (checkout con PAT + segunda app real, para probar la
+# integracion de validacion de vencimiento de facturas). Eso cubre esa
+# integracion puntual, pero los 11 feature files propios de este repo (cupo
+# indirecto, cupo propio, endoso, negociacion, OTP, security, conversion --
+# 115 escenarios) nunca corrieron en ningun CI real hasta ahora. Mismo diseno
+# que _e2e-infra/ (infra local del equipo), adaptado a GitHub Actions service
+# containers, portado del mismo patron ya usado 7 veces esta sesion.
+#
+# Kafka con auto-startup deshabilitado a proposito: los 2 @KafkaListener
+# reales (LiquidacionFallidaConsumer/OtpValidatedListener) no los ejercita
+# ningun escenario de Karate -- el container solo hace falta para que la app
+# no falle al arrancar el cliente Kafka.
+#
+# Pre-seed: solo las tablas que este repo LEE pero no posee (company/city/
+# document_type/company_operation/company_section_verification/person/user),
+# con DDL real precreada -- ver el porque completo en el propio archivo.
+# funder/parametrization/indirect_funder_offer/indirect_funder_offer_supplier_quota/
+# payer_funding_visibility/user_quota/messages_templates SI son propias (sus
+# @Entity mapean la tabla completa, @Version real incluido) -- ddl-auto=update
+# las crea solas, sus datos van en post-seed.sql despues del boot.
+#
+# Se extrae a un workflow reutilizable (no a un composite action) porque los
+# service containers son una propiedad del job, no de un step.
+
+on:
+  workflow_call:
+    inputs:
+      gradle-task:
+        description: 'Tarea de Gradle a ejecutar (smokeTest, regressionTest, automatedTest, productionTest)'
+        required: true
+        type: string
+      report-name:
+        description: 'Sufijo para el nombre de los artifacts subidos'
+        required: true
+        type: string
+
+jobs:
+  run:
+    name: ${{ inputs.gradle-task }}
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: e2e-root
+          MYSQL_DATABASE: dbcompany
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot -pe2e-root"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --quiet --eval 'db.runCommand({ping:1})' || mongo --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+      kafka:
+        image: apache/kafka:3.9.0
+        env:
+          KAFKA_NODE_ID: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+        ports:
+          - 9092:9092
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant Gradle permissions
+        run: chmod +x gradlew
+
+      - name: Instalar clientes MySQL y MongoDB Shell
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q mysql-client
+          curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+          echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update -q
+          sudo apt-get install -y -q mongodb-mongosh
+
+      - name: Pre-seed MySQL (tablas ajenas que este repo solo lee)
+        run: |
+          mysql -h127.0.0.1 -P3306 -uroot -pe2e-root --default-character-set=utf8mb4 dbcompany < .github/ci/pre-seed.sql
+
+      - name: Levantar el servicio en background
+        env:
+          JAVA_TOOL_OPTIONS: '-Dspring.devtools.restart.enabled=false'
+          SPRING_PROFILES_ACTIVE: dev
+          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/dbcompany?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: e2e-root
+          SPRING_FLYWAY_ENABLED: 'false'
+          SPRING_JPA_HIBERNATE_DDL_AUTO: update
+          SPRING_JPA_SHOW_SQL: 'false'
+          SPRING_DATA_MONGODB_URI: mongodb://127.0.0.1:27017/DB_Facturas
+          SPRING_DATA_REDIS_HOST: 127.0.0.1
+          SPRING_DATA_REDIS_PORT: '6379'
+          SPRING_KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9092
+          SPRING_KAFKA_LISTENER_AUTO_STARTUP: 'false'
+          RATE_LIMIT_IP_ENABLED: 'false'
+          LOGGING_LEVEL_ORG_HIBERNATE_SQL: WARN
+        run: |
+          nohup ./gradlew bootRun --console=plain > bootrun.log 2>&1 &
+          echo $! > bootrun.pid
+
+      - name: Esperar a que el servicio responda
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8083/actuator/health >/dev/null 2>&1; then
+              echo "app UP"
+              exit 0
+            fi
+            if grep -qE "APPLICATION FAILED TO START|BUILD FAILED" bootrun.log 2>/dev/null; then
+              echo "la app falló al arrancar:"
+              tail -150 bootrun.log
+              exit 1
+            fi
+            sleep 3
+          done
+          echo "timeout esperando la app"
+          tail -150 bootrun.log
+          exit 1
+
+      # Post-seed: se aplica DESPUÉS de que ddl-auto creó funder/parametrization/
+      # indirect_funder_offer/indirect_funder_offer_supplier_quota/
+      # payer_funding_visibility/user_quota/messages_templates completas.
+      - name: "Post-seed MySQL (anclas propias: autofondeo, cupos, plantilla)"
+        run: |
+          mysql -h127.0.0.1 -P3306 -uroot -pe2e-root --default-character-set=utf8mb4 dbcompany < .github/ci/post-seed.sql
+
+      - name: Post-seed MongoDB (negociación + factura endosable)
+        run: mongosh --quiet DB_Facturas .github/ci/post-seed.mongo.js
+
+      - name: Ejecutar pruebas funcionales (${{ inputs.gradle-task }})
+        env:
+          AMBIENTE_PIPE: dev
+        run: ./gradlew ${{ inputs.gradle-task }}
+
+      - name: Detener el servicio
+        if: always()
+        run: kill "$(cat bootrun.pid)" 2>/dev/null || true
+
+      - name: Publicar reporte de Karate
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: karate-reports-${{ inputs.report-name }}
+          path: |
+            build/reports/tests/${{ inputs.gradle-task }}/
+            build/test-results/${{ inputs.gradle-task }}/

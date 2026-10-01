@@ -1,0 +1,46 @@
+name: Functional Tests - Karate
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Suite de pruebas'
+        required: true
+        default: 'regression'
+        type: choice
+        options: [smoke, regression, full, production]
+
+jobs:
+  smoke:
+    name: Smoke Tests
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/karate-e2e-run.yml
+    with:
+      gradle-task: smokeTest
+      report-name: smoke
+
+  regression:
+    name: Regression Tests
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/karate-e2e-run.yml
+    with:
+      gradle-task: regressionTest
+      report-name: regression
+
+  manual:
+    name: Manual (${{ github.event.inputs.suite }})
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/karate-e2e-run.yml
+    with:
+      gradle-task: >-
+        ${{
+          github.event.inputs.suite == 'smoke' && 'smokeTest' ||
+          github.event.inputs.suite == 'regression' && 'regressionTest' ||
+          github.event.inputs.suite == 'full' && 'automatedTest' ||
+          'productionTest'
+        }}
+      report-name: manual-${{ github.event.inputs.suite }}
