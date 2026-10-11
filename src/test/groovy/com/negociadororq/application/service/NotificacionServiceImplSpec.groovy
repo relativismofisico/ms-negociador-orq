@@ -10,6 +10,7 @@ import com.negociadororq.domain.event.DestinatarioEmail
 import com.negociadororq.domain.model.AprobacionRequest
 import com.negociadororq.domain.model.Company
 import com.negociadororq.domain.model.Endoso
+import com.negociadororq.domain.model.Factura
 import com.negociadororq.domain.model.FacturaNegociada
 import com.negociadororq.domain.model.FondeadorAsignacion
 import com.negociadororq.domain.model.Negociacion
@@ -516,9 +517,11 @@ class NotificacionServiceImplSpec extends Specification {
         given:
         def neg = buildNegociacion()
         destinatarioResolver.resolverParaLiquidacionFallida(neg) >> []
+        companyPort.findByNit(_) >> Optional.empty()
+        facturaPort.findByNumeroFactura(_) >> Optional.empty()
 
         when:
-        service.notificarLiquidacionFallida(neg, "Error de pago")
+        service.notificarLiquidacionFallida(neg, "FE-1", "Error de pago")
 
         then:
         1 * outboxService.guardarEvento("neg-001", "topic-email", {
@@ -530,14 +533,70 @@ class NotificacionServiceImplSpec extends Specification {
         given:
         def neg = buildNegociacion()
         destinatarioResolver.resolverParaLiquidacionFallida(neg) >> []
+        companyPort.findByNit(_) >> Optional.empty()
+        facturaPort.findByNumeroFactura(_) >> Optional.empty()
         def capturedEvents = []
 
         when:
-        service.notificarLiquidacionFallida(neg, "Error")
-        service.notificarLiquidacionFallida(neg, "Error")
+        service.notificarLiquidacionFallida(neg, "FE-1", "Error")
+        service.notificarLiquidacionFallida(neg, "FE-1", "Error")
 
         then:
         2 * outboxService.guardarEvento(_, _, { capturedEvents << it; true })
+    }
+
+    def "notificarLiquidacionFallida envía el motivo, la factura, los nombres y los montos formateados"() {
+        given:
+        def neg = buildNegociacion()
+        neg.rutFondeadores = ["FOND-001", "FOND-002"]
+        neg.totalNegociado = new BigDecimal("1E+7")
+        destinatarioResolver.resolverParaLiquidacionFallida(neg) >> []
+        companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().nameCompany("Pagador SAS").build())
+        companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().nameCompany("Proveedor SAS").build())
+        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().nameCompany("Fondos Uno").build())
+        companyPort.findByNit("FOND-002") >> Optional.empty()
+        facturaPort.findByNumeroFactura("FE-1") >> Optional.of(new Factura(valorFactura: new BigDecimal("2500000.5")))
+        def eventos = []
+
+        when:
+        service.notificarLiquidacionFallida(neg, "FE-1", "La factura FE-1 fue rechazada durante el proceso de aprobación/endoso")
+
+        then:
+        1 * outboxService.guardarEvento("neg-001", "topic-email", { eventos << it; true })
+        def data = eventos[0].data
+        data.motivo == "La factura FE-1 fue rechazada durante el proceso de aprobación/endoso"
+        data.numeroFactura == "FE-1"
+        data.valorFactura == "2.500.000,50"
+        data.totalNegociado == "10.000.000,00"
+        data.nombrePagador == "Pagador SAS"
+        data.nombreProveedor == "Proveedor SAS"
+        // un fondeador sin empresa registrada se muestra por su NIT, como en el resto de los correos
+        data.nombresFondeadores == "Fondos Uno, FOND-002"
+        data.cantidadFacturas == 1
+        // claves que ya se enviaban, conservadas por compatibilidad
+        data.id == "neg-001"
+        data.rutPagador == "PAG-001"
+        data.rutFondeadores == ["FOND-001", "FOND-002"]
+        data.facturas == 1
+    }
+
+    def "notificarLiquidacionFallida sin fondeadores ni valor conocido usa N/A, sin fallar"() {
+        given:
+        def neg = buildNegociacion()
+        neg.rutFondeadores = []
+        destinatarioResolver.resolverParaLiquidacionFallida(neg) >> []
+        companyPort.findByNit(_) >> Optional.empty()
+        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        def eventos = []
+
+        when:
+        service.notificarLiquidacionFallida(neg, "FE-9", "motivo")
+
+        then:
+        1 * outboxService.guardarEvento(_, _, { eventos << it; true })
+        def data = eventos[0].data
+        data.nombresFondeadores == "N/A"
+        data.valorFactura == "N/A"
     }
 
     // ─── safeMap (indirectamente via notificar*) ──────────────────────────────

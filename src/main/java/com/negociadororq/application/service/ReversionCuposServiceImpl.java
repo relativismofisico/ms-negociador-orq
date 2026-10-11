@@ -193,7 +193,7 @@ public class ReversionCuposServiceImpl
 
         log.info(String.format("Cupos revertidos factura=%s motivo=%s", numeroFactura, motivo));
 
-        notificacionService.notificarLiquidacionFallida(negociacion, motivo);
+        notificacionService.notificarLiquidacionFallida(negociacion, numeroFactura, motivo);
 
         log.info(String.format("Notificacion enviada negociacion=%s", negociacion.getId()));
     }

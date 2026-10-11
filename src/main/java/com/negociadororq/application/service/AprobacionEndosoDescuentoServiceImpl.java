@@ -243,7 +243,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     + " fue rechazada durante el proceso de aprobación/endoso";
 
             revertirCupos(factura, tipoOperacion, factura.getRutProveedor(), rutOperador);
-            notificacionService.notificarLiquidacionFallida(negociacion, motivoError);
+            notificacionService.notificarLiquidacionFallida(negociacion, factura.getNumeroFactura(), motivoError);
             facturaPatchPort.actualizarEstadosPorNoFactura(
                     factura.getNumeroFactura(), EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA);
             factura.setEstadoFirma(EstadoFirma.RECHAZADA);

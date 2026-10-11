@@ -477,7 +477,7 @@ public class NotificacionServiceImpl implements NotificacionService {
     }
 
     @Override
-    public void notificarLiquidacionFallida(Negociacion negociacion, String motivo) {
+    public void notificarLiquidacionFallida(Negociacion negociacion, String numeroFactura, String motivo) {
         List<DestinatarioEmail> destinatarios =
                 destinatarioResolver.resolverParaLiquidacionFallida(negociacion);
 
@@ -490,14 +490,24 @@ public class NotificacionServiceImpl implements NotificacionService {
             cantidadFacturas = negociacion.getFacturas().size();
         }
 
+        // Se conservan las claves que ya se enviaban (id, tipoOperacion, rut*, facturas = cantidad) para no romper
+        // a ningún consumidor; se agregan el motivo, la factura rechazada, los nombres en vez de solo los NIT y el
+        // total formateado (antes iba el BigDecimal crudo, que podía salir con notación científica).
         Map<String, Object> data = safeMap(
                 "id", negociacion.getId(),
                 "tipoOperacion", tipoOperacion,
                 "rutPagador", negociacion.getRutPagador(),
                 "rutProveedor", negociacion.getRutProveedor(),
                 "rutFondeadores", negociacion.getRutFondeadores(),
-                "totalNegociado", negociacion.getTotalNegociado(),
-                "facturas", cantidadFacturas
+                "totalNegociado", formatearMonto(negociacion.getTotalNegociado()),
+                "facturas", cantidadFacturas,
+                "cantidadFacturas", cantidadFacturas,
+                "motivo", motivo,
+                "numeroFactura", numeroFactura,
+                "valorFactura", formatearMonto(valorFactura(numeroFactura)),
+                "nombrePagador", nombreCompania(negociacion.getRutPagador()),
+                "nombreProveedor", nombreCompania(negociacion.getRutProveedor()),
+                "nombresFondeadores", nombresCompanias(negociacion.getRutFondeadores())
         );
 
         NotificacionEmailEvent event = NotificacionEmailEvent.builder()
@@ -511,6 +521,16 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .build();
 
         outboxService.guardarEvento(negociacion.getId(), topicNotificacionEmail, event);
+    }
+
+    private String nombresCompanias(List<String> nits) {
+        if (nits == null || nits.isEmpty()) {
+            return SIN_DATO;
+        }
+        return nits.stream()
+                .map(this::nombreCompania)
+                .distinct()
+                .collect(Collectors.joining(", "));
     }
 
     private Map<String, Object> safeMap(Object... values) {
