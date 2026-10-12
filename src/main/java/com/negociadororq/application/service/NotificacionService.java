@@ -37,8 +37,12 @@ public interface NotificacionService {
     void notificarFirmaEndoso(AprobacionRequest aprobacion);
 
     /**
-     * @param negociacion negociación cuya liquidación falló
-     * @param motivo      motivo de la falla, para incluir en la notificación
+     * Avisa a los actores que una factura de la negociación quedó rechazada y sus cupos se revirtieron (por un
+     * rechazo durante la aprobación o por una reversión de cupos).
+     *
+     * @param negociacion   negociación a la que pertenece la factura
+     * @param numeroFactura factura rechazada
+     * @param motivo        motivo del rechazo, para incluir en la notificación
      */
-    void notificarLiquidacionFallida(Negociacion negociacion, String motivo);
+    void notificarLiquidacionFallida(Negociacion negociacion, String numeroFactura, String motivo);
 }

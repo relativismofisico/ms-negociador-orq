@@ -80,7 +80,7 @@ class ReversionCuposServiceImplSpec extends Specification {
         1 * cupoReversionService.revertirCupoEmpresa(10L, valor)
         1 * cupoReversionService.revertirCupoFondeadorFactoring(20L, 30L, valor)
         1 * facturaPatchPort.actualizarEstadoFirmaPorNoFactura(numero, EstadoFirma.RECHAZADA)
-        1 * notificacionService.notificarLiquidacionFallida(neg, "Error de pago")
+        1 * notificacionService.notificarLiquidacionFallida(neg, numero, "Error de pago")
     }
 
     // ─── flujo exitoso CONFIRMING ─────────────────────────────────────────────
