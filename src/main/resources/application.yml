@@ -157,7 +157,12 @@ login-lockout:
   max-attempts: 5
   window-minutes: 15
 
+# Log de texto plano con la trazabilidad de ms-commons-util (MDC): requestId de correlación entre microservicios,
+# usuario (sub del JWT ya validado) y empresa (claim emp). %logger{36} da la clase sin costo; NO usar %M (método):
+# recorre el stack en cada línea. Si hace falta el método, va como texto dentro del propio mensaje.
 logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%5p][%logger{36}][req=%X{requestId:-} user=%X{user:-} emp=%X{companyId:-}] %m%n%wEx"
   level:
     org.springframework.security: DEBUG
 
