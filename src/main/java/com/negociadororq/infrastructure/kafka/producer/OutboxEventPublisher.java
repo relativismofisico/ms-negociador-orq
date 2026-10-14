@@ -3,6 +3,8 @@ package com.negociadororq.infrastructure.kafka.producer;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.factoring.commons.auditoria.AuditoriaAccionEvent;
+import com.factoring.commons.auditoria.AuditoriaPublisher;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
 import com.negociadororq.domain.event.NotificacionEmailEvent;
 import com.negociadororq.domain.event.OtpRequestEvent;
@@ -12,6 +14,7 @@ import com.negociadororq.infrastructure.kafka.config.TopicsProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +28,7 @@ public class OutboxEventPublisher {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final TopicsProperties topics;
+    private final ObjectProvider<AuditoriaPublisher> auditoriaPublisher;
 
     private Map<Class<?>, String> topicMap;
 
@@ -45,6 +49,10 @@ public class OutboxEventPublisher {
      * @param event evento a publicar; su clase determina el topic destino
      */
     public void publicar(Object event) {
+        if (event instanceof AuditoriaAccionEvent auditoria) {
+            publicarAuditoria(auditoria);
+            return;
+        }
         String topic = topicMap.get(event.getClass());
 
         if (topic == null) {
@@ -53,5 +61,19 @@ public class OutboxEventPublisher {
 
         log.info("Publicando evento en topic {} -> {}", topic, event);
         kafkaTemplate.send(topic, event);
+    }
+
+    /**
+     * Auditoría: con su propio publicador (clave por entidad, JSON sin headers de tipo) y esperando la confirmación
+     * del broker; si falla, la excepción deja el evento pendiente en el outbox y el scheduler lo reintenta. Con
+     * {@code auditoria.enabled=false} no hay publicador y se descarta.
+     */
+    private void publicarAuditoria(AuditoriaAccionEvent evento) {
+        AuditoriaPublisher publicador = auditoriaPublisher.getIfAvailable();
+        if (publicador == null) {
+            log.warn("Auditoría desactivada: se descarta el evento {}", evento.eventId());
+            return;
+        }
+        publicador.publicarConfirmado(evento);
     }
 }

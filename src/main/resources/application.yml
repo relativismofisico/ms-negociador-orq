@@ -2,6 +2,9 @@ server:
   port: 8083
 
 spring:
+  application:
+    # servicioOrigen de los eventos de auditoría (ms-commons-util)
+    name: ms-negociador-orq
   jackson:
     default-property-inclusion: non_null
   servlet:
@@ -166,4 +169,6 @@ logging:
   level:
     org.springframework.security: DEBUG
 
-
+# Log de auditoría (ms-commons-util → ms-auditoria-util), publicado por el outbox. auditoria.enabled=false lo apaga.
+auditoria:
+  topic: ${AUDITORIA_TOPIC:auditoria.accion}

@@ -30,4 +30,11 @@ public class PendingOtp {
      * liquidación como marca de trazabilidad.
      */
     private Boolean validadoEnOrigen;
+
+    /** Actor (autenticado) y requestId de la solicitud del OTP: la aprobación se audita con ellos, en otro hilo. */
+    private String actorTipo;
+    private String actorId;
+    private String actorRol;
+    private Long actorEmpresaId;
+    private String requestId;
 }

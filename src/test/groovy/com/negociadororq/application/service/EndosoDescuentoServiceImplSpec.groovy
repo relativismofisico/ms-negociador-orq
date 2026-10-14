@@ -43,11 +43,12 @@ class EndosoDescuentoServiceImplSpec extends Specification {
         now() >> LocalDateTime.now()
     }
 
+    AuditoriaNegociacionService auditoriaNegociacion = Mock()
+
     EndosoDescuentoServiceImpl service = new EndosoDescuentoServiceImpl(
             negociacionPort, endosoPort, facturaPort, notificacionService,
             facturaPatchPort, documentoEndosoService, negociacionPatchPort,
-            companyPort, fondeadorQuotaPort, userPort, cupoReversionService, clock
-    )
+            companyPort, fondeadorQuotaPort, userPort, cupoReversionService, clock, auditoriaNegociacion)
 
     // idPorNit vacío por defecto -> companyPort.findByNit devuelve Optional.empty()
     // -> permiteEndosoGrupal siempre da false (comportamiento previo: un Endoso por

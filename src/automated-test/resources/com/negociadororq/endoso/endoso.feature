@@ -57,6 +57,17 @@ Feature: POST /negociaciones/{idNegociacion}/endosos — Registrar Endoso de Des
     And match response.facturasEndosadas == ['FE-END-CUFE-1']
     And match response.cufesEndosadas == ['CUFE-END-CUFE-0001-abcdef0123456789']
     And match response.facturasRechazadas == []
+    # Auditoría: el endoso sale por el outbox (mismo commit que el endoso) a auditoria.accion. El scheduler del
+    # outbox corre cada 5 s, de ahí la espera.
+    * def Auditoria = Java.type('com.negociadororq.auditoria.AuditoriaKafkaHelper')
+    * def kafka = java.lang.System.getenv('KAFKA_BOOTSTRAP_SERVERS') || 'localhost:9092'
+    * def json = Auditoria.buscarConTexto(kafka, 'auditoria.accion', 'ENDOSO_REGISTRADO', 'NEG-END-CUFE', 30000)
+    * assert json != null
+    * def evento = karate.fromString(json)
+    * match evento.servicioOrigen == 'ms-negociador-orq'
+    * match evento.entidad.tipo == 'ENDOSO'
+    * match evento.actor.tipo == 'USUARIO'
+    * match evento.detalle contains { idNegociacion: 'NEG-END-CUFE', numerosFactura: ['FE-END-CUFE-1'], rutActorEndosa: 'KARATE-CF-PROV' }
 
   @regression @full
   Scenario: EMPRESA puede registrar endoso (rol permitido)

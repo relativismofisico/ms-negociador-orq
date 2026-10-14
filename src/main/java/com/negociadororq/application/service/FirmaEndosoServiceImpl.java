@@ -20,6 +20,7 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
     private final EndosoOutputPort endosoPort;
     private final PdfFirmaOutputPort pdfFirmaPort;
     private final ClockPort clock;
+    private final AuditoriaNegociacionService auditoria;
 
     @Override
     public void firmarPdfEndoso(String idNegociacion, FacturaNegociada factura, PendingOtp pending, String rutEmpresa,
@@ -58,6 +59,7 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
 
         endoso.setDocumentoPdf(pdfFirmado);
         endosoPort.save(endoso);
+        auditoria.endosoFirmado(pending, endoso, factura.getNumeroFactura(), rolActor, aprobado);
     }
 }
 

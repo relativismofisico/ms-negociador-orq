@@ -51,6 +51,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final ProcesarFacturaNegociacionService procesarFacturaNegociacionService;
     private final FacturaPatchOutputPort facturaPatchPort;
     private final ClockPort clock;
+    private final AuditoriaNegociacionService auditoria;
 
     /**
      * Crea una negociación procesando factura a factura.
@@ -172,6 +173,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                 facturaPatchPort.actualizarNegociacionId(fn.getNumeroFactura(), idNegociacionGuardada));
 
         notificacionService.notificarCreacionNegociacion(negociacion);
+        auditoria.negociacionCreada(negociacion, request, facturasRechazadas.size());
 
         // preparar respuesta
         NegociacionResponseDto response = new NegociacionResponseDto();

@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.factoring.commons.auditoria.AuditoriaAccionEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
 import com.negociadororq.domain.event.NotificacionEmailEvent;
@@ -51,6 +52,9 @@ public class OutboxScheduler {
     @Value("${topics.notificacion-email}")
     private String notificacionEmail;
 
+    @Value("${auditoria.topic:auditoria.accion}")
+    private String topicAuditoria;
+
     // Propietario de este MS
     private static final String MS_PROPIETARIO = "ms-negociador-orq";
 
@@ -70,6 +74,7 @@ public class OutboxScheduler {
         eventMap.put(topicValidateResponse, OtpValidateResponseEvent.class);
         eventMap.put(liquidacionFactura, LiquidacionSolicitadaEvent.class);
         eventMap.put(notificacionEmail, NotificacionEmailEvent.class);
+        eventMap.put(topicAuditoria, AuditoriaAccionEvent.class);
         log.info("OutboxScheduler inicializado con eventos: {}", eventMap.keySet());
     }
 

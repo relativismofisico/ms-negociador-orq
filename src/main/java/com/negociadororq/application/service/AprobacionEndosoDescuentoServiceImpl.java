@@ -72,6 +72,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final String topicRequestOtp;
     private final String topicValidateOtp;
     private final String topicLiquidacionSolicitada;
+    private final AuditoriaNegociacionService auditoria;
 
     @Override
     public void solicitarOtp(AprobacionRequestDto request) {
@@ -88,6 +89,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 // propaga hasta el evento de liquidación.
                 .validadoEnOrigen(true)
                 .build();
+        auditoria.completarSolicitud(pending);
 
         pendingOtpPort.save(pending);
 
@@ -198,6 +200,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             firmaEndosoService.firmarPdfEndoso(
                     request.getIdNegociacion(), factura, pending, request.getRutEmpresa(),
                     request.getRutOperador(), rolActor, factReq.isAprobado(), request.getObservacion());
+            auditoria.facturaRevisada(pending, negociacion.getId(), factura.getNumeroFactura(), rolActor,
+                    factReq.isAprobado());
 
             factura.getAprobaciones().removeIf(a -> a.getRutActor().equals(request.getRutEmpresa()));
             factura.getAprobaciones().add(aprobacion);
@@ -206,15 +210,17 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             actualizarEstadosFacturaEndosoNegociacion(
                     negociacion, negociacion.getId(), factura,
                     negociacion.getTipoOperacion(), request.getRutOperador(),
-                    Boolean.TRUE.equals(pending.getValidadoEnOrigen()));
+                    Boolean.TRUE.equals(pending.getValidadoEnOrigen()), pending.getRequestId());
         }
 
         notificacionService.notificarFirmaEndoso(request);
 
         EstadoNegociacion estadoGlobal = calcularEstadoNegociacion(negociacion);
+        String estadoAnterior = negociacion.getEstado();
         negociacion.setEstado(estadoGlobal.name());
         negociacion.setFechaUltimaActualizacion(clock.now());
         negociacionPort.save(negociacion);
+        auditoria.estadoNegociacion(pending, negociacion.getId(), estadoAnterior, negociacion.getEstado());
 
         AprobacionResponseDto response = new AprobacionResponseDto();
         response.setIdNegociacion(negociacion.getId());
@@ -229,7 +235,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                                                            FacturaNegociada factura,
                                                            Operacion tipoOperacion,
                                                            String rutOperador,
-                                                           boolean validadoEnOrigen) {
+                                                           boolean validadoEnOrigen,
+                                                           String requestId) {
 
         Set<RolActor> actoresRequeridos = obtenerActoresRequeridos(tipoOperacion.getTipo());
 
@@ -278,7 +285,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             LiquidacionSolicitadaEvent event = new LiquidacionSolicitadaEvent(
                     idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, clock.now(),
-                    validadoEnOrigen);
+                    validadoEnOrigen, requestId);
 
             outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
         } else if (alguienAprobo) {
