@@ -4,10 +4,12 @@ import java.util.List;
 
 import com.negociadororq.application.mapper.EstadoFacturaMapper;
 import com.negociadororq.application.mapper.OperacionMapper;
+import com.negociadororq.application.port.output.AuditoriaOutputPort;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOperationOutputPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.CompanySectionVerificationOutputPort;
+import com.negociadororq.application.port.output.ContextoAuditoriaOutputPort;
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
 import com.negociadororq.application.port.output.EndosoOutputPort;
 import com.negociadororq.application.port.output.EndosoPatchOutputPort;
@@ -29,6 +31,7 @@ import com.negociadororq.application.port.output.TemplateEngineOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.application.port.output.UserQuotaOutputPort;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoServiceImpl;
+import com.negociadororq.application.service.AuditoriaNegociacionService;
 import com.negociadororq.application.service.CupoConsumidorService;
 import com.negociadororq.application.service.CupoPropioFondeoService;
 import com.negociadororq.application.service.CupoPropioFondeoServiceImpl;
@@ -190,8 +193,16 @@ public class ApplicationBeansConfig {
     public FirmaEndosoService firmaEndosoService(
             final EndosoOutputPort endosoPort,
             final PdfFirmaOutputPort pdfFirmaPort,
-            final ClockPort clock) {
-        return new FirmaEndosoServiceImpl(endosoPort, pdfFirmaPort, clock);
+            final ClockPort clock,
+            final AuditoriaNegociacionService auditoriaNegociacionService) {
+        return new FirmaEndosoServiceImpl(endosoPort, pdfFirmaPort, clock, auditoriaNegociacionService);
+    }
+
+    @Bean
+    public AuditoriaNegociacionService auditoriaNegociacionService(
+            final AuditoriaOutputPort auditoriaPort,
+            final ContextoAuditoriaOutputPort contextoAuditoriaPort) {
+        return new AuditoriaNegociacionService(auditoriaPort, contextoAuditoriaPort);
     }
 
     @Bean
@@ -273,7 +284,7 @@ public class ApplicationBeansConfig {
 
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por
     // Lombok en orden de declaración de campos) — no es una señal de diseño a corregir acá.
-    @SuppressWarnings("checkstyle:ParameterNumber")
+    @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
     @Bean
     public NegociacionFactoringComfirmingService negociacionFactoringComfirmingService(
             final FacturaOutputPort facturaPort,
@@ -285,11 +296,12 @@ public class ApplicationBeansConfig {
             final NotificacionService notificacionService,
             final ProcesarFacturaNegociacionService procesarFacturaNegociacionService,
             final FacturaPatchOutputPort facturaPatchPort,
-            final ClockPort clock) {
+            final ClockPort clock,
+            final AuditoriaNegociacionService auditoriaNegociacionService) {
         return new NegociacionFactoringComfirmingServiceImpl(
                 facturaPort, negociacionPort, userPort, companyPort, companyOperationPort,
                 companySectionVerificationPort, notificacionService, procesarFacturaNegociacionService,
-                facturaPatchPort, clock);
+                facturaPatchPort, clock, auditoriaNegociacionService);
     }
 
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por
@@ -308,11 +320,12 @@ public class ApplicationBeansConfig {
             final FondeadorQuotaOutputPort fondeadorQuotaPort,
             final UserOutputPort userPort,
             final CupoReversionService cupoReversionService,
-            final ClockPort clock) {
+            final ClockPort clock,
+            final AuditoriaNegociacionService auditoriaNegociacionService) {
         return new EndosoDescuentoServiceImpl(
                 negociacionPort, endosoPort, facturaPort, notificacionService, facturaPatchPort,
                 documentoEndosoService, negociacionPatchPort, companyPort, fondeadorQuotaPort,
-                userPort, cupoReversionService, clock);
+                userPort, cupoReversionService, clock, auditoriaNegociacionService);
     }
 
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por
@@ -337,12 +350,13 @@ public class ApplicationBeansConfig {
             final ClockPort clock,
             @Value("${topics.otp-request}") final String topicRequestOtp,
             @Value("${topics.otp-validate}") final String topicValidateOtp,
-            @Value("${topics.liquidacion}") final String topicLiquidacionSolicitada) {
+            @Value("${topics.liquidacion}") final String topicLiquidacionSolicitada,
+            final AuditoriaNegociacionService auditoriaNegociacionService) {
         return new AprobacionEndosoDescuentoServiceImpl(
                 negociacionPort, facturaPatchPort, endosoPatchPort, outboxService, cupoReversionService,
                 companyPort, fondeadorQuotaPort, facturaPort, userPort, pendingOtpPort, firmaEndosoService,
                 notificacionService, endosoPort, documentoEndosoService, clock,
-                topicRequestOtp, topicValidateOtp, topicLiquidacionSolicitada);
+                topicRequestOtp, topicValidateOtp, topicLiquidacionSolicitada, auditoriaNegociacionService);
     }
 
     // Igual que con OperadorServiceImpl más arriba: sin @Bean explícito para

@@ -156,7 +156,7 @@ dependencies {
 
     // ms-commons-util — IpUtils/RateLimitFilter extraídos en la Fase 11 del
     // pipeline de mantenibilidad; se resuelve desde GitHub Packages (ver repositories{})
-    implementation 'com.factoring:ms-commons-util:0.3.1'
+    implementation 'com.factoring:ms-commons-util:0.4.1'
 
     // Tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

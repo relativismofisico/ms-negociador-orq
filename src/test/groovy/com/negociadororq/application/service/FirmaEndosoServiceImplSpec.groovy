@@ -19,7 +19,9 @@ class FirmaEndosoServiceImplSpec extends Specification {
     ClockPort clock = Mock() {
         now() >> LocalDateTime.now()
     }
-    FirmaEndosoServiceImpl service = new FirmaEndosoServiceImpl(endosoPort, pdfFirmaPort, clock)
+    AuditoriaNegociacionService auditoriaNegociacion = Mock()
+
+    FirmaEndosoServiceImpl service = new FirmaEndosoServiceImpl(endosoPort, pdfFirmaPort, clock, auditoriaNegociacion)
 
     def "firmarPdfEndoso actualiza documentoPdf del endoso y guarda"() {
         given:

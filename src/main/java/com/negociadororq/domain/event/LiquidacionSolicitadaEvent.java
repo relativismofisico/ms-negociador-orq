@@ -27,5 +27,11 @@ public class LiquidacionSolicitadaEvent {
      * (ms-liquidador-neg) no revalida, pero puede alertar si llega en false.
      */
     private boolean validadoEnOrigen;
+
+    /**
+     * requestId de la solicitud del OTP que derivó en esta liquidación: ms-liquidador-neg lo pone en su MDC para
+     * correlacionar sus logs y su auditoría con los de la aprobación.
+     */
+    private String requestId;
 }
 

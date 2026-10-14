@@ -40,10 +40,11 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         now() >> LocalDateTime.now()
     }
 
+    AuditoriaNegociacionService auditoriaNegociacion = Mock()
+
     NegociacionFactoringComfirmingServiceImpl service = new NegociacionFactoringComfirmingServiceImpl(
             facturaPort, negociacionPort, userPort, companyPort, companyOperationPort, companySectionVerificationPort,
-            notificacionService, procesarFacturaNegociacionService, facturaPatchPort, clock
-    )
+            notificacionService, procesarFacturaNegociacionService, facturaPatchPort, clock, auditoriaNegociacion)
 
     // Controlan el comportamiento por defecto de companyPort/companyOperationPort: los tests
     // existentes (que no se centran en esta validación) no necesitan re-declarar estos stubs,

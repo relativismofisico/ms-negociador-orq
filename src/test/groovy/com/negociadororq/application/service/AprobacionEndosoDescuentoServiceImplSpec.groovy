@@ -57,13 +57,14 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         now() >> LocalDateTime.now()
     }
 
+    AuditoriaNegociacionService auditoriaNegociacion = Mock()
+
     AprobacionEndosoDescuentoServiceImpl service = new AprobacionEndosoDescuentoServiceImpl(
             negociacionPort, facturaPatchPort, endosoPatchPort, outboxService,
             cupoReversionService, companyPort, fondeadorQuotaPort, facturaPort,
             userPort, pendingOtpPort, firmaEndosoService, notificacionService, endosoPort,
             documentoEndosoService, clock,
-            "topic-otp-request", "topic-otp-validate", "topic-liquidacion"
-    )
+            "topic-otp-request", "topic-otp-validate", "topic-liquidacion", auditoriaNegociacion)
 
     def setup() {
         // Por defecto, cada factura tiene su propio Endoso sin agrupar (comportamiento
@@ -87,6 +88,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         service.solicitarOtp(request)
 
         then:
+        1 * auditoriaNegociacion.completarSolicitud({ it.idNegociacion == "neg-001" })
         1 * pendingOtpPort.save({ it.idNegociacion == "neg-001" && it.rutEmpresa == "EMP-001" })
         1 * outboxService.guardarEvento("neg-001", "topic-otp-request", {
             it.idNegociacion == "neg-001" && it.rutEmpresa == "EMP-001"
@@ -133,6 +135,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
                 .otp("123456")
                 .ip("10.0.0.1")
                 .request(req)
+                .requestId("req-otp")
                 .build()
     }
 
@@ -265,7 +268,9 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         // rolesQueAprobaron = {FONDEADOR} + {PAGADOR} = todosAprobaron = true
         1 * facturaPatchPort.actualizarEstadosPorNoFactura("FECI001", EstadoFirma.CESION, EstadoNegociacion.APROBADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.ACEPTADO)
-        1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", _)
+        1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", { it.requestId == "req-otp" })
+        1 * auditoriaNegociacion.facturaRevisada(pending, "neg-001", _, _, true)
+        1 * auditoriaNegociacion.estadoNegociacion(pending, "neg-001", _, _)
     }
 
     def "aprobarInterno FACTORING fondeador rechaza -> revierte cupos y RECHAZADA"() {

@@ -57,6 +57,7 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     private final UserOutputPort userPort;
     private final CupoReversionService cupoReversionService;
     private final ClockPort clock;
+    private final AuditoriaNegociacionService auditoria;
 
     private record FacturaValidada(String numeroFactura, Factura factura, FacturaNegociada facturaNegociada) {
     }
@@ -170,9 +171,9 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
             }
 
             for (List<FacturaValidada> lote : lotes) {
-                Endoso endoso = crearEndoso(request, negociacion, rutFondeador, lote);
-                endosoPort.save(endoso);
+                Endoso endoso = endosoPort.save(crearEndoso(request, negociacion, rutFondeador, lote));
                 endososCreados.add(endoso);
+                auditoria.endosoRegistrado(endoso, request);
 
                 for (FacturaValidada fv : lote) {
                     facturasCreadas.add(fv.numeroFactura());
