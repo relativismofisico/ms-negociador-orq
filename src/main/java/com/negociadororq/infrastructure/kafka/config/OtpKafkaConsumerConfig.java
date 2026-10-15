@@ -32,7 +32,8 @@ public class OtpKafkaConsumerConfig {
         JsonDeserializer<OtpValidatedEvent> deserializer =
                 new JsonDeserializer<>(OtpValidatedEvent.class);
 
-        deserializer.addTrustedPackages("*");
+        // Solo el paquete del evento consumido (tipo fijo, sin headers de tipo): sin comodín.
+        deserializer.addTrustedPackages(OtpValidatedEvent.class.getPackageName());
 
         deserializer.setUseTypeHeaders(false);
 

@@ -42,7 +42,8 @@ public class LiquidacionKafkaConsumerConfig {
         JsonDeserializer<LiquidacionFallidaEvent> deserializer =
                 new JsonDeserializer<>(LiquidacionFallidaEvent.class);
 
-        deserializer.addTrustedPackages("*");
+        // Solo el paquete del evento consumido (tipo fijo, sin headers de tipo): sin comodín.
+        deserializer.addTrustedPackages(LiquidacionFallidaEvent.class.getPackageName());
 
         deserializer.setUseTypeHeaders(false);
 
