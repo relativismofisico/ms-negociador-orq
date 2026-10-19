@@ -157,8 +157,30 @@ Las variables marcadas con `*` son **obligatorias en producción**.
 | `MONGO_URI` * | URI de conexión MongoDB | `mongodb+srv://user:pass@cluster/` |
 | `MONGO_DB` * | Nombre de la base de datos MongoDB | `DB_Facturas_Prod` |
 | `KAFKA_SERVERS` * | Bootstrap servers de Kafka | `kafka1:9092,kafka2:9092` |
-| `JWT_SECRET` | Secret Base64 HMAC-HS256 para JWT | Ver `application.yml` |
+| `JWT_SECRET` * | Secret HMAC Base64 (48 a 63 bytes), obligatorio en **todos** los perfiles (ver [Variables de entorno requeridas](#variables-de-entorno-requeridas)) | `openssl rand -base64 48` |
 | `AMBIENTE_PIPE` | Perfil activo de Spring | `dev`, `qa`, `prod` |
+
+### Variables de entorno requeridas
+
+Los secretos HMAC no tienen valor por defecto en ningún perfil (`application.yml`, `dev`, `qa`, `prod`). Si falta una variable, o su valor no es Base64 válido de **48 a 63 bytes decodificados**, la aplicación no arranca.
+
+| Variable | Propiedad | Uso |
+|---|---|---|
+| `JWT_SECRET` | `security.jwt.secret` | Verifica los JWT de usuario que firma ms-security-util (HS384). La comparten los 10 backends. |
+
+- **Mismo valor** en todos los servicios de un mismo ambiente: los que firman y los que verifican.
+- **Distinto** entre ambientes (local/dev, qa, prod): nunca reutilizar el de otro ambiente.
+- Se generan con `openssl rand -base64 48 | tr -d '\n'` (48 bytes, 64 caracteres Base64).
+- En Windows (Git Bash) `openssl` termina la línea con CRLF: usar `tr -d '\r\n'`; un `\r` sobrante invalida el Base64 y la aplicación no arranca.
+- Por qué de 48 a 63 bytes: jjwt elige el algoritmo por el largo de la clave (`Keys.hmacShaKeyFor`) y los verificadores tienen HS384 fijo. Con menos de 48 bytes se firmaría HS256 y con 64 o más HS512, y todos los tokens serían rechazados.
+- Los valores que estuvieron versionados en este repositorio siguen en el historial de git y se dan por comprometidos: no deben usarse en ningún ambiente.
+
+Arranque local (para levantar varios servicios juntos, exportar los mismos valores en todas las terminales):
+
+```bash
+export JWT_SECRET="$(openssl rand -base64 48 | tr -d '\r\n')"
+./gradlew bootRun
+```
 
 ### application.yml — Configuración Principal
 
@@ -193,7 +215,7 @@ springdoc:
 
 security:
   jwt:
-    secret: AF84F1FGllNpNnLG055fdg5hGHJK4KGG5VH5TR5J05JFGGDFDGXVV545J4505G666JFGF2mMY95y
+    secret: ${JWT_SECRET}
   roles:
     negociacion:
       - ADMINISTRADOR
@@ -242,9 +264,9 @@ facturas:
 
 ### Secrets Requeridos
 
-> ⚠️ **En producción, el secret JWT no debe estar en `application.yml`**. Debe inyectarse como variable de entorno o mediante un gestor de secretos (AWS Secrets Manager, HashiCorp Vault, etc.).
+> ⚠️ El secret JWT **nunca** va en un `application*.yml`: se inyecta como variable de entorno o mediante un gestor de secretos (AWS Secrets Manager, HashiCorp Vault, etc.).
 
-El secret JWT actual en `application.yml` es solo para entornos de desarrollo y pruebas.
+Ningún perfil trae el secreto JWT: `application.yml`, `qa` y `prod` lo leen de `${JWT_SECRET}`, sin valor por defecto (ver [Variables de entorno requeridas](#variables-de-entorno-requeridas)).
 
 ---
 
@@ -378,11 +400,11 @@ cd src/test/java/com/negociadororq/util
 # Ejecutar la clase directamente desde el IDE o via Gradle test
 ```
 
-O genere un token manualmente con el secret del entorno de desarrollo:
+O genere un token manualmente con el secreto del ambiente:
 
-- **Secret (dev):** `AF84F1FGllNpNnLG055fdg5hGHJK4KGG5VH5TR5J05JFGGDFDGXVV545J4505G666JFGF2mMY95y`
+- **Secret:** el valor de `JWT_SECRET` con el que arrancó la app (ver [Variables de entorno requeridas](#variables-de-entorno-requeridas)); nunca está en el repositorio.
 - **Claims requeridos:** `sub`, `rol` (ADMINISTRADOR | EMPRESA | OPERARIO | FONDEADOR)
-- **Algoritmo:** HS256
+- **Algoritmo:** HS384 (el que firma ms-security-util con un secreto de 48 a 63 bytes)
 
 ### Cómo Usar Swagger UI
 
@@ -1391,7 +1413,7 @@ server:
 **Causas y Soluciones:**
 1. Token expirado → Generar un nuevo token con `JwtTestTokenGenerator`.
 2. Header mal formado → Asegurarse de usar `Authorization: Bearer <token>` (con espacio después de "Bearer").
-3. Secret incorrecto → Verificar que el token fue firmado con el mismo secret configurado en `security.jwt.secret`.
+3. Secret incorrecto → Verificar que el token fue firmado con el mismo secret que la app recibió en `JWT_SECRET`.
 4. Claim `rol` ausente → El token debe incluir el claim `rol` (no `roles`).
 5. Token generado con otro algoritmo → Solo se acepta HS256.
 

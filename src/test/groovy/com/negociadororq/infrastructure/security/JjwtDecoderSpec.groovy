@@ -13,8 +13,9 @@ import java.util.Base64
 
 class JjwtDecoderSpec extends Specification {
 
+    // Solo para tests: Base64 de un texto de 48 bytes, sin relación con ningún secreto real.
     static final String SECRET =
-            "AF84F1FGllNpNnLG055fdg5hGHJK4KGG5VH5TR5J05JFGGDFDGXVV545J4505G666JFGF2mMY95y"
+            "c29sby1wYXJhLXRlc3RzOmp3dC1zZWNyZXQ6Tk8tdXNhci1lbi1hbWJpZW50ZXMh"
     static final SecretKey SIGN_KEY = Keys.hmacShaKeyFor(Base64.decoder.decode(SECRET))
 
     UserRepository userRepository = Mock()
