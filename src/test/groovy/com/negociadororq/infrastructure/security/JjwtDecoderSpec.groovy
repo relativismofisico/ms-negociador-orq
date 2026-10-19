@@ -79,4 +79,19 @@ class JjwtDecoderSpec extends Specification {
         then:
         thrown(BadJwtException)
     }
+
+    def "el constructor impide arrancar si el secreto #caso"() {
+        when:
+        new JjwtDecoder(valor, new ObjectMapper(), userRepository)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains("JWT_SECRET")
+
+        where:
+        caso                                                       | valor
+        "falta"                                                    | null
+        "quedó como texto sin resolver (@ConfigurationProperties)" | '${JWT_SECRET}'
+        "mide 64 bytes"                                            | Base64.encoder.encodeToString(new byte[64])
+    }
 }
