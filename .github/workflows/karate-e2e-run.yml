@@ -125,6 +125,14 @@ jobs:
         run: |
           mysql -h127.0.0.1 -P3306 -uroot -pe2e-root --default-character-set=utf8mb4 dbcompany < .github/ci/pre-seed.sql
 
+      # Secretos aleatorios por corrida, enmascarados en el log y compartidos por la app y
+      # Karate vía GITHUB_ENV. Ningún yml trae su valor; sin ellos la app no arranca.
+      - name: Generar secretos JWT por corrida
+        run: |
+          JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$JWT_SECRET"
+          echo "JWT_SECRET=$JWT_SECRET" >> "$GITHUB_ENV"
+
       - name: Levantar el servicio en background
         env:
           JAVA_TOOL_OPTIONS: '-Dspring.devtools.restart.enabled=false'

@@ -40,7 +40,7 @@ function fn() {
     // ─── Configuracion por ambiente ──────────────────────────────
     if (env === 'dev') {
         if (!jwtSecret) {
-            jwtSecret = 'AF84F1FGllNpNnLG055fdg5hGHJK4KGG5VH5TR5J05JFGGDFDGXVV545J4505G666JFGF2mMY95y';
+            throw new Error('[config-dev] JWT_SECRET no esta definido: debe tener el mismo valor que la app bajo prueba (Base64 de 48 a 63 bytes).');
         }
         var JwtHelper = Java.type('com.negociadororq.auth.JwtTestHelper');
         tokenAdmin     = JwtHelper.generate('dev-admin',     'ADMINISTRADOR', jwtSecret);

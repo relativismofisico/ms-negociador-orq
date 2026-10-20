@@ -100,9 +100,11 @@ management:
     readinessstate:
       enabled: true
 
+# Secreto HMAC sin valor por defecto: el arranque falla si falta la variable o si no es Base64 de
+# 48 a 63 bytes (ver README, "Variables de entorno requeridas").
 security:
   jwt:
-    secret: AF84F1FGllNpNnLG055fdg5hGHJK4KGG5VH5TR5J05JFGGDFDGXVV545J4505G666JFGF2mMY95y
+    secret: ${JWT_SECRET}
   service-credentials:
     ms-liquidador-neg:
       username: ms-liquidador-neg

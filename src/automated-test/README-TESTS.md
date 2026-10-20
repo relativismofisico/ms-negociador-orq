@@ -46,7 +46,7 @@ src/automated-test/
 
 ## Ejecución local (DEV)
 
-**Prerequisito:** microservicio corriendo en `http://localhost:8083`
+**Prerequisito:** microservicio corriendo en `http://localhost:8083` y la variable `JWT_SECRET` exportada con el **mismo valor** con el que arrancó la app (sin ella `karate-config.js` falla; ningún archivo del repo trae su valor).
 
 ```bash
 # Suite completa (FullRunner - @full)

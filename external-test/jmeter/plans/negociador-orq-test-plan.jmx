@@ -62,12 +62,6 @@
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
 
-          <elementProp name="token" elementType="Argument">
-            <stringProp name="Argument.name">token</stringProp>
-            <stringProp name="Argument.value">${__P(token,REEMPLAZAR_JWT)}</stringProp>
-            <stringProp name="Argument.metadata">=</stringProp>
-          </elementProp>
-
           <!-- Datos de prueba: deben existir en el ambiente destino -->
           <elementProp name="facturaId" elementType="Argument">
             <stringProp name="Argument.name">facturaId</stringProp>
@@ -97,6 +91,48 @@
       </elementProp>
     </TestPlan>
     <hashTree>
+
+      <!-- SETUP: si no se pasa -Jtoken, firma un JWT HS384 con el secreto del ambiente
+           (-Jjwt.secret=... o variable de entorno JWT_SECRET) y lo deja en la propiedad "token".
+           Ningún .properties trae el secreto ni un token pre-firmado. -->
+      <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="SETUP — Token JWT" enabled="true">
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">0</stringProp>
+        <stringProp name="ThreadGroup.on_sample_error">stoptest</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <stringProp name="LoopController.loops">1</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </SetupThreadGroup>
+      <hashTree>
+        <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="JWT — Firmar token de prueba" enabled="true">
+          <stringProp name="scriptLanguage">groovy</stringProp>
+          <stringProp name="parameters"></stringProp>
+          <stringProp name="filename"></stringProp>
+          <stringProp name="cacheKey">true</stringProp>
+          <stringProp name="script">
+if (props.get('token')) {
+    SampleResult.setResponseMessage('Token JWT recibido por -Jtoken')
+    return
+}
+def secret = props.get('jwt.secret') ?: System.getenv('JWT_SECRET')
+if (!secret) {
+    throw new IllegalStateException('Falta el secreto JWT: definir la variable de entorno JWT_SECRET (o -Jjwt.secret=..., o -Jtoken=...)')
+}
+def urlEnc = java.util.Base64.getUrlEncoder().withoutPadding()
+long now = System.currentTimeMillis().intdiv(1000)
+def sub = props.get('jwt.subject') ?: 'perf-tester'
+def rol = props.get('jwt.rol') ?: 'ADMINISTRADOR'
+def hdr = urlEnc.encodeToString('{"alg":"HS384","typ":"JWT"}'.getBytes('UTF-8'))
+def pld = urlEnc.encodeToString(('{"sub":"' + sub + '","rol":"' + rol + '","iat":' + now + ',"exp":' + (now + 7200) + '}').getBytes('UTF-8'))
+def mac = javax.crypto.Mac.getInstance('HmacSHA384')
+mac.init(new javax.crypto.spec.SecretKeySpec(java.util.Base64.getDecoder().decode(secret), 'HmacSHA384'))
+props.put('token', hdr + '.' + pld + '.' + urlEnc.encodeToString(mac.doFinal((hdr + '.' + pld).getBytes('UTF-8'))))
+SampleResult.setResponseMessage('Token JWT firmado al iniciar (HS384, sub=' + sub + ')')
+          </stringProp>
+        </JSR223Sampler>
+        <hashTree/>
+      </hashTree>
 
       <!-- ═══════════════════════════════════════════════════════════════
            Thread Group
@@ -149,7 +185,7 @@
             </elementProp>
             <elementProp name="Authorization" elementType="Header">
               <stringProp name="Header.name">Authorization</stringProp>
-              <stringProp name="Header.value">Bearer ${token}</stringProp>
+              <stringProp name="Header.value">Bearer ${__P(token)}</stringProp>
             </elementProp>
           </collectionProp>
         </HeaderManager>

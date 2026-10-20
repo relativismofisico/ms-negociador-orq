@@ -12,7 +12,6 @@ import com.negociadororq.infrastructure.persistence.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.jwt.BadJwtException;
@@ -48,8 +47,9 @@ public class JjwtDecoder implements JwtDecoder {
      * @param userRepository usado para verificar que el usuario del token siga existiendo
      */
     public JjwtDecoder(String secretBase64, ObjectMapper objectMapper, UserRepository userRepository) {
-        byte[] keyBytes = Decoders.BASE64.decode(secretBase64);
-        this.signingKey = Keys.hmacShaKeyFor(keyBytes);
+        // Valida al arrancar (este decoder es un bean): si el secreto falta, quedó sin resolver o no es Base64 de
+        // 48 a 63 bytes, la app no arranca.
+        this.signingKey = Keys.hmacShaKeyFor(SecretoHmac.decodificar("security.jwt.secret", "JWT_SECRET", secretBase64));
         this.objectMapper = objectMapper;
         this.userRepository = userRepository;
     }

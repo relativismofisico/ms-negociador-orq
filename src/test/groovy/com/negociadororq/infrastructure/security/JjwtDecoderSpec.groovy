@@ -13,8 +13,9 @@ import java.util.Base64
 
 class JjwtDecoderSpec extends Specification {
 
+    // Solo para tests: Base64 de un texto de 48 bytes, sin relación con ningún secreto real.
     static final String SECRET =
-            "AF84F1FGllNpNnLG055fdg5hGHJK4KGG5VH5TR5J05JFGGDFDGXVV545J4505G666JFGF2mMY95y"
+            "c29sby1wYXJhLXRlc3RzOmp3dC1zZWNyZXQ6Tk8tdXNhci1lbi1hbWJpZW50ZXMh"
     static final SecretKey SIGN_KEY = Keys.hmacShaKeyFor(Base64.decoder.decode(SECRET))
 
     UserRepository userRepository = Mock()
@@ -78,5 +79,20 @@ class JjwtDecoderSpec extends Specification {
 
         then:
         thrown(BadJwtException)
+    }
+
+    def "el constructor impide arrancar si el secreto #caso"() {
+        when:
+        new JjwtDecoder(valor, new ObjectMapper(), userRepository)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains("JWT_SECRET")
+
+        where:
+        caso                                                       | valor
+        "falta"                                                    | null
+        "quedó como texto sin resolver (@ConfigurationProperties)" | '${JWT_SECRET}'
+        "mide 64 bytes"                                            | Base64.encoder.encodeToString(new byte[64])
     }
 }
