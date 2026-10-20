@@ -172,7 +172,7 @@ Los secretos HMAC no tienen valor por defecto en ningún perfil (`application.ym
 - **Distinto** entre ambientes (local/dev, qa, prod): nunca reutilizar el de otro ambiente.
 - Se generan con `openssl rand -base64 48 | tr -d '\n'` (48 bytes, 64 caracteres Base64).
 - En Windows (Git Bash) `openssl` termina la línea con CRLF: usar `tr -d '\r\n'`; un `\r` sobrante invalida el Base64 y la aplicación no arranca.
-- Por qué de 48 a 63 bytes: jjwt elige el algoritmo por el largo de la clave (`Keys.hmacShaKeyFor`) y los verificadores tienen HS384 fijo. Con menos de 48 bytes se firmaría HS256 y con 64 o más HS512, y todos los tokens serían rechazados.
+- Por qué de 48 a 63 bytes: el mínimo de 48 (384 bits) es el que exige HS384, el único algoritmo con el que la plataforma firma y verifica (fijado explícitamente en código; un token con otro `alg` se rechaza con 401, ya no depende del largo de la clave). El máximo se conserva por prudencia.
 - Los valores que estuvieron versionados en este repositorio siguen en el historial de git y se dan por comprometidos: no deben usarse en ningún ambiente.
 
 Arranque local (para levantar varios servicios juntos, exportar los mismos valores en todas las terminales):
@@ -858,7 +858,7 @@ Los cupos se descuentan únicamente cuando todos los niveles son válidos.
 
 - **Tipo:** Bearer Token (JWT)
 - **Header:** `Authorization: Bearer <token>`
-- **Algoritmo:** HMAC-HS256
+- **Algoritmo:** HMAC-HS384 (fijo; un token con cualquier otro `alg` se rechaza con 401)
 - **Librería:** `io.jsonwebtoken:jjwt-api:0.12.6`
 
 ### Estructura del Token JWT
@@ -1415,7 +1415,7 @@ server:
 2. Header mal formado → Asegurarse de usar `Authorization: Bearer <token>` (con espacio después de "Bearer").
 3. Secret incorrecto → Verificar que el token fue firmado con el mismo secret que la app recibió en `JWT_SECRET`.
 4. Claim `rol` ausente → El token debe incluir el claim `rol` (no `roles`).
-5. Token generado con otro algoritmo → Solo se acepta HS256.
+5. Token generado con otro algoritmo → Solo se acepta HS384.
 
 ---
 
