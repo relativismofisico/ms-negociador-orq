@@ -13,9 +13,8 @@ import java.util.Base64
 
 class JjwtDecoderSpec extends Specification {
 
-    // Solo para tests: Base64 de un texto de 48 bytes, sin relación con ningún secreto real.
-    static final String SECRET =
-            "c29sby1wYXJhLXRlc3RzOmp3dC1zZWNyZXQ6Tk8tdXNhci1lbi1hbWJpZW50ZXMh"
+    // Clave aleatoria de 48 bytes generada en el test: nunca un secreto literal.
+    static final String SECRET = Base64.encoder.encodeToString(new byte[48].tap { new java.security.SecureRandom().nextBytes(it) })
     static final SecretKey SIGN_KEY = Keys.hmacShaKeyFor(Base64.decoder.decode(SECRET))
 
     UserRepository userRepository = Mock()
@@ -94,5 +93,51 @@ class JjwtDecoderSpec extends Specification {
         "falta"                                                    | null
         "quedó como texto sin resolver (@ConfigurationProperties)" | '${JWT_SECRET}'
         "mide 64 bytes"                                            | Base64.encoder.encodeToString(new byte[64])
+    }
+
+    def "decode acepta un token HS384 firmado con el secreto compartido"() {
+        given:
+        userRepository.findByUsername("usuario@test.com") >> Optional.of(new UserEntity())
+        expect:
+        decoder.decode(tokenCon("HS384", "HmacSHA384", Base64.decoder.decode(SECRET))).subject == "usuario@test.com"
+    }
+
+    def "decode rechaza (401) un token #caso"() {
+        given:
+        userRepository.findByUsername("usuario@test.com") >> Optional.of(new UserEntity())
+        when:
+        decoder.decode(tokenCon(alg, hmac, Base64.decoder.decode(SECRET)))
+
+        then:
+        thrown(BadJwtException)
+
+        where:
+        caso                                        | alg     | hmac
+        "HS256 firmado con el mismo secreto"        | "HS256" | "HmacSHA256"
+        "HS512 firmado a mano con el mismo secreto" | "HS512" | "HmacSHA512"
+        "alg=none sin firma"                        | "none"  | null
+        "con header HS256 y firma HS384 válida"     | "HS256" | "HmacSHA384"
+        "con header RS256 y firma HMAC"             | "RS256" | "HmacSHA384"
+    }
+
+    /**
+     * Arma un JWT a mano para probar el algoritmo: header con {@code alg} y firma con {@code hmac} sobre la clave dada
+     * (sin firma si {@code hmac} es null). Así se puede firmar HS512 con una clave de 48 bytes, que jjwt no permite, y
+     * falsificar el header.
+     */
+    private static String tokenCon(String alg, String hmac, byte[] clave, Map extra = [:]) {
+        def enc = Base64.urlEncoder.withoutPadding()
+        long ahora = System.currentTimeMillis().intdiv(1000L)
+        Map claims = [sub: "usuario@test.com", rol: "ADMINISTRADOR", iat: ahora, exp: ahora + 600] + extra
+        String json = "{" + claims.collect { k, v -> "\"${k}\":" + (v instanceof Number ? v : "\"${v}\"") }.join(",") + "}"
+        String header = enc.encodeToString("{\"alg\":\"${alg}\",\"typ\":\"JWT\"}".getBytes("UTF-8"))
+        String payload = enc.encodeToString(json.getBytes("UTF-8"))
+        String firma = ""
+        if (hmac != null) {
+            def mac = javax.crypto.Mac.getInstance(hmac)
+            mac.init(new javax.crypto.spec.SecretKeySpec(clave, hmac))
+            firma = enc.encodeToString(mac.doFinal("${header}.${payload}".getBytes("UTF-8")))
+        }
+        "${header}.${payload}.${firma}"
     }
 }

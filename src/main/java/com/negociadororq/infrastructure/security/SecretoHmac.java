@@ -3,18 +3,18 @@ package com.negociadororq.infrastructure.security;
 import java.util.Base64;
 
 /**
- * Valida y decodifica, al arrancar, un secreto HMAC compartido que llega por variable de entorno (Base64 estándar,
- * el formato de {@code openssl rand -base64 48}). Exige entre 48 y 63 bytes decodificados: ms-security-util firma con
- * {@code Keys.hmacShaKeyFor}, que elige el algoritmo por el largo de la clave, y ese rango es el que produce HS384,
- * el que tienen fijo los verificadores Nimbus y ms-registroempresa-neg. Con menos bytes se firmaría HS256 y con
- * 64 o más HS512. Los mensajes de error nunca incluyen el valor.
+ * Valida y decodifica, al arrancar, un secreto HMAC compartido que llega por variable de entorno (Base64 estándar, el
+ * formato de {@code openssl rand -base64 48}). Exige entre 48 y 63 bytes decodificados: el mínimo de 48 (384 bits) es
+ * el que exige HS384, el único algoritmo con el que la plataforma firma y verifica (fijado explícitamente en código,
+ * ya no depende del largo de la clave); el máximo se conserva por prudencia. Los mensajes de error nunca incluyen el
+ * valor.
  */
 public final class SecretoHmac {
 
-    /** Mínimo de bytes decodificados (HS384). */
+    /** Mínimo de bytes decodificados: 48 (384 bits), lo que exige HS384. */
     public static final int MIN_BYTES = 48;
 
-    /** Máximo de bytes decodificados: desde 64 jjwt firmaría HS512. */
+    /** Máximo de bytes decodificados: se conserva por prudencia. */
     public static final int MAX_BYTES = 63;
 
     private SecretoHmac() {

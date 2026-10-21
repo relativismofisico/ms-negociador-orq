@@ -23,11 +23,12 @@ import org.springframework.security.oauth2.jwt.JwtException;
  * Decodificador JWT compatible con el ms-security que genera los tokens.
  *
  * Usa la misma librería (jjwt 0.12.x) y la misma clave secreta para garantizar
- * compatibilidad exacta de algoritmo y firma. No asume el algoritmo — lo extrae
- * del header del token para tolerancia ante cambios futuros del generador.
+ * compatibilidad exacta de firma. Acepta solo HS384, el algoritmo con el que firma
+ * ms-security-util: un token con cualquier otro {@code alg} (HS256, HS512, none) se
+ * rechaza aunque esté firmado con el secreto correcto.
  *
  * Flujo:
- * 1. jjwt verifica firma y expiración.
+ * 1. jjwt verifica algoritmo (HS384), firma y expiración.
  * 2. Claims se mapean a org.springframework.security.oauth2.jwt.Jwt.
  * 3. Spring Security extrae las autoridades vía JwtRolConverter.
  */
@@ -59,6 +60,9 @@ public class JjwtDecoder implements JwtDecoder {
         Claims claims;
         try {
             claims = Jwts.parser()
+                    // Solo HS384, el algoritmo de la plataforma: se quitan HS256 y HS512; none ya se rechaza
+                    // por defecto y los algoritmos asimétricos no aceptan una SecretKey.
+                    .sig().remove(Jwts.SIG.HS256).remove(Jwts.SIG.HS512).and()
                     .verifyWith(signingKey)
                     .build()
                     .parseSignedClaims(token)
