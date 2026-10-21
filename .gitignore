@@ -58,3 +58,6 @@ external-test/jmeter/*.jtl
 
 # Log local de bootRun, no debe versionarse
 bootrun.log
+
+# Variables locales (ver .env.example)
+.env

@@ -143,6 +143,26 @@ No se detectó `docker-compose.yml` en el repositorio.
 
 ---
 
+## Base de datos: variables obligatorias
+
+`DB_HOST`, `DB_PASSWORD`, `DB_USER` **no tienen valor por defecto** en ningún `application*.yml`
+(ms-security-util#52): si falta alguna, el servicio no arranca (`Could not resolve placeholder`), en vez de conectarse
+en silencio a una base compartida. Los nombres están en `.env.example` (sin valores). CI y el e2e local las dan con
+`SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD`, que tienen precedencia sobre el yml.
+
+**En local, con MySQL en Docker** (usuario y contraseña propios de tu máquina, nunca los de un ambiente compartido):
+
+```bash
+docker run -d --name mysql-local -p 3306:3306 -e MYSQL_DATABASE=<base> \
+  -e MYSQL_USER=<usuario> -e MYSQL_PASSWORD=<contraseña> -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.0
+export DB_HOST=localhost:3306
+export DB_USER=<usuario> DB_PASSWORD=<contraseña>
+./gradlew bootRun
+```
+
+En el IDE, las mismas variables en la configuración de ejecución. Para dev/qa/prod las entrega el despliegue
+(variables de entorno o gestor de secretos); nunca van en el repositorio.
+
 ## 4. Configuración
 
 ### Variables de Entorno
