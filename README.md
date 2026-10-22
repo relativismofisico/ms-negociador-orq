@@ -172,10 +172,10 @@ Las variables marcadas con `*` son **obligatorias en producción**.
 
 | Variable | Descripción | Ejemplo |
 |---|---|---|
-| `DB_HOST` * | Host de la base de datos MySQL | `dbcompany.rds.amazonaws.com` |
-| `DB_USER` * | Usuario MySQL | `admin` |
-| `DB_PASSWORD` * | Contraseña MySQL | `s3cret` |
-| `MONGO_URI` * | URI de conexión MongoDB | `mongodb+srv://user:pass@cluster/` |
+| `DB_HOST` * | Host de la base de datos MySQL | `<host-mysql>` (lo entrega el despliegue) |
+| `DB_USER` * | Usuario MySQL | `<usuario>` (gestor de secretos del ambiente) |
+| `DB_PASSWORD` * | Contraseña MySQL | `<contraseña>` (gestor de secretos del ambiente) |
+| `MONGO_URI` * | URI de conexión MongoDB | `<uri-mongodb>` (gestor de secretos del ambiente) |
 | `MONGO_DB` * | Nombre de la base de datos MongoDB | `DB_Facturas_Prod` |
 | `KAFKA_SERVERS` * | Bootstrap servers de Kafka | `kafka1:9092,kafka2:9092` |
 | `JWT_SECRET` * | Secret HMAC Base64 (48 a 63 bytes), obligatorio en **todos** los perfiles (ver [Variables de entorno requeridas](#variables-de-entorno-requeridas)) | `openssl rand -base64 48` |
