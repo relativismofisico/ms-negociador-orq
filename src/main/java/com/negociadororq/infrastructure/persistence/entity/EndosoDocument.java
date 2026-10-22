@@ -6,10 +6,12 @@ import java.util.List;
 import com.negociadororq.domain.enums.EstadoEndoso;
 import com.negociadororq.domain.model.AprobacionActorDto;
 import com.negociadororq.domain.model.Operacion;
+import com.negociadororq.domain.util.Sensible;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -43,6 +45,7 @@ public class EndosoDocument {
     private String rutFondeador;
     private Operacion tipoOperacion;
     private EstadoEndoso estado;
+    @ToString.Exclude
     private String otp;
     private List<AprobacionActorDto> aprobaciones;
     private String documentoUrl;
@@ -52,4 +55,11 @@ public class EndosoDocument {
     private String documentoHtml;
     private byte[] documentoPdf;
     private String nombreArchivoPdf;
+
+    /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
+    @ToString.Include(name = "otp")
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
+    private String otpParaLog() {
+        return Sensible.ocultar(otp);
+    }
 }
