@@ -160,6 +160,7 @@ export DB_USER=<usuario> DB_PASSWORD=<contraseña>
 ./gradlew bootRun
 ```
 
+El perfil `dev` también las toma del entorno: ya no trae usuario ni contraseña literales de una base local.
 En el IDE, las mismas variables en la configuración de ejecución. Para dev/qa/prod las entrega el despliegue
 (variables de entorno o gestor de secretos); nunca van en el repositorio.
 
@@ -273,7 +274,7 @@ facturas:
 
 | Propiedad | Desarrollo | QA | Producción |
 |---|---|---|---|
-| `spring.datasource.url` | `jdbc:mysql://localhost:3306/dbcompany` | `jdbc:mysql://${DB_HOST}/dbcompany` | `jdbc:mysql://${DB_HOST}/dbcompany?useSSL=true` |
+| `spring.datasource.url` | `jdbc:mysql://${DB_HOST}/dbcompany` (hereda de `application.yml`) | `jdbc:mysql://${DB_HOST}/dbcompany` | `jdbc:mysql://${DB_HOST}/dbcompany?useSSL=true` |
 | `spring.data.mongodb.uri` | `mongodb://localhost:27017/DB_Facturas` | `${MONGO_URI}` | `${MONGO_URI}` |
 | `spring.kafka.bootstrap-servers` | `localhost:9092` | `${KAFKA_SERVERS}` | `${KAFKA_SERVERS}` |
 | `spring.jpa.hibernate.ddl-auto` | `update` | `update` | `validate` |
@@ -1344,7 +1345,7 @@ graph LR
 | Propiedad | Valor |
 |---|---|
 | Puerto | `8083` |
-| MySQL | `localhost:3306/dbcompany` (usuario: `root`, contraseña: `root`) |
+| MySQL | `${DB_HOST}` (con MySQL en Docker, `localhost`), base `dbcompany`; usuario y contraseña por `DB_USER` / `DB_PASSWORD` (ver [Base de datos: variables obligatorias](#base-de-datos-variables-obligatorias)) |
 | MongoDB | `mongodb://localhost:27017/DB_Facturas` |
 | Kafka | `localhost:9092` |
 | Swagger UI | Habilitado en `http://localhost:8083/swagger-ui.html` |
