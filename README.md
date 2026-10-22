@@ -158,6 +158,8 @@ Las variables marcadas con `*` son **obligatorias en producción**.
 | `MONGO_DB` * | Nombre de la base de datos MongoDB | `DB_Facturas_Prod` |
 | `KAFKA_SERVERS` * | Bootstrap servers de Kafka | `kafka1:9092,kafka2:9092` |
 | `JWT_SECRET` * | Secret HMAC Base64 (48 a 63 bytes), obligatorio en **todos** los perfiles (ver [Variables de entorno requeridas](#variables-de-entorno-requeridas)) | `openssl rand -base64 48` |
+| `LIQUIDADOR_SERVICE_USERNAME` * | Usuario de la cuenta de servicio de ms-liquidador-neg, obligatorio en **todos** los perfiles (ver [Cuenta de servicio de ms-liquidador-neg](#cuenta-de-servicio-de-ms-liquidador-neg)) | `ms-liquidador-neg` |
+| `LIQUIDADOR_SERVICE_PASSWORD_HASH` * | Hash bcrypt de la contraseña de esa cuenta, obligatorio en **todos** los perfiles | `$2a$10$…` (60 caracteres) |
 | `AMBIENTE_PIPE` | Perfil activo de Spring | `dev`, `qa`, `prod` |
 
 ### Variables de entorno requeridas
@@ -175,10 +177,31 @@ Los secretos HMAC no tienen valor por defecto en ningún perfil (`application.ym
 - Por qué de 48 a 63 bytes: el mínimo de 48 (384 bits) es el que exige HS384, el único algoritmo con el que la plataforma firma y verifica (fijado explícitamente en código; un token con otro `alg` se rechaza con 401, ya no depende del largo de la clave). El máximo se conserva por prudencia.
 - Los valores que estuvieron versionados en este repositorio siguen en el historial de git y se dan por comprometidos: no deben usarse en ningún ambiente.
 
+### Cuenta de servicio de ms-liquidador-neg
+
+ms-liquidador-neg llama a este servicio con Basic Auth (Feign). El usuario y el **hash bcrypt** de su contraseña llegan
+por entorno, sin valor por defecto en ningún perfil: el hash que estuvo versionado en `application.yml` ya no se acepta
+y rotar la contraseña no requiere un commit. Los nombres están en `.env.example` (sin valores).
+
+| Variable | Propiedad | Uso |
+|---|---|---|
+| `LIQUIDADOR_SERVICE_USERNAME` | `security.service-credentials.ms-liquidador-neg.username` | Usuario con el que llama ms-liquidador-neg (su `FEIGN_USERNAME`). |
+| `LIQUIDADOR_SERVICE_PASSWORD_HASH` | `security.service-credentials.ms-liquidador-neg.password` | Hash bcrypt (`$2a$`/`$2b$`/`$2y$`, 60 caracteres) de la contraseña que ms-liquidador-neg tiene en `FEIGN_PASSWORD`. |
+
+- Si falta alguna, si el usuario está vacío o si el hash no tiene formato bcrypt, la aplicación no arranca. El error
+  nombra la propiedad o la variable, nunca el valor.
+- La contraseña en texto plano solo la tiene ms-liquidador-neg. Aquí solo va su hash.
+- Para rotarla, el hash nuevo se despliega aquí y la contraseña nueva en ms-liquidador-neg **en la misma ventana**:
+  desde que este servicio tiene el hash nuevo, la contraseña vieja responde 401.
+- Para calcular el hash sin pasar la contraseña por argumento:
+  `python3 -c 'import bcrypt, getpass; print(bcrypt.hashpw(getpass.getpass().encode(), bcrypt.gensalt(10)).decode())'`.
+
 Arranque local (para levantar varios servicios juntos, exportar los mismos valores en todas las terminales):
 
 ```bash
 export JWT_SECRET="$(openssl rand -base64 48 | tr -d '\r\n')"
+export LIQUIDADOR_SERVICE_USERNAME=ms-liquidador-neg
+export LIQUIDADOR_SERVICE_PASSWORD_HASH='<hash bcrypt de la contraseña de ms-liquidador-neg>'
 ./gradlew bootRun
 ```
 

@@ -132,6 +132,13 @@ jobs:
           JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
           echo "::add-mask::$JWT_SECRET"
           echo "JWT_SECRET=$JWT_SECRET" >> "$GITHUB_ENV"
+          # Cuenta de servicio de ms-liquidador-neg: usuario y hash bcrypt por entorno, sin default. La suite no la usa,
+          # así que basta el hash de una contraseña aleatoria que no se guarda en ningún sitio.
+          python3 -m pip install --quiet --disable-pip-version-check "bcrypt==4.2.1"
+          LIQUIDADOR_SERVICE_PASSWORD_HASH="$(python3 -c 'import bcrypt, secrets; print(bcrypt.hashpw(secrets.token_urlsafe(33).encode(), bcrypt.gensalt(10)).decode())')"
+          echo "::add-mask::$LIQUIDADOR_SERVICE_PASSWORD_HASH"
+          echo "LIQUIDADOR_SERVICE_USERNAME=ms-liquidador-neg" >> "$GITHUB_ENV"
+          echo "LIQUIDADOR_SERVICE_PASSWORD_HASH=$LIQUIDADOR_SERVICE_PASSWORD_HASH" >> "$GITHUB_ENV"
 
       - name: Levantar el servicio en background
         env:

@@ -21,8 +21,7 @@ public class ServiceCredentialsUserDetailsService implements UserDetailsService 
 
     @Override
     public UserDetails loadUserByUsername(String username) {
-        SecurityProperties.ServiceCredential credential = securityProperties.getServiceCredentials()
-            .get(username);
+        SecurityProperties.ServiceCredential credential = securityProperties.buscarPorUsuario(username);
 
         if (credential == null) {
             throw new UsernameNotFoundException("Service account not found: " + username);
