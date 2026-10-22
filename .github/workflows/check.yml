@@ -1,0 +1,48 @@
+name: CI — check
+
+# `./gradlew check` en cada PR y en cada push a master: tests unitarios (Spock), cobertura JaCoCo, Checkstyle, PMD,
+# SpotBugs y ArchUnit. Job propio, en paralelo al de Karate, que no cambia. Usa la misma caché de Gradle de
+# actions/setup-java (dependencias y wrapper), así que no vuelve a descargar nada; solo compila lo que `check` necesita.
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    env:
+      # ms-commons-util se resuelve desde GitHub Packages; alcanza el GITHUB_TOKEN del workflow.
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: check
+        run: |
+          chmod +x gradlew
+          ./gradlew check --console=plain
+
+      - name: Publicar reportes
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reportes-check
+          path: |
+            build/reports/
+            build/test-results/

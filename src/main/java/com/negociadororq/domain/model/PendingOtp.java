@@ -1,9 +1,11 @@
 package com.negociadororq.domain.model;
 
+import com.negociadororq.domain.util.Sensible;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * Solicitud de aprobación de negociación que quedó pendiente de que su OTP sea
@@ -20,6 +22,7 @@ public class PendingOtp {
     private String rutEmpresa;
     private String rolActor;
     private String ip;
+    @ToString.Exclude
     private String otp;
     private Boolean aprobado;
     private AprobacionRequest request;
@@ -37,4 +40,11 @@ public class PendingOtp {
     private String actorRol;
     private Long actorEmpresaId;
     private String requestId;
+
+    /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
+    @ToString.Include(name = "otp")
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
+    private String otpParaLog() {
+        return Sensible.ocultar(otp);
+    }
 }

@@ -9,10 +9,12 @@ import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.enums.EstadoNegociacion;
 import com.negociadororq.domain.model.AprobacionActorDto;
 import com.negociadororq.domain.model.FondeadorAsignacion;
+import com.negociadororq.domain.util.Sensible;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * Forma de persistencia embebida de
@@ -46,7 +48,15 @@ public class FacturaNegociadaEmbedded {
     private EstadoEndoso estadoEndoso;
     private Boolean estadoCreacionEndoso;
 
+    @ToString.Exclude
     private String otpEndoso;
 
     private LocalDateTime fechaOtp;
+
+    /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
+    @ToString.Include(name = "otpEndoso")
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
+    private String otpEndosoParaLog() {
+        return Sensible.ocultar(otpEndoso);
+    }
 }

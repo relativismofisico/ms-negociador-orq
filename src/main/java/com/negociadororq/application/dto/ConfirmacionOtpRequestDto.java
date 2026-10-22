@@ -2,11 +2,13 @@ package com.negociadororq.application.dto;
 
 import java.util.List;
 
+import com.negociadororq.domain.util.Sensible;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * Solicitud para confirmar un código OTP y aprobar el endoso.
@@ -28,6 +30,7 @@ public class ConfirmacionOtpRequestDto {
     private String rutOperador;
 
     @Schema(description = "Código OTP de 6 dígitos recibido por el canal de notificación.", example = "482931")
+    @ToString.Exclude
     private String otp;
 
     @Schema(description = "IP del cliente que confirma el OTP. Se inyecta automáticamente desde el request HTTP.",
@@ -36,4 +39,11 @@ public class ConfirmacionOtpRequestDto {
 
     @Schema(description = "Lista de facturas con su decisión de aprobación individual.")
     private List<AprobacionFacturaRequestDto> facturas;
+
+    /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
+    @ToString.Include(name = "otp")
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
+    private String otpParaLog() {
+        return Sensible.ocultar(otp);
+    }
 }
