@@ -23,6 +23,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Manejador global de excepciones HTTP para ms-negociador-orq.
@@ -256,6 +258,18 @@ public class GlobalExceptionHandler {
     // =========================================================================
     // Fallback — cualquier excepción no manejada
     // =========================================================================
+
+    /**
+     * Ruta inexistente (sin handler ni recurso): 404 con mensaje fijo. Ni el mensaje de la excepción ni la ruta
+     * pedida van en el mensaje; la ruta queda solo en el log.
+     */
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<ErrorResponse> handleRutaInexistente(Exception ex, HttpServletRequest request) {
+        log.warning(String.format("Ruta inexistente: %s %s", request.getMethod(), request.getRequestURI()));
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(buildError(HttpStatus.NOT_FOUND, "RECURSO_NO_ENCONTRADO", "El recurso solicitado no existe.", request.getRequestURI(), null));
+    }
 
     /**
      * Captura de último recurso. NUNCA exponer detalles de la excepción al cliente.

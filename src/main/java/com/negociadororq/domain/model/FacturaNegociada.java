@@ -7,10 +7,12 @@ import java.util.List;
 import com.negociadororq.domain.enums.EstadoEndoso;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.enums.EstadoNegociacion;
+import com.negociadororq.domain.util.Sensible;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 
 /**
@@ -41,9 +43,16 @@ public class FacturaNegociada {
     private EstadoEndoso estadoEndoso;
     private Boolean estadoCreacionEndoso;
 
+    @ToString.Exclude
     private String otpEndoso;
 
     private LocalDateTime fechaOtp;
 
+    /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
+    @ToString.Include(name = "otpEndoso")
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
+    private String otpEndosoParaLog() {
+        return Sensible.ocultar(otpEndoso);
+    }
 }
 
