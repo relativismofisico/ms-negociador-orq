@@ -185,7 +185,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         facturaPort.findByNumeroFactura("FECI003") >> Optional.of(buildFactura("FECI003", "PROV-001", "PAG-001"))
 
         procesarFacturaNegociacionService.procesarFactura(_, fn1) >> {
-            throw new RuntimeException("Factura sin cupo")
+            throw new com.negociadororq.application.exception.ReglaDeNegocioException("Factura sin cupo")
         }
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1])
@@ -197,6 +197,28 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         resultado.estado == EstadoNegociacion.RECHAZADA.name()
         resultado.errores.any { it.contains("Factura sin cupo") }
         1 * negociacionPort.save(_) >> { args -> args[0] }
+    }
+
+    def "una factura rechazada por un error que no es del dominio informa un motivo fijo, sin el texto de la excepción"() {
+        given:
+        def fn1 = buildFn("FECI009", "PROV-001", "PAG-001")
+
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findByNumeroFactura("FECI009") >> Optional.of(buildFactura("FECI009", "PROV-001", "PAG-001"))
+
+        procesarFacturaNegociacionService.procesarFactura(_, fn1) >> {
+            throw new IllegalStateException("could not execute statement; SQL [update cupo set saldo=? where id=?]")
+        }
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1])
+
+        when:
+        def resultado = service.crearNegociacion(request)
+
+        then:
+        resultado.errores == [NegociacionFactoringComfirmingServiceImpl.MENSAJE_ERROR_FACTURA]
+        resultado.errores.every { !it.contains("SQL") && !it.contains("update cupo") }
+        1 * negociacionPort.save({ it.errores == [NegociacionFactoringComfirmingServiceImpl.MENSAJE_ERROR_FACTURA] }) >> { args -> args[0] }
     }
 
     // ─── flujo parcial ────────────────────────────────────────────────────────
@@ -213,7 +235,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def fn1Procesada = buildFn("FECI004", "PROV-001", "PAG-001")
         procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1Procesada
         procesarFacturaNegociacionService.procesarFactura(_, fn2) >> {
-            throw new RuntimeException("FECI005 sin cupo")
+            throw new com.negociadororq.application.exception.ReglaDeNegocioException("FECI005 sin cupo")
         }
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1, fn2])
