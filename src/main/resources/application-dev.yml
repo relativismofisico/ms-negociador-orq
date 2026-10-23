@@ -2,10 +2,9 @@
 # Perfil DEV — desarrollo local
 # ─────────────────────────────────────────────────────────────
 spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/dbcompany?useSSL=false&serverTimezone=UTC
-    username: root
-    password: root
+  # Base de datos: la misma URL de application.yml (${DB_HOST}) con ${DB_USER} / ${DB_PASSWORD} por entorno, sin
+  # credenciales literales en ningún perfil. En local con MySQL en Docker: DB_HOST=localhost (ver README,
+  # "Base de datos: variables obligatorias", y .env.example).
   data:
     mongodb:
       uri: mongodb://localhost:27017/DB_Facturas

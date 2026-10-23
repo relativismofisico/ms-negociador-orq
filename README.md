@@ -143,6 +143,27 @@ No se detectó `docker-compose.yml` en el repositorio.
 
 ---
 
+## Base de datos: variables obligatorias
+
+`DB_HOST`, `DB_PASSWORD`, `DB_USER` **no tienen valor por defecto** en ningún `application*.yml`
+(ms-security-util#52): si falta alguna, el servicio no arranca (`Could not resolve placeholder`), en vez de conectarse
+en silencio a una base compartida. Los nombres están en `.env.example` (sin valores). CI y el e2e local las dan con
+`SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD`, que tienen precedencia sobre el yml.
+
+**En local, con MySQL en Docker** (usuario y contraseña propios de tu máquina, nunca los de un ambiente compartido):
+
+```bash
+docker run -d --name mysql-local -p 3306:3306 -e MYSQL_DATABASE=<base> \
+  -e MYSQL_USER=<usuario> -e MYSQL_PASSWORD=<contraseña> -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.0
+export DB_HOST=localhost:3306
+export DB_USER=<usuario> DB_PASSWORD=<contraseña>
+./gradlew bootRun
+```
+
+El perfil `dev` también las toma del entorno: ya no trae usuario ni contraseña literales de una base local.
+En el IDE, las mismas variables en la configuración de ejecución. Para dev/qa/prod las entrega el despliegue
+(variables de entorno o gestor de secretos); nunca van en el repositorio.
+
 ## 4. Configuración
 
 ### Variables de Entorno
@@ -151,10 +172,10 @@ Las variables marcadas con `*` son **obligatorias en producción**.
 
 | Variable | Descripción | Ejemplo |
 |---|---|---|
-| `DB_HOST` * | Host de la base de datos MySQL | `dbcompany.rds.amazonaws.com` |
-| `DB_USER` * | Usuario MySQL | `admin` |
-| `DB_PASSWORD` * | Contraseña MySQL | `s3cret` |
-| `MONGO_URI` * | URI de conexión MongoDB | `mongodb+srv://user:pass@cluster/` |
+| `DB_HOST` * | Host de la base de datos MySQL | `<host-mysql>` (lo entrega el despliegue) |
+| `DB_USER` * | Usuario MySQL | `<usuario>` (gestor de secretos del ambiente) |
+| `DB_PASSWORD` * | Contraseña MySQL | `<contraseña>` (gestor de secretos del ambiente) |
+| `MONGO_URI` * | URI de conexión MongoDB | `<uri-mongodb>` (gestor de secretos del ambiente) |
 | `MONGO_DB` * | Nombre de la base de datos MongoDB | `DB_Facturas_Prod` |
 | `KAFKA_SERVERS` * | Bootstrap servers de Kafka | `kafka1:9092,kafka2:9092` |
 | `JWT_SECRET` * | Secret HMAC Base64 (48 a 63 bytes), obligatorio en **todos** los perfiles (ver [Variables de entorno requeridas](#variables-de-entorno-requeridas)) | `openssl rand -base64 48` |
@@ -276,7 +297,7 @@ facturas:
 
 | Propiedad | Desarrollo | QA | Producción |
 |---|---|---|---|
-| `spring.datasource.url` | `jdbc:mysql://localhost:3306/dbcompany` | `jdbc:mysql://${DB_HOST}/dbcompany` | `jdbc:mysql://${DB_HOST}/dbcompany?useSSL=true` |
+| `spring.datasource.url` | `jdbc:mysql://${DB_HOST}/dbcompany` (hereda de `application.yml`) | `jdbc:mysql://${DB_HOST}/dbcompany` | `jdbc:mysql://${DB_HOST}/dbcompany?useSSL=true` |
 | `spring.data.mongodb.uri` | `mongodb://localhost:27017/DB_Facturas` | `${MONGO_URI}` | `${MONGO_URI}` |
 | `spring.kafka.bootstrap-servers` | `localhost:9092` | `${KAFKA_SERVERS}` | `${KAFKA_SERVERS}` |
 | `spring.jpa.hibernate.ddl-auto` | `update` | `update` | `validate` |
@@ -1347,7 +1368,7 @@ graph LR
 | Propiedad | Valor |
 |---|---|
 | Puerto | `8083` |
-| MySQL | `localhost:3306/dbcompany` (usuario: `root`, contraseña: `root`) |
+| MySQL | `${DB_HOST}` (con MySQL en Docker, `localhost`), base `dbcompany`; usuario y contraseña por `DB_USER` / `DB_PASSWORD` (ver [Base de datos: variables obligatorias](#base-de-datos-variables-obligatorias)) |
 | MongoDB | `mongodb://localhost:27017/DB_Facturas` |
 | Kafka | `localhost:9092` |
 | Swagger UI | Habilitado en `http://localhost:8083/swagger-ui.html` |

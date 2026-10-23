@@ -12,9 +12,9 @@ spring:
       max-file-size: 20MB
       max-request-size: 200MB
   datasource:
-    url: jdbc:mysql://${DB_HOST:dbcompany.cn48sgciaax1.us-east-2.rds.amazonaws.com}:3306/dbcompany?useSSL=false&serverTimezone=UTC
-    username: ${DB_USER:desarrollador}
-    password: ${DB_PASSWORD:Juliana1987****}
+    url: jdbc:mysql://${DB_HOST}:3306/dbcompany?useSSL=false&serverTimezone=UTC
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:5}
