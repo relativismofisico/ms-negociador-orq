@@ -72,7 +72,7 @@ public class JjwtDecoder implements JwtDecoder {
             throw new JwtException("Token expirado", ex);
         } catch (io.jsonwebtoken.JwtException ex) {
             log.warn("JWT inválido: {}", ex.getMessage());
-            throw new BadJwtException("Token inválido: " + ex.getMessage(), ex);
+            throw new BadJwtException("Token inválido.", ex);
         }
 
         // Un refresh token (emitido por ms-security-util, mismo secreto, mismos claims que

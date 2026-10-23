@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
+    /** Mensaje único de cualquier 401: el motivo concreto solo va al log. */
+    static final String MENSAJE_NO_AUTENTICADO = "Token inválido o expirado.";
+
     private final ObjectMapper objectMapper;
 
     @Override
@@ -37,22 +41,15 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
 
         log.warn("Acceso no autenticado a {}: {}", request.getRequestURI(), authException.getMessage());
 
+        // El código distingue la categoría (contrato de la API); el mensaje es único y el motivo concreto
+        // (texto de jjwt o de Spring Security) solo va al log (ms-security-util#55).
         String codigo;
-        String mensaje;
-
-        String causeMsg = "";
-        if (authException.getCause() != null) {
-            causeMsg = authException.getCause().getMessage();
-        }
-        if (causeMsg.contains("expirado") || causeMsg.contains("expired") || causeMsg.contains("Expired")) {
+        if (esTokenExpirado(authException)) {
             codigo = "TOKEN_EXPIRADO";
-            mensaje = "El token JWT ha expirado. Por favor autentíquese nuevamente.";
         } else if (request.getHeader("Authorization") == null) {
             codigo = "TOKEN_AUSENTE";
-            mensaje = "Se requiere un token JWT en el header Authorization: Bearer <token>";
         } else {
             codigo = "TOKEN_INVALIDO";
-            mensaje = "El token JWT es inválido o está mal formado.";
         }
 
         SecurityErrorResponse errorResponse = SecurityErrorResponse.builder()
@@ -60,7 +57,7 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
                 .status(HttpStatus.UNAUTHORIZED.value())
                 .error(HttpStatus.UNAUTHORIZED.getReasonPhrase())
                 .codigo(codigo)
-                .mensaje(mensaje)
+                .mensaje(MENSAJE_NO_AUTENTICADO)
                 .path(request.getRequestURI())
                 .build();
 
@@ -69,5 +66,16 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         objectMapper.writeValue(response.getWriter(), errorResponse);
     }
-}
 
+    /**
+     * Por el tipo de la causa, no por su texto: el decoder envuelve la {@link ExpiredJwtException} de jjwt.
+     */
+    private static boolean esTokenExpirado(Throwable error) {
+        for (Throwable causa = error; causa != null; causa = causa.getCause()) {
+            if (causa instanceof ExpiredJwtException) {
+                return true;
+            }
+        }
+        return false;
+    }
+}

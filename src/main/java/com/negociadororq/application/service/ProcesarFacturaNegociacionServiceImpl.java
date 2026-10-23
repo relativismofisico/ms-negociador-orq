@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
 import com.negociadororq.application.exception.ConflictoException;
+import com.negociadororq.application.exception.ReglaDeNegocioException;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
@@ -77,7 +78,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 validacionFacturaService.validarFacturaVencida(numero, null);
 
         if (!validacion.isValida()) {
-            throw new RuntimeException(validacion.getMensaje());
+            throw new ReglaDeNegocioException(validacion.getMensaje());
         }
 
         // ==========================================
@@ -85,7 +86,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         // ==========================================
 
         if (!"SIN_NEGOCIAR".equalsIgnoreCase(factura.getEstadoNegociacion())) {
-            throw new RuntimeException("Factura no negociable estado=" + factura.getEstadoNegociacion());
+            throw new ReglaDeNegocioException("Factura no negociable estado=" + factura.getEstadoNegociacion());
         }
 
         // ==========================================
@@ -121,7 +122,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         BigDecimal cupoOperador = cupoConsumidorService.obtenerCupoDisponible(userId);
 
         if (cupoOperador.compareTo(valorFactura) < 0) {
-            throw new RuntimeException(
+            throw new ReglaDeNegocioException(
                     "Operador sin cupo disponible");
         }
 
@@ -141,7 +142,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                                 new RuntimeException("EmpresaQuota no encontrada"));
 
         if (empresaQuota.getCurrentQuota().compareTo(valorFactura) < 0) {
-            throw new RuntimeException("Empresa sin cupo");
+            throw new ReglaDeNegocioException("Empresa sin cupo");
         }
 
         // ==========================================
@@ -261,7 +262,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                     if (quota.getSupplierCurrentQuota()
                             .compareTo(valorFactura) < 0) {
 
-                        throw new RuntimeException(
+                        throw new ReglaDeNegocioException(
                                 "Fondeador sin cupo factoring");
                     }
 
@@ -286,7 +287,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 if (quota.getPayerCurrentQuota()
                         .compareTo(valorFactura) < 0) {
 
-                    throw new RuntimeException(
+                    throw new ReglaDeNegocioException(
                             "Fondeador sin cupo confirming");
                 }
             }
@@ -305,7 +306,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 quota.getVigenciaDescuento(), quota.getDiasVigencia());
 
         if (!dentroDeVigencia) {
-            throw new RuntimeException(
+            throw new ReglaDeNegocioException(
                     "La vigencia del descuento configurada por el fondeador ya no permite negociar esta factura");
         }
     }
@@ -316,7 +317,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         boolean aprobadoPorFondeador = Boolean.TRUE.equals(quota.getAprobadoPorFondeador());
 
         if (!estadoAprobado || !aprobadoPorFondeador) {
-            throw new RuntimeException(
+            throw new ReglaDeNegocioException(
                     "La asignación de fondeo no está aprobada");
         }
     }
@@ -340,7 +341,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
     ) {
 
         if (!payerFundingVisibilityPort.estaHabilitado(payerId)) {
-            throw new RuntimeException(
+            throw new ReglaDeNegocioException(
                     "El fondeador " + fon.getRutFondeador()
                             + " no tiene una asignación de cupo activa para este proveedor");
         }
@@ -357,7 +358,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 .orElse(oferta.getSupplierQuotaTemplate());
 
         if (cupoDisponible.compareTo(valorFactura) < 0) {
-            throw new RuntimeException(
+            throw new ReglaDeNegocioException(
                     "Fondeador sin cupo factoring (indirecto vía pagador)");
         }
     }
@@ -544,7 +545,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
             if (!empresa.equals(proveedor)) {
 
-                throw new RuntimeException(
+                throw new ReglaDeNegocioException(
                         "Solo proveedor puede hacer factoring");
             }
 
@@ -555,7 +556,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
             if (!empresa.equals(pagador)) {
 
-                throw new RuntimeException(
+                throw new ReglaDeNegocioException(
                         "Solo pagador puede hacer confirming");
             }
         }

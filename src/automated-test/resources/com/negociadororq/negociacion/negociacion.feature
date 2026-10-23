@@ -100,6 +100,19 @@ Feature: POST /negociar/factura — Crear Negociacion Factoring/Confirming
     * def mrEstado = responseStatus != 201 ? { pass: true } : karate.match(response.estado, '#regex (PENDIENTE|RECHAZADA|ACEPTADA)')
     * assert mrEstado.pass
 
+  # ms-security-util#55: los motivos de rechazo de cada factura viajan en `errores` y quedan guardados en la
+  # negociación. Solo llevan el texto de una excepción del dominio; el de un error interno (BD, red) va al log.
+  Scenario: Los motivos de rechazo de facturas no llevan detalle interno
+    Given path endpoint
+    And header Authorization = 'Bearer ' + tokenAdmin
+    And request bodyFactoring
+    When method POST
+    Then assert responseStatus != 500
+    * def errores = responseStatus == 201 && response.errores ? response.errores : []
+    * match each errores == '#? !_.contains("Exception") && !_.contains("SQL") && !_.contains("could not")'
+    * def texto = karate.toString(response)
+    And match texto !contains 'Exception'
+
   # ─── Validaciones de entrada ────────────────────────────────────
   @regression @full
   Scenario: Body JSON malformado -> 400 CUERPO_INVALIDO

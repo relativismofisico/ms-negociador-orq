@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.NegociacionResponseDto;
 import com.negociadororq.application.exception.AccionNoPermitidaException;
+import com.negociadororq.application.exception.NegociadorException;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.ClockPort;
@@ -40,6 +41,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Log
 @RequiredArgsConstructor
 public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFactoringComfirmingService {
+
+    /** Motivo de rechazo de una factura cuando el error no es del dominio: el detalle queda en el log. */
+    static final String MENSAJE_ERROR_FACTURA = "No se pudo procesar la factura por un error interno.";
 
     private final FacturaOutputPort facturaPort;
     private final NegociacionOutputPort negociacionPort;
@@ -104,8 +108,11 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             } catch (Exception e) {
                 log.log(java.util.logging.Level.SEVERE, String.format("Error procesando factura %s", facturaReq.getNumeroFactura()), e);
 
-                errores.add(e.getMessage());
-                facturasRechazadas.add(facturaReq.getNumeroFactura() + " -> " + e.getMessage());
+                // El motivo viaja en la respuesta (errores) y queda guardado en la negociación: solo el
+                // mensaje de una excepción del dominio; el de cualquier otra (BD, red, librerías) va al log.
+                String motivo = motivoRechazo(e);
+                errores.add(motivo);
+                facturasRechazadas.add(facturaReq.getNumeroFactura() + " -> " + motivo);
             }
         }
 
@@ -308,6 +315,14 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         }
     }
 
+    /**
+     * Motivo de rechazo de una factura apto para el cliente: el mensaje de las excepciones del dominio
+     * ({@link NegociadorException}) está escrito para él; cualquier otra recibe un mensaje fijo.
+     */
+    private static String motivoRechazo(Exception e) {
+        if (e instanceof NegociadorException) {
+            return e.getMessage();
+        }
+        return MENSAJE_ERROR_FACTURA;
+    }
 }
-
-

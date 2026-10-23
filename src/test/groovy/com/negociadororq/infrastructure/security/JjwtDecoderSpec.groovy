@@ -57,6 +57,16 @@ class JjwtDecoderSpec extends Specification {
         jwt.getSubject() == "usuario@test.com"
     }
 
+    def "un token malformado da BadJwtException sin el texto de jjwt en el mensaje: queda como causa"() {
+        when:
+        decoder.decode("no.es.un-jwt")
+
+        then:
+        def ex = thrown(BadJwtException)
+        ex.message == "Token inválido."
+        ex.cause instanceof io.jsonwebtoken.JwtException
+    }
+
     def "decode lanza BadJwtException para un refresh token usado como access token"() {
         given:
         def token = buildToken("refresh")
