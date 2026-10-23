@@ -105,10 +105,12 @@ management:
 security:
   jwt:
     secret: ${JWT_SECRET}
+  # Cuenta de servicio de ms-liquidador-neg (Basic Auth): usuario y hash bcrypt por entorno, sin default. El arranque
+  # falla si faltan o si el hash no tiene formato bcrypt (ver README, "Cuenta de servicio de ms-liquidador-neg").
   service-credentials:
     ms-liquidador-neg:
-      username: ms-liquidador-neg
-      password: "$2a$12$QGH/U6x55/WfQ6B.prPvz.9B6tYuSxbxTEW764fQgpEjoIMFG2Ae."
+      username: ${LIQUIDADOR_SERVICE_USERNAME}
+      password: ${LIQUIDADOR_SERVICE_PASSWORD_HASH}
       roles:
         - OPERARIO
   roles:

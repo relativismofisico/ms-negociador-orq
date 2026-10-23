@@ -31,8 +31,7 @@ public class CompositeUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String username) {
         // Estrategia 1: Intentar cargar credenciales de servicio
-        SecurityProperties.ServiceCredential serviceCredential = securityProperties.getServiceCredentials()
-            .get(username);
+        SecurityProperties.ServiceCredential serviceCredential = securityProperties.buscarPorUsuario(username);
 
         if (serviceCredential != null) {
             log.fine("Autenticando servicio: " + username);
