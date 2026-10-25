@@ -46,7 +46,9 @@ class ConfiguracionObligatoriaSpec extends Specification {
     }
 
     private static void sinValores(String mensaje) {
-        entornoValido().values().each { assert !mensaje.contains(it as String) }
+        for (Object valor : entornoValido().values()) {
+            assert !mensaje.contains(valor as String)
+        }
     }
 
     def "con todas las variables definidas el arranque continúa"() {
@@ -129,6 +131,19 @@ class ConfiguracionObligatoriaSpec extends Specification {
 
         where:
         variable << ['LIQUIDADOR_SERVICE_PASSWORD_HASH']
+    }
+
+    def "un placeholder con default no exige la variable"() {
+        given:
+        StandardEnvironment environment = entorno(entornoValido())
+        environment.propertySources.addFirst(new MapPropertySource('perfil',
+                ['spring.datasource.url': '${DB_URL_OPCIONAL:jdbc:h2:mem:prueba}']))
+
+        when:
+        ConfiguracionObligatoria.validar(environment)
+
+        then:
+        noExceptionThrown()
     }
 
     def "arranque: sin la variable, SpringApplication falla antes de crear el contexto y la nombra"() {

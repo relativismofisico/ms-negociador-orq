@@ -37,8 +37,11 @@ public final class ConfiguracionObligatoria implements ApplicationListener<Appli
     private static final Pattern HASH_BCRYPT =
             Pattern.compile("^\\$2[aby]\\$(0[4-9]|[12]\\d|3[01])\\$[./A-Za-z0-9]{53}$");
 
-    /** {@code ${NOMBRE}} o {@code ${NOMBRE:default}}: el grupo 1 es el nombre y el 2, si existe, el default. */
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{([^}:]+)(:[^}]*)?}");
+    /**
+     * {@code ${NOMBRE}} o {@code ${NOMBRE:default}}: el grupo 1 es el nombre y el 2 es {@code ":"} si hay default.
+     * Sin cuantificadores encadenados (sin riesgo de ReDoS): el default no hace falta leerlo.
+     */
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{([^}:]+)(:?)");
 
     /** Fuente que Spring Boot antepone a las demás y que solo las envuelve. */
     private static final String FUENTE_ADJUNTA = "configurationProperties";
@@ -80,7 +83,7 @@ public final class ConfiguracionObligatoria implements ApplicationListener<Appli
             if (variable == null) {
                 variable = nombre;
             }
-            if (placeholder.group(2) != null) {
+            if (!placeholder.group(2).isEmpty()) {
                 continue;
             }
             String valorVariable = environment.getProperty(nombre);
