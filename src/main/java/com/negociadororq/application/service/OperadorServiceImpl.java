@@ -3,6 +3,8 @@ package com.negociadororq.application.service;
 import java.math.BigDecimal;
 import java.util.Optional;
 
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
+import com.negociadororq.application.exception.ReglaDeNegocioException;
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
 import com.negociadororq.application.port.output.UserQuotaOutputPort;
@@ -30,16 +32,16 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
     public BigDecimal obtenerCupoDisponible(Long userId) {
         return userQuotaPort.findByUserId(userId)
                 .map(UserQuota::getCurrentQuota)
-                .orElseThrow(() -> new RuntimeException("No existe operador para el usuario ID " + userId));
+                .orElseThrow(() -> new RecursoNoEncontradoException("No existe operador para el usuario ID " + userId));
     }
 
     @Override
     public void descontarCupo(Long userId, BigDecimal monto) {
         UserQuota cuota = userQuotaPort.findByUserId(userId)
-                .orElseThrow(() -> new RuntimeException("No existe operador para el usuario ID " + userId));
+                .orElseThrow(() -> new RecursoNoEncontradoException("No existe operador para el usuario ID " + userId));
 
         if (cuota.getCurrentQuota().compareTo(monto) < 0) {
-            throw new RuntimeException("Cupo insuficiente para el operador " + userId);
+            throw new ReglaDeNegocioException("Cupo insuficiente para el operador " + userId);
         }
 
         cuota.setCurrentQuota(cuota.getCurrentQuota().subtract(monto));
@@ -50,7 +52,7 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
     @Override
     public void revertirCupo(Long userId, BigDecimal valor) {
         UserQuota cuota = userQuotaPort.findByUserId(userId)
-                .orElseThrow(() -> new RuntimeException("No existe operador para el usuario ID " + userId));
+                .orElseThrow(() -> new RecursoNoEncontradoException("No existe operador para el usuario ID " + userId));
 
         cuota.setCurrentQuota(cuota.getCurrentQuota().add(valor));
         userQuotaPort.save(cuota);
@@ -91,7 +93,7 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
     @Transactional
     public void revertirCupoFondeadorConfirming(Long funderId, Long payerId, BigDecimal valor) {
         FondeadorQuota quota = fondeadorQuotaPort.findByFunderIdAndPayerId(funderId, payerId)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new RecursoNoEncontradoException(
                         "No existe cupo confirming para funderId=" + funderId + " payerId=" + payerId));
 
         BigDecimal actual = Optional.ofNullable(quota.getPayerCurrentQuota()).orElse(BigDecimal.ZERO);
@@ -113,7 +115,7 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
     @Transactional
     public void revertirCupoFondeadorFactoring(Long funderId, Long supplierId, BigDecimal valor) {
         FondeadorQuota quota = fondeadorQuotaPort.findByFunderIdAndSupplierId(funderId, supplierId)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new RecursoNoEncontradoException(
                         "No existe cupo factoring para funderId=" + funderId + " supplierId=" + supplierId));
 
         BigDecimal actual = Optional.ofNullable(quota.getSupplierCurrentQuota()).orElse(BigDecimal.ZERO);

@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
@@ -394,7 +395,7 @@ public class NotificacionServiceImpl implements NotificacionService {
     public void notificarFirmaEndoso(AprobacionRequest aprobacion) {
         Negociacion negociacion = negociacionPort
                 .findById(aprobacion.getIdNegociacion())
-                .orElseThrow(() -> new RuntimeException("Negociación no encontrada"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Negociación no encontrada"));
 
         List<DestinatarioEmail> destinatarios =
                 destinatarioResolver.resolverParaFirmaEndoso(negociacion, aprobacion.getRutEmpresa());
