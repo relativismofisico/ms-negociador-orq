@@ -40,7 +40,7 @@ class SinDefaultsDeBaseDeDatosSpec extends Specification {
         String yml = new File('src/main/resources/application.yml').text
 
         expect:
-        yml.contains('${DB_HOST}')
+        yml.contains('${DB_URL}')
         yml.contains('${DB_PASSWORD}')
         yml.contains('${DB_USER}')
     }
