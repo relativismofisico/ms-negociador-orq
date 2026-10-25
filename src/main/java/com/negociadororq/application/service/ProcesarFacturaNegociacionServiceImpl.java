@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
 import com.negociadororq.application.exception.ConflictoException;
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
@@ -68,7 +69,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         String numero = reqFact.getNumeroFactura();
 
         Factura factura = facturaPort.findByNumeroFactura(numero)
-                .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + numero));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Factura no encontrada: " + numero));
 
         // ==========================================
         // VALIDAR VENCIMIENTO
@@ -113,7 +114,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 .findByUsername(request.getRutOperador())
                 .map(User::getIdeUser)
                 .orElseThrow(() ->
-                        new RuntimeException("Operador no existe"));
+                        new RecursoNoEncontradoException("Operador no existe"));
 
         // ==========================================
         // VALIDAR CUPO OPERADOR
@@ -134,12 +135,12 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 .findByNit(request.getRutEmpresa())
                 .map(Company::getIdeCompany)
                 .orElseThrow(() ->
-                        new RuntimeException("Empresa no encontrada"));
+                        new RecursoNoEncontradoException("Empresa no encontrada"));
 
         EmpresaQuota empresaQuota =
                 empresaQuotaPort.findByCompanyId(companyId)
                         .orElseThrow(() ->
-                                new RuntimeException("EmpresaQuota no encontrada"));
+                                new RecursoNoEncontradoException("EmpresaQuota no encontrada"));
 
         if (empresaQuota.getCurrentQuota().compareTo(valorFactura) < 0) {
             throw new ReglaDeNegocioException("Empresa sin cupo");
@@ -226,21 +227,21 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
             Long funderId = companyPort
                     .findByNit(fon.getRutFondeador())
                     .map(Company::getIdeCompany)
-                    .orElseThrow(() -> new RuntimeException(
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
                             "La empresa fondeadora con NIT " + fon.getRutFondeador()
                                     + " no está registrada en la plataforma"));
 
             Long supplierId = companyPort
                     .findByNit(factura.getRutProveedor())
                     .map(Company::getIdeCompany)
-                    .orElseThrow(() -> new RuntimeException(
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
                             "La empresa proveedora con NIT " + factura.getRutProveedor()
                                     + " no está registrada en la plataforma"));
 
             Long payerId = companyPort
                     .findByNit(factura.getRutPagador())
                     .map(Company::getIdeCompany)
-                    .orElseThrow(() -> new RuntimeException(
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
                             "La empresa pagadora con NIT " + factura.getRutPagador()
                                     + " no está registrada en la plataforma"));
 
@@ -277,7 +278,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                         .findByFunderIdAndPayerIdActivo(
                                 funderId,
                                 payerId)
-                        .orElseThrow(() -> new RuntimeException(
+                        .orElseThrow(() -> new ReglaDeNegocioException(
                                 "El fondeador " + fon.getRutFondeador()
                                         + " no tiene una asignación de cupo activa para este pagador"));
 
@@ -348,7 +349,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         IndirectFunderOffer oferta = indirectFunderOfferPort
                 .findActivaAprobada(funderId, payerId)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ReglaDeNegocioException(
                         "El fondeador " + fon.getRutFondeador()
                                 + " no tiene una asignación de cupo activa para este proveedor"));
 
@@ -375,14 +376,14 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
             Long funderId = companyPort
                     .findByNit(fon.getRutFondeador())
                     .map(Company::getIdeCompany)
-                    .orElseThrow(() -> new RuntimeException(
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
                             "La empresa fondeadora con NIT " + fon.getRutFondeador()
                                     + " no está registrada en la plataforma"));
 
             Long payerId = companyPort
                     .findByNit(factura.getRutPagador())
                     .map(Company::getIdeCompany)
-                    .orElseThrow(() -> new RuntimeException(
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
                             "La empresa pagadora con NIT " + factura.getRutPagador()
                                     + " no está registrada en la plataforma"));
 
@@ -391,7 +392,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 Long supplierId = companyPort
                         .findByNit(factura.getRutProveedor())
                         .map(Company::getIdeCompany)
-                        .orElseThrow(() -> new RuntimeException(
+                        .orElseThrow(() -> new RecursoNoEncontradoException(
                                 "La empresa proveedora con NIT " + factura.getRutProveedor()
                                         + " no está registrada en la plataforma"));
 
@@ -416,7 +417,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                                 .findByFunderIdAndPayerId(
                                         funderId,
                                         payerId)
-                                .orElseThrow(() -> new RuntimeException(
+                                .orElseThrow(() -> new ReglaDeNegocioException(
                                         "El fondeador " + fon.getRutFondeador()
                                                 + " no tiene una asignación de cupo para este pagador"));
 
@@ -467,7 +468,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         IndirectFunderOffer oferta = indirectFunderOfferPort
                 .findActivaAprobada(funderId, payerId)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ReglaDeNegocioException(
                         "No se encontró la oferta de fondeo indirecta al descontar cupo"));
 
         int filas = indirectFunderOfferSupplierQuotaPort.descontarCupo(oferta.getId(), supplierId, valorFactura);

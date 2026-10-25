@@ -199,6 +199,27 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         1 * negociacionPort.save(_) >> { args -> args[0] }
     }
 
+    def "el motivo de negocio de una factura rechazada llega al cliente con su texto"() {
+        given:
+        def fn1 = buildFn("FECI010", "PROV-001", "PAG-001")
+
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findByNumeroFactura("FECI010") >> Optional.of(buildFactura("FECI010", "PROV-001", "PAG-001"))
+
+        procesarFacturaNegociacionService.procesarFactura(_, fn1) >> {
+            throw new com.negociadororq.application.exception.RecursoNoEncontradoException("Operador no existe")
+        }
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1])
+
+        when:
+        def resultado = service.crearNegociacion(request)
+
+        then:
+        resultado.errores == ["Operador no existe"]
+        1 * negociacionPort.save(_) >> { args -> args[0] }
+    }
+
     def "una factura rechazada por un error que no es del dominio informa un motivo fijo, sin el texto de la excepción"() {
         given:
         def fn1 = buildFn("FECI009", "PROV-001", "PAG-001")

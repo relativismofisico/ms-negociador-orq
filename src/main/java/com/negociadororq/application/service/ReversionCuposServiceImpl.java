@@ -3,6 +3,7 @@ package com.negociadororq.application.service;
 import java.math.BigDecimal;
 import java.util.Locale;
 
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.EndosoPatchOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
@@ -54,7 +55,7 @@ public class ReversionCuposServiceImpl
                 facturaPort
                         .findByNumeroFactura(numeroFactura)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new RecursoNoEncontradoException(
                                         "Factura no encontrada"));
 
         // ==========================================
@@ -65,7 +66,7 @@ public class ReversionCuposServiceImpl
                 negociacionPort
                         .findByNumeroFactura(numeroFactura)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new RecursoNoEncontradoException(
                                         "Negociación no encontrada"));
 
         // ==========================================
@@ -106,7 +107,7 @@ public class ReversionCuposServiceImpl
                         .findByUsername(actorId)
                         .map(User::getIdeUser)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new RecursoNoEncontradoException(
                                         "Usuario no encontrado"));
 
         cupoReversionService.revertirCupoUsuario(
@@ -122,7 +123,7 @@ public class ReversionCuposServiceImpl
                         .findByNit(negociacion.getRutEmpresa())
                         .map(Company::getIdeCompany)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new RecursoNoEncontradoException(
                                         "Empresa no encontrada"));
 
         cupoReversionService.revertirCupoEmpresa(
@@ -161,19 +162,19 @@ public class ReversionCuposServiceImpl
         for (FondeadorAsignacion fon : facturaNegociada.getFondeadores()) {
             Long funderId = companyPort.findByNit(fon.getRutFondeador())
                     .map(Company::getIdeCompany)
-                    .orElseThrow(() -> new RuntimeException("Fondeador no encontrado"));
+                    .orElseThrow(() -> new RecursoNoEncontradoException("Fondeador no encontrado"));
 
             if ("FACTORING".equals(tipoOperacion)) {
                 Long supplierId = companyPort.findByNit(factura.getRutProveedor())
                         .map(Company::getIdeCompany)
-                        .orElseThrow(() -> new RuntimeException("Proveedor no encontrado"));
+                        .orElseThrow(() -> new RecursoNoEncontradoException("Proveedor no encontrado"));
                 cupoReversionService.revertirCupoFondeadorFactoring(funderId, supplierId, valor);
             }
 
             if ("CONFIRMING".equals(tipoOperacion)) {
                 Long payerId = companyPort.findByNit(factura.getRutPagador())
                         .map(Company::getIdeCompany)
-                        .orElseThrow(() -> new RuntimeException("Pagador no encontrado"));
+                        .orElseThrow(() -> new RecursoNoEncontradoException("Pagador no encontrado"));
                 cupoReversionService.revertirCupoFondeadorConfirming(funderId, payerId, valor);
             }
         }
