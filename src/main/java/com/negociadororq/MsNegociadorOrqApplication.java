@@ -1,5 +1,6 @@
 package com.negociadororq;
 
+import com.negociadororq.infrastructure.config.ConfiguracionObligatoria;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -15,7 +16,9 @@ public class MsNegociadorOrqApplication {
      * @param args argumentos de línea de comandos, delegados a Spring Boot
      */
     public static void main(String[] args) {
-        SpringApplication.run(MsNegociadorOrqApplication.class, args);
+        SpringApplication app = new SpringApplication(MsNegociadorOrqApplication.class);
+        app.addListeners(new ConfiguracionObligatoria());
+        app.run(args);
     }
 }
 

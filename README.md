@@ -145,9 +145,12 @@ No se detectó `docker-compose.yml` en el repositorio.
 
 ## Base de datos: variables obligatorias
 
-`DB_HOST`, `DB_PASSWORD`, `DB_USER` **no tienen valor por defecto** en ningún `application*.yml`
-(ms-security-util#52): si falta alguna, el servicio no arranca (`Could not resolve placeholder`), en vez de conectarse
-en silencio a una base compartida. Los nombres están en `.env.example` (sin valores). CI y el e2e local las dan con
+`DB_URL`, `DB_PASSWORD`, `DB_USER` **no tienen valor por defecto** en ningún `application*.yml`
+(ms-security-util#52): si falta alguna o está vacía, el servicio no arranca, en vez de conectarse en silencio a una
+base compartida. La validación corre antes de abrir el pool de conexiones y el error nombra la **variable**
+(`falta la variable de entorno DB_URL`, `la variable de entorno DB_PASSWORD está vacía`), nunca su valor.
+`DB_URL` es la URL JDBC completa: el host, el puerto, la base y los parámetros (en qa/prod `useSSL=true&requireSSL=true`)
+ya no están fijados en el yml. Los nombres están en `.env.example` (sin valores). CI y el e2e local las dan con
 `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD`, que tienen precedencia sobre el yml.
 
 **En local, con MySQL en Docker** (usuario y contraseña propios de tu máquina, nunca los de un ambiente compartido):
@@ -155,7 +158,7 @@ en silencio a una base compartida. Los nombres están en `.env.example` (sin val
 ```bash
 docker run -d --name mysql-local -p 3306:3306 -e MYSQL_DATABASE=<base> \
   -e MYSQL_USER=<usuario> -e MYSQL_PASSWORD=<contraseña> -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.0
-export DB_HOST=localhost:3306
+export DB_URL="jdbc:mysql://localhost:3306/<base>?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
 export DB_USER=<usuario> DB_PASSWORD=<contraseña>
 ./gradlew bootRun
 ```
@@ -172,7 +175,7 @@ Las variables marcadas con `*` son **obligatorias en producción**.
 
 | Variable | Descripción | Ejemplo |
 |---|---|---|
-| `DB_HOST` * | Host de la base de datos MySQL | `<host-mysql>` (lo entrega el despliegue) |
+| `DB_URL` * | URL JDBC completa de MySQL (host, puerto, base y parámetros) | `jdbc:mysql://<host-mysql>:3306/dbcompany?useSSL=true&requireSSL=true&serverTimezone=UTC` (lo entrega el despliegue) |
 | `DB_USER` * | Usuario MySQL | `<usuario>` (gestor de secretos del ambiente) |
 | `DB_PASSWORD` * | Contraseña MySQL | `<contraseña>` (gestor de secretos del ambiente) |
 | `MONGO_URI` * | URI de conexión MongoDB | `<uri-mongodb>` (gestor de secretos del ambiente) |
@@ -209,8 +212,8 @@ y rotar la contraseña no requiere un commit. Los nombres están en `.env.exampl
 | `LIQUIDADOR_SERVICE_USERNAME` | `security.service-credentials.ms-liquidador-neg.username` | Usuario con el que llama ms-liquidador-neg (su `FEIGN_USERNAME`). |
 | `LIQUIDADOR_SERVICE_PASSWORD_HASH` | `security.service-credentials.ms-liquidador-neg.password` | Hash bcrypt (`$2a$`/`$2b$`/`$2y$`, 60 caracteres) de la contraseña que ms-liquidador-neg tiene en `FEIGN_PASSWORD`. |
 
-- Si falta alguna, si el usuario está vacío o si el hash no tiene formato bcrypt, la aplicación no arranca. El error
-  nombra la propiedad o la variable, nunca el valor.
+- Si falta alguna, si está vacía o si el hash no tiene formato bcrypt, la aplicación no arranca. El error nombra la
+  variable (`LIQUIDADOR_SERVICE_PASSWORD_HASH no es un hash bcrypt`), nunca el valor.
 - La contraseña en texto plano solo la tiene ms-liquidador-neg. Aquí solo va su hash.
 - Para rotarla, el hash nuevo se despliega aquí y la contraseña nueva en ms-liquidador-neg **en la misma ventana**:
   desde que este servicio tiene el hash nuevo, la contraseña vieja responde 401.
@@ -297,7 +300,7 @@ facturas:
 
 | Propiedad | Desarrollo | QA | Producción |
 |---|---|---|---|
-| `spring.datasource.url` | `jdbc:mysql://${DB_HOST}/dbcompany` (hereda de `application.yml`) | `jdbc:mysql://${DB_HOST}/dbcompany` | `jdbc:mysql://${DB_HOST}/dbcompany?useSSL=true` |
+| `spring.datasource.url` | `${DB_URL}` (hereda de `application.yml`) | `${DB_URL}` | `${DB_URL}` (con `useSSL=true&requireSSL=true`) |
 | `spring.data.mongodb.uri` | `mongodb://localhost:27017/DB_Facturas` | `${MONGO_URI}` | `${MONGO_URI}` |
 | `spring.kafka.bootstrap-servers` | `localhost:9092` | `${KAFKA_SERVERS}` | `${KAFKA_SERVERS}` |
 | `spring.jpa.hibernate.ddl-auto` | `update` | `update` | `validate` |
@@ -1368,7 +1371,7 @@ graph LR
 | Propiedad | Valor |
 |---|---|
 | Puerto | `8083` |
-| MySQL | `${DB_HOST}` (con MySQL en Docker, `localhost`), base `dbcompany`; usuario y contraseña por `DB_USER` / `DB_PASSWORD` (ver [Base de datos: variables obligatorias](#base-de-datos-variables-obligatorias)) |
+| MySQL | `${DB_URL}` (con MySQL en Docker, `jdbc:mysql://localhost:3306/dbcompany?...`); usuario y contraseña por `DB_USER` / `DB_PASSWORD` (ver [Base de datos: variables obligatorias](#base-de-datos-variables-obligatorias)) |
 | MongoDB | `mongodb://localhost:27017/DB_Facturas` |
 | Kafka | `localhost:9092` |
 | Swagger UI | Habilitado en `http://localhost:8083/swagger-ui.html` |
@@ -1379,7 +1382,7 @@ graph LR
 
 | Propiedad | Valor |
 |---|---|
-| MySQL | `${DB_HOST}/dbcompany` (credenciales por variable de entorno) |
+| MySQL | `${DB_URL}` (URL y credenciales por variable de entorno) |
 | MongoDB | `${MONGO_URI}` / `${MONGO_DB}` (defecto: `DB_Facturas_QA`) |
 | Kafka | `${KAFKA_SERVERS}` (defecto: `localhost:9092`) |
 | Swagger UI | Habilitado |
@@ -1389,7 +1392,7 @@ graph LR
 
 | Propiedad | Valor |
 |---|---|
-| MySQL | `${DB_HOST}/dbcompany?useSSL=true` (todas las credenciales por variables de entorno) |
+| MySQL | `${DB_URL}`, con `useSSL=true&requireSSL=true` (URL y credenciales por variables de entorno) |
 | MongoDB | `${MONGO_URI}` (obligatorio) |
 | Kafka | `${KAFKA_SERVERS}` (obligatorio) |
 | Swagger UI | **Deshabilitado** (`springdoc.swagger-ui.enabled: false`) |
