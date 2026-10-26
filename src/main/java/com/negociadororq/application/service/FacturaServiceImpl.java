@@ -2,6 +2,7 @@ package com.negociadororq.application.service;
 
 import java.util.List;
 
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.domain.model.Factura;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,7 @@ public class FacturaServiceImpl implements FacturaService {
     @Transactional
     public void actualizarEstadoFirma(String numeroFactura, String nuevoEstado) {
         Factura factura = facturaPort.findByNumeroFactura(numeroFactura)
-                .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + numeroFactura));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Factura no encontrada: " + numeroFactura));
 
         String estadoAnterior = factura.getEstadoFirma();
         factura.setEstadoFirma(nuevoEstado);
@@ -54,7 +55,7 @@ public class FacturaServiceImpl implements FacturaService {
     @Override
     public Factura obtenerPorNumero(String numeroFactura) {
         return facturaPort.findByNumeroFactura(numeroFactura)
-                .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + numeroFactura));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Factura no encontrada: " + numeroFactura));
     }
 
     @Override

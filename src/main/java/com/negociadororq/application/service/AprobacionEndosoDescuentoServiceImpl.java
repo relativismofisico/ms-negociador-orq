@@ -468,7 +468,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     public void revertirCupos(FacturaNegociada factura, Operacion tipoOperacion, String rutEmpresa, String rutOperador) {
 
         Factura facturaDb = facturaPort.findByNumeroFactura(factura.getNumeroFactura())
-                .orElseThrow(() -> new RuntimeException("Factura no encontrada para reversión"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Factura no encontrada para reversión"));
 
         BigDecimal valorFactura = Optional.ofNullable(facturaDb.getValorNetoFactura())
                 .orElse(facturaDb.getValorFactura());
@@ -479,13 +479,13 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
         Long userId = userPort.findByUsername(rutOperador)
                 .map(User::getIdeUser)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         cupoReversionService.revertirCupoUsuario(userId, valorFactura);
 
         Long companyId = companyPort.findByNit(rutEmpresa)
                 .map(Company::getIdeCompany)
-                .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Empresa no encontrada"));
 
         cupoReversionService.revertirCupoEmpresa(companyId, valorFactura);
 
@@ -493,19 +493,19 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             for (FondeadorAsignacion fon : factura.getFondeadores()) {
                 Long funderId = companyPort.findByNit(fon.getRutFondeador())
                         .map(Company::getIdeCompany)
-                        .orElseThrow(() -> new RuntimeException("Fondeador no encontrado: " + fon.getRutFondeador()));
+                        .orElseThrow(() -> new RecursoNoEncontradoException("Fondeador no encontrado: " + fon.getRutFondeador()));
 
                 if ("FACTORING".equalsIgnoreCase(tipoOperacion.getTipo())) {
                     Long supplierId = companyPort.findByNit(facturaDb.getRutProveedor())
                             .map(Company::getIdeCompany)
-                            .orElseThrow(() -> new RuntimeException("Proveedor no encontrado"));
+                            .orElseThrow(() -> new RecursoNoEncontradoException("Proveedor no encontrado"));
                     cupoReversionService.revertirCupoFondeadorFactoring(funderId, supplierId, valorFactura);
                 }
 
                 if ("CONFIRMING".equalsIgnoreCase(tipoOperacion.getTipo())) {
                     Long payerId = companyPort.findByNit(facturaDb.getRutPagador())
                             .map(Company::getIdeCompany)
-                            .orElseThrow(() -> new RuntimeException("Pagador no encontrado"));
+                            .orElseThrow(() -> new RecursoNoEncontradoException("Pagador no encontrado"));
                     cupoReversionService.revertirCupoFondeadorConfirming(funderId, payerId, valorFactura);
                 }
             }

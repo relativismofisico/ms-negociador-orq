@@ -1,6 +1,7 @@
 package com.negociadororq.application.service;
 
 
+import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.EndosoOutputPort;
 import com.negociadororq.application.port.output.PdfFirmaOutputPort;
@@ -28,7 +29,7 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
 
         Endoso endoso = endosoPort
                 .findByNegociacionIdAndNumeroFactura(idNegociacion, factura.getNumeroFactura())
-                .orElseThrow(() -> new RuntimeException("Endoso no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Endoso no encontrado"));
 
         byte[] pdfActual = endoso.getDocumentoPdf();
 

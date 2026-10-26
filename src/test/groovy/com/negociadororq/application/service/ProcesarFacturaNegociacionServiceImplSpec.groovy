@@ -315,6 +315,24 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         ex.message.contains("sin cupo")
     }
 
+    def "procesarFactura con un operador inexistente lanza una excepción del dominio con el mismo texto (llega al cliente)"() {
+        given:
+        def factura = buildFactura("FECI008", "PROV-001", "PAG-001")
+        facturaPort.findByNumeroFactura("FECI008") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida("FECI008", null) >>
+                ValidacionFacturaResponseDto.builder().valida(true).build()
+        userPort.findByUsername("OP-NO-EXISTE") >> Optional.empty()
+
+        def request = buildRequest("FACTORING", "PROV-001", "OP-NO-EXISTE")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI008"))
+
+        then:
+        def ex = thrown(com.negociadororq.application.exception.RecursoNoEncontradoException)
+        ex.message == "Operador no existe"
+    }
+
     // ─── empresa sin cupo ─────────────────────────────────────────────────────
 
     def "procesarFactura lanza RuntimeException cuando empresa sin cupo"() {
