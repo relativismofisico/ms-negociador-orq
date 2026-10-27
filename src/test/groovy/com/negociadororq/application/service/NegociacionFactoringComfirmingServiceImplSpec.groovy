@@ -4,6 +4,7 @@ import com.negociadororq.application.dto.NegociacionRequestDto
 import com.negociadororq.application.exception.AccionNoPermitidaException
 import com.negociadororq.application.exception.PeticionInvalidaException
 import com.negociadororq.application.exception.RecursoNoEncontradoException
+import com.negociadororq.application.exception.ReglaDeNegocioException
 import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.CompanyOperationOutputPort
 import com.negociadororq.application.port.output.CompanyOutputPort
@@ -105,10 +106,15 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         NegociacionRequestDto.builder()
                 .rutEmpresa(rutEmpresa)
                 .rolEmpresa(rolEmpresa)
-                .tipoOperacion(new Operacion(tipo, "DESC"))
+                .tipoOperacion(new Operacion(tipo, claseDe(tipo)))
                 .rutOperador(rutOp)
                 .facturas(facturas)
                 .build()
+    }
+
+    // Una clase válida del tipo: crearNegociacion rechaza las que no le corresponden.
+    static String claseDe(String tipo) {
+        tipo == "CONFIRMING" ? "TRADICIONAL" : "ANTICIPO"
     }
 
     def buildFn(String numero, String rutProv, String rutPag) {
@@ -620,5 +626,67 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
 
         then:
         resultado.estado == EstadoNegociacion.PENDIENTE.name()
+    }
+
+    // ─── clase de operación según el tipo ─────────────────────────────────────
+
+    def "crearNegociacion rechaza con 422 una clase que no pertenece al tipo (#clase en #tipo)"() {
+        given:
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        def request = NegociacionRequestDto.builder()
+                .rutEmpresa("PROV-001")
+                .rolEmpresa("PROVEEDOR")
+                .tipoOperacion(new Operacion(tipo, clase))
+                .rutOperador("OP-001")
+                .facturas([buildFn("F-1", "PROV-001", "PAG-001")])
+                .build()
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        def ex = thrown(ReglaDeNegocioException)
+        ex.codigo == "CLASE_OPERACION_INVALIDA"
+        ex.message == mensaje
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * negociacionPort.save(_)
+
+        where:
+        tipo         | clase         || mensaje
+        "FACTORING"  | "TRADICIONAL" || "La clase de operación TRADICIONAL no es válida para FACTORING. Clases válidas: ANTICIPO, CON_RESPONSABILIDAD, SIN_DESCUENTO, SIN_RESPONSABILIDAD."
+        "CONFIRMING" | "ANTICIPO"    || "La clase de operación ANTICIPO no es válida para CONFIRMING. Clases válidas: TRADICIONAL, PRONTO_PAGO, SIN_RECURSO, COSTO_COMPARTIDO, CON_GARANTIA."
+        "factoring"  | "INVENTADA"   || "La clase de operación INVENTADA no es válida para FACTORING. Clases válidas: ANTICIPO, CON_RESPONSABILIDAD, SIN_DESCUENTO, SIN_RESPONSABILIDAD."
+        "CONFIRMING" | null          || "La clase de operación null no es válida para CONFIRMING. Clases válidas: TRADICIONAL, PRONTO_PAGO, SIN_RECURSO, COSTO_COMPARTIDO, CON_GARANTIA."
+    }
+
+    def "crearNegociacion acepta toda clase válida de su tipo, sin importar mayúsculas (#clase en #tipo)"() {
+        given:
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        def request = NegociacionRequestDto.builder()
+                .rutEmpresa("PROV-001")
+                .rolEmpresa("PROVEEDOR")
+                .tipoOperacion(new Operacion(tipo, clase))
+                .rutOperador("OP-001")
+                .facturas([])
+                .build()
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        notThrown(ReglaDeNegocioException)
+
+        where:
+        tipo         | clase
+        "FACTORING"  | "ANTICIPO"
+        "FACTORING"  | "CON_RESPONSABILIDAD"
+        "FACTORING"  | "SIN_DESCUENTO"
+        "FACTORING"  | "SIN_RESPONSABILIDAD"
+        "FACTORING"  | "anticipo"
+        "CONFIRMING" | "TRADICIONAL"
+        "CONFIRMING" | "PRONTO_PAGO"
+        "CONFIRMING" | "SIN_RECURSO"
+        "CONFIRMING" | "COSTO_COMPARTIDO"
+        "CONFIRMING" | "CON_GARANTIA"
     }
 }
