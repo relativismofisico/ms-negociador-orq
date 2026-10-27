@@ -1,5 +1,7 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
@@ -8,36 +10,86 @@ import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.infrastructure.persistence.entity.FondeadorQuotaEntity;
 import com.negociadororq.infrastructure.persistence.repository.FondeadorQuotaRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 /**
  * Implementación de {@link FondeadorQuotaOutputPort}.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class FondeadorQuotaAdapter implements FondeadorQuotaOutputPort {
 
+    private static final String ESTADO_APROBADO = "APROBADO";
+
     private final FondeadorQuotaRepository repository;
+
+    // La tabla funder admite varias filas por par (una RECHAZADA o PENDIENTE junto a la APROBADA, o
+    // una asignación nueva tras desactivar la anterior). Mismo criterio que ms-liquidador-neg
+    // (FunderRepositoryAdapter) y ms-registroempresa-neg: la asignación efectiva es la APROBADO; si
+    // hay más de una, la más reciente (id mayor). Sin ninguna APROBADO se devuelve la fila más
+    // reciente, para que el llamador siga distinguiendo "existe pero no está aprobada"
+    // (validarFondeadorAprobado), igual que cuando el par tenía una sola fila.
 
     @Override
     public Optional<FondeadorQuota> findByFunderIdAndPayerId(Long funderId, Long payerId) {
-        return repository.findByFunderIdAndPayerId(funderId, payerId).map(this::toDomain);
+        return elegir(repository.findByFunderIdAndPayerIdOrderByIdDesc(funderId, payerId), false,
+                "payerId", funderId, payerId).map(this::toDomain);
     }
 
     @Override
     public Optional<FondeadorQuota> findByFunderIdAndSupplierId(Long funderId, Long supplierId) {
-        return repository.findByFunderIdAndSupplierId(funderId, supplierId).map(this::toDomain);
+        return elegir(repository.findByFunderIdAndSupplierIdOrderByIdDesc(funderId, supplierId), false,
+                "supplierId", funderId, supplierId).map(this::toDomain);
     }
 
     @Override
     public Optional<FondeadorQuota> findByFunderIdAndPayerIdActivo(Long funderId, Long payerId) {
-        return repository.findByFunderIdAndPayerIdAndActivoTrue(funderId, payerId).map(this::toDomain);
+        return elegir(repository.findByFunderIdAndPayerIdOrderByIdDesc(funderId, payerId), true,
+                "payerId", funderId, payerId).map(this::toDomain);
     }
 
     @Override
     public Optional<FondeadorQuota> findByFunderIdAndSupplierIdActivo(Long funderId, Long supplierId) {
-        return repository.findByFunderIdAndSupplierIdAndActivoTrue(funderId, supplierId).map(this::toDomain);
+        return elegir(repository.findByFunderIdAndSupplierIdOrderByIdDesc(funderId, supplierId), true,
+                "supplierId", funderId, supplierId).map(this::toDomain);
+    }
+
+    /**
+     * Elige la asignación efectiva de un par entre sus filas (ordenadas de la más reciente a la más
+     * antigua).
+     *
+     * @param filas        todas las filas del par, por id descendente
+     * @param soloActivas  {@code true} al validar una negociación NUEVA: una asignación desactivada no
+     *                     cuenta. {@code false} en reversiones y descuentos de una negociación ya en
+     *                     curso, que deben encontrar la fila aunque se haya desactivado después (entre
+     *                     las APROBADO se prefiere la activa)
+     * @param campoPar     nombre del segundo id del par, solo para el log
+     * @param funderId     id de la empresa fondeadora, solo para el log
+     * @param otroId       id de la empresa pagadora o proveedora, solo para el log
+     * @return la APROBADO elegida; si no hay ninguna, la fila más reciente; vacío si no hay filas
+     */
+    private Optional<FondeadorQuotaEntity> elegir(List<FondeadorQuotaEntity> filas, boolean soloActivas,
+            String campoPar, Long funderId, Long otroId) {
+        List<FondeadorQuotaEntity> candidatas = filas;
+        if (soloActivas) {
+            candidatas = filas.stream().filter(f -> Boolean.TRUE.equals(f.getActivo())).toList();
+        }
+        List<FondeadorQuotaEntity> aprobadas = candidatas.stream()
+                .filter(f -> ESTADO_APROBADO.equalsIgnoreCase(f.getEstado()))
+                .sorted(Comparator.comparing((FondeadorQuotaEntity f) -> !Boolean.TRUE.equals(f.getActivo()))
+                        .thenComparing(FondeadorQuotaEntity::getId, Comparator.reverseOrder()))
+                .toList();
+        if (aprobadas.isEmpty()) {
+            return candidatas.stream().findFirst();
+        }
+        if (aprobadas.size() > 1) {
+            log.warn("[FondeadorQuotaAdapter] {} asignaciones APROBADO para funderId={} {}={}; se usa id={}",
+                    aprobadas.size(), funderId, campoPar, otroId, aprobadas.get(0).getId());
+        }
+        return Optional.of(aprobadas.get(0));
     }
 
     @Override
