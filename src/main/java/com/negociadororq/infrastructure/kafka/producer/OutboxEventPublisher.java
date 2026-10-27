@@ -59,7 +59,8 @@ public class OutboxEventPublisher {
             throw new IllegalStateException("No se encontró topic registrado para evento: " + event.getClass().getName());
         }
 
-        log.info("Publicando evento en topic {} -> {}", topic, event);
+        // Solo el tipo de evento y el topic: el evento completo puede llevar destinatarios y data de un correo.
+        log.info("Publicando evento {} en topic {}", event.getClass().getSimpleName(), topic);
         kafkaTemplate.send(topic, event);
     }
 
