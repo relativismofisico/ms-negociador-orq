@@ -167,6 +167,17 @@ El perfil `dev` también las toma del entorno: ya no trae usuario ni contraseña
 En el IDE, las mismas variables en la configuración de ejecución. Para dev/qa/prod las entrega el despliegue
 (variables de entorno o gestor de secretos); nunca van en el repositorio.
 
+### Timeouts de la base de datos (opcionales)
+
+| Variable | Qué acota | Por defecto |
+|---|---|---|
+| `DB_CONNECT_TIMEOUT_MS` | Tiempo máximo (ms) para abrir la conexión TCP con MySQL (`connectTimeout` del driver) | `10000` |
+| `DB_SOCKET_TIMEOUT_MS` | Tiempo máximo (ms) de espera de cada lectura sobre una conexión abierta (`socketTimeout` del driver) | `30000` |
+
+Se pasan al driver por `spring.datasource.hikari.data-source-properties`. `connection-timeout` de Hikari (5 s) solo
+acota la espera de una conexión libre del pool: sin `socketTimeout`, una BD que deja de responder sin cerrar la
+conexión dejaba la petición colgada. El socket timeout debe ser mayor que la consulta legítima más lenta.
+
 ## 4. Configuración
 
 ### Variables de Entorno
