@@ -6,6 +6,9 @@ import com.negociadororq.infrastructure.persistence.repository.UserRepository
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import org.springframework.security.oauth2.jwt.BadJwtException
+import org.springframework.dao.QueryTimeoutException
+import org.springframework.jdbc.CannotGetJdbcConnectionException
+import org.springframework.transaction.CannotCreateTransactionException
 import spock.lang.Specification
 
 import javax.crypto.SecretKey
@@ -149,5 +152,23 @@ class JjwtDecoderSpec extends Specification {
             firma = enc.encodeToString(mac.doFinal("${header}.${payload}".getBytes("UTF-8")))
         }
         "${header}.${payload}.${firma}"
+    }
+
+    def "BD caída al comprobar el usuario (#falla.class.simpleName): ValidacionTokenNoDisponibleException, no BadJwtException (401)"() {
+        given:
+        userRepository.findByUsername("usuario@test.com") >> { throw falla }
+
+        when:
+        decoder.decode(buildToken("access"))
+
+        then:
+        def ex = thrown(ValidacionTokenNoDisponibleException)
+        ex.cause.is(falla)
+        !(ex instanceof org.springframework.security.oauth2.jwt.JwtException)
+
+        where:
+        falla << [new CannotGetJdbcConnectionException("detalle-interno"),
+                  new QueryTimeoutException("detalle-interno"),
+                  new CannotCreateTransactionException("detalle-interno")]
     }
 }

@@ -28,6 +28,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -84,7 +85,10 @@ public class SecurityConfig {
                     "/swagger-ui.html",
                     "/v3/api-docs/**",
                     "/actuator/health",
-                    "/actuator/health/**"
+                    "/actuator/health/**",
+                    // Reenvío de errores del contenedor: sin esto, un 500 de cualquier endpoint se reenvía a /error,
+                    // cae en anyRequest().authenticated() y el cliente recibe un 401 (ms-security-util#66).
+                    "/error"
                 ).permitAll()
                 // Todo lo demás requiere un JWT válido; @PreAuthorize gestiona la autorización fina
                 .anyRequest().authenticated()
@@ -106,6 +110,10 @@ public class SecurityConfig {
                 .authenticationEntryPoint(authenticationEntryPoint)
                 .accessDeniedHandler(accessDeniedHandler)
             )
+
+            // BD caída al comprobar el usuario del token (JjwtDecoder): 503, no 401.
+            .addFilterBefore(new ValidacionTokenNoDisponibleFilter(authenticationEntryPoint),
+                BearerTokenAuthenticationFilter.class)
 
             // Límite de solicitudes por IP lo más temprano posible en la cadena,
             // antes de intentar Basic Auth o validar el Bearer JWT.

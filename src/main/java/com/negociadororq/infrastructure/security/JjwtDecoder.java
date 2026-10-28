@@ -14,10 +14,12 @@ import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.transaction.TransactionException;
 
 /**
  * Decodificador JWT compatible con el ms-security que genera los tokens.
@@ -91,7 +93,14 @@ public class JjwtDecoder implements JwtDecoder {
         // la misma que administra ms-security-util) — un usuario borrado no debe seguir
         // operando solo porque su JWT no haya expirado todavía. Mismo criterio ya aplicado
         // en ms-security-util.
-        if (userRepository.findByUsername(claims.getSubject()).isEmpty()) {
+        boolean usuarioExiste;
+        try {
+            usuarioExiste = userRepository.findByUsername(claims.getSubject()).isPresent();
+        } catch (DataAccessException | TransactionException ex) {
+            // Fallo de infraestructura, no un token inválido: 503 en ValidacionTokenNoDisponibleFilter, no 401.
+            throw new ValidacionTokenNoDisponibleException(ex);
+        }
+        if (!usuarioExiste) {
             log.warn("Usuario del token ya no existe: {}", claims.getSubject());
             throw new BadJwtException("El usuario del token ya no existe.");
         }
