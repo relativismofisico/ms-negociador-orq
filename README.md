@@ -1548,3 +1548,13 @@ El flujo de OTP devuelve `202 Accepted` inmediatamente. La validación y aprobac
 | Strategy | Lógica diferenciada por tipo de operación (FACTORING vs CONFIRMING) |
 | Chain of Responsibility | Validación en cascada de cupos |
 | Observer (via Kafka) | Reacción a eventos de dominio en servicios externos |
+## Salud para el orquestador
+
+Las sondas del orquestador (Kubernetes, ECS, balanceador) deben usar los grupos de Spring Boot, no el health agregado:
+
+| Sonda | Ruta | Qué comprueba |
+|---|---|---|
+| Liveness | `/actuator/health/liveness` | Solo el estado interno de la aplicación (`livenessState`). **No consulta la BD ni Redis**: una caída de infraestructura no debe reiniciar el contenedor. |
+| Readiness | `/actuator/health/readiness` | El estado de disponibilidad (`readinessState`) para dejar o sacar la instancia del tráfico. |
+
+`/actuator/health` (agregado) sí consulta MySQL, Redis y MongoDB y responde 503 si alguna no contesta: sirve para diagnóstico y monitoreo, no como liveness.
