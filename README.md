@@ -167,6 +167,17 @@ El perfil `dev` también las toma del entorno: ya no trae usuario ni contraseña
 En el IDE, las mismas variables en la configuración de ejecución. Para dev/qa/prod las entrega el despliegue
 (variables de entorno o gestor de secretos); nunca van en el repositorio.
 
+### Timeouts de la base de datos (opcionales)
+
+| Variable | Qué acota | Por defecto |
+|---|---|---|
+| `DB_CONNECT_TIMEOUT_MS` | Tiempo máximo (ms) para abrir la conexión TCP con MySQL (`connectTimeout` del driver) | `10000` |
+| `DB_SOCKET_TIMEOUT_MS` | Tiempo máximo (ms) de espera de cada lectura sobre una conexión abierta (`socketTimeout` del driver) | `30000` |
+
+Se pasan al driver por `spring.datasource.hikari.data-source-properties`. `connection-timeout` de Hikari (5 s) solo
+acota la espera de una conexión libre del pool: sin `socketTimeout`, una BD que deja de responder sin cerrar la
+conexión dejaba la petición colgada. El socket timeout debe ser mayor que la consulta legítima más lenta.
+
 ## 4. Configuración
 
 ### Variables de Entorno
@@ -1537,3 +1548,13 @@ El flujo de OTP devuelve `202 Accepted` inmediatamente. La validación y aprobac
 | Strategy | Lógica diferenciada por tipo de operación (FACTORING vs CONFIRMING) |
 | Chain of Responsibility | Validación en cascada de cupos |
 | Observer (via Kafka) | Reacción a eventos de dominio en servicios externos |
+## Salud para el orquestador
+
+Las sondas del orquestador (Kubernetes, ECS, balanceador) deben usar los grupos de Spring Boot, no el health agregado:
+
+| Sonda | Ruta | Qué comprueba |
+|---|---|---|
+| Liveness | `/actuator/health/liveness` | Solo el estado interno de la aplicación (`livenessState`). **No consulta la BD ni Redis**: una caída de infraestructura no debe reiniciar el contenedor. |
+| Readiness | `/actuator/health/readiness` | El estado de disponibilidad (`readinessState`) para dejar o sacar la instancia del tráfico. |
+
+`/actuator/health` (agregado) sí consulta MySQL, Redis y MongoDB y responde 503 si alguna no contesta: sirve para diagnóstico y monitoreo, no como liveness.

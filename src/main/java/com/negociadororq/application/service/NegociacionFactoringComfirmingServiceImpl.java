@@ -17,6 +17,7 @@ import com.negociadororq.application.exception.AccionNoPermitidaException;
 import com.negociadororq.application.exception.NegociadorException;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
+import com.negociadororq.application.exception.ReglaDeNegocioException;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOperationOutputPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
@@ -44,6 +45,13 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
     /** Motivo de rechazo de una factura cuando el error no es del dominio: el detalle queda en el log. */
     static final String MENSAJE_ERROR_FACTURA = "No se pudo procesar la factura por un error interno.";
+
+    // Clases de operación de cada tipo: las mismas para las que ms-liquidador-neg tiene
+    // calculadora (GET /liquidar/clases). Una clase de otro tipo se negociaba y fallaba
+    // recién al liquidar.
+    private static final Map<String, List<String>> CLASES_POR_TIPO = Map.of(
+            "FACTORING", List.of("ANTICIPO", "CON_RESPONSABILIDAD", "SIN_DESCUENTO", "SIN_RESPONSABILIDAD"),
+            "CONFIRMING", List.of("TRADICIONAL", "PRONTO_PAGO", "SIN_RECURSO", "COSTO_COMPARTIDO", "CON_GARANTIA"));
 
     private final FacturaOutputPort facturaPort;
     private final NegociacionOutputPort negociacionPort;
@@ -80,6 +88,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "No existe operador con username " + request.getRutOperador(), "OPERADOR_NO_ENCONTRADO"));
 
+        validarClaseSegunTipo(request);
         validarOperacionHabilitada(request);
         validarUnicaContraparte(request);
 
@@ -196,6 +205,29 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         response.setErrores(allErrores);
 
         return response;
+    }
+
+    /**
+     * Rechaza toda la solicitud si la clase de operación no pertenece a su tipo (p. ej.
+     * TRADICIONAL, que es de CONFIRMING, en una FACTORING). Un tipo que no es FACTORING ni
+     * CONFIRMING lo resuelve validarOperacionHabilitada, como hasta ahora.
+     */
+    private void validarClaseSegunTipo(NegociacionRequestDto request) {
+        if (request.getTipoOperacion() == null || request.getTipoOperacion().getTipo() == null) {
+            return;
+        }
+        String tipo = request.getTipoOperacion().getTipo().toUpperCase(Locale.ROOT);
+        List<String> clasesValidas = CLASES_POR_TIPO.get(tipo);
+        if (clasesValidas == null) {
+            return;
+        }
+        String clase = request.getTipoOperacion().getClase();
+        if (clase == null || !clasesValidas.contains(clase.toUpperCase(Locale.ROOT))) {
+            throw new ReglaDeNegocioException(
+                    "La clase de operación " + clase + " no es válida para " + tipo
+                            + ". Clases válidas: " + String.join(", ", clasesValidas) + ".",
+                    "CLASE_OPERACION_INVALIDA");
+        }
     }
 
     /**

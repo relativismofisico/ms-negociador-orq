@@ -6,6 +6,9 @@ import com.negociadororq.infrastructure.persistence.repository.UserRepository
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import org.springframework.security.oauth2.jwt.BadJwtException
+import org.springframework.dao.QueryTimeoutException
+import org.springframework.jdbc.CannotGetJdbcConnectionException
+import org.springframework.transaction.CannotCreateTransactionException
 import spock.lang.Specification
 
 import javax.crypto.SecretKey
@@ -65,6 +68,24 @@ class JjwtDecoderSpec extends Specification {
         def ex = thrown(BadJwtException)
         ex.message == "Token inválido."
         ex.cause instanceof io.jsonwebtoken.JwtException
+    }
+
+    def "un token expirado da BadJwtException (401), no una JwtException generica (que Spring relanza como 500)"() {
+        given:
+        def token = Jwts.builder()
+                .subject("usuario@test.com")
+                .claim("rol", "ADMINISTRADOR")
+                .issuedAt(new Date(System.currentTimeMillis() - 120_000L))
+                .expiration(new Date(System.currentTimeMillis() - 60_000L))
+                .signWith(SIGN_KEY).compact()
+
+        when:
+        decoder.decode(token)
+
+        then:
+        def ex = thrown(BadJwtException)
+        ex.cause instanceof io.jsonwebtoken.ExpiredJwtException
+        0 * userRepository._
     }
 
     def "decode lanza BadJwtException para un refresh token usado como access token"() {
@@ -149,5 +170,23 @@ class JjwtDecoderSpec extends Specification {
             firma = enc.encodeToString(mac.doFinal("${header}.${payload}".getBytes("UTF-8")))
         }
         "${header}.${payload}.${firma}"
+    }
+
+    def "BD caída al comprobar el usuario (#falla.class.simpleName): ValidacionTokenNoDisponibleException, no BadJwtException (401)"() {
+        given:
+        userRepository.findByUsername("usuario@test.com") >> { throw falla }
+
+        when:
+        decoder.decode(buildToken("access"))
+
+        then:
+        def ex = thrown(ValidacionTokenNoDisponibleException)
+        ex.cause.is(falla)
+        !(ex instanceof org.springframework.security.oauth2.jwt.JwtException)
+
+        where:
+        falla << [new CannotGetJdbcConnectionException("detalle-interno"),
+                  new QueryTimeoutException("detalle-interno"),
+                  new CannotCreateTransactionException("detalle-interno")]
     }
 }

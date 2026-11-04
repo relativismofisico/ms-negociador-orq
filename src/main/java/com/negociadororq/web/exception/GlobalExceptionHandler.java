@@ -12,10 +12,15 @@ import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.java.Log;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.dao.RecoverableDataAccessException;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -272,12 +277,36 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Fallo de infraestructura de datos (base caída o sin conexión, timeout): 503 con mensaje fijo, no 500. Los
+     * errores de datos normales (integridad, resultado no único) siguen en sus handlers. El handler genérico
+     * delega aquí cuando el fallo llega envuelto en otra excepción.
+     */
+    @ExceptionHandler({DataAccessResourceFailureException.class, CannotCreateTransactionException.class,
+            QueryTimeoutException.class, TransientDataAccessResourceException.class,
+            RecoverableDataAccessException.class})
+    public ResponseEntity<ErrorResponse> handleDatosNoDisponibles(Exception ex, HttpServletRequest request) {
+        log.warning("[GlobalExceptionHandler][503] Base de datos no disponible en " + request.getRequestURI()
+                + ": " + FalloInfraestructuraDatos.nombreCausa(ex));
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(buildError(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "SERVICIO_NO_DISPONIBLE",
+                        FalloInfraestructuraDatos.MENSAJE,
+                        request.getRequestURI(),
+                        null));
+    }
+
+    /**
      * Captura de último recurso. NUNCA exponer detalles de la excepción al cliente.
      * El stacktrace se loguea en ERROR para diagnóstico interno.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex, HttpServletRequest request) {
+        if (FalloInfraestructuraDatos.es(ex)) {
+            return handleDatosNoDisponibles(ex, request);
+        }
 
         log.log(java.util.logging.Level.SEVERE, String.format("Error inesperado en %s: %s", request.getRequestURI(), ex.getMessage()), ex);
 
