@@ -70,6 +70,24 @@ class JjwtDecoderSpec extends Specification {
         ex.cause instanceof io.jsonwebtoken.JwtException
     }
 
+    def "un token expirado da BadJwtException (401), no una JwtException generica (que Spring relanza como 500)"() {
+        given:
+        def token = Jwts.builder()
+                .subject("usuario@test.com")
+                .claim("rol", "ADMINISTRADOR")
+                .issuedAt(new Date(System.currentTimeMillis() - 120_000L))
+                .expiration(new Date(System.currentTimeMillis() - 60_000L))
+                .signWith(SIGN_KEY).compact()
+
+        when:
+        decoder.decode(token)
+
+        then:
+        def ex = thrown(BadJwtException)
+        ex.cause instanceof io.jsonwebtoken.ExpiredJwtException
+        0 * userRepository._
+    }
+
     def "decode lanza BadJwtException para un refresh token usado como access token"() {
         given:
         def token = buildToken("refresh")

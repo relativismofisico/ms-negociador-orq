@@ -18,7 +18,6 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.transaction.TransactionException;
 
 /**
@@ -71,7 +70,10 @@ public class JjwtDecoder implements JwtDecoder {
                     .getPayload();
         } catch (ExpiredJwtException ex) {
             log.warn("JWT expirado: {}", ex.getMessage());
-            throw new JwtException("Token expirado", ex);
+            // BadJwtException (no JwtException genérica): Spring la convierte en InvalidBearerTokenException -> 401.
+            // Una JwtException genérica acaba en AuthenticationServiceException, que Spring Security relanza:
+            // con /error pública eso llegaba al cliente como 500.
+            throw new BadJwtException("Token expirado", ex);
         } catch (io.jsonwebtoken.JwtException ex) {
             log.warn("JWT inválido: {}", ex.getMessage());
             throw new BadJwtException("Token inválido.", ex);
