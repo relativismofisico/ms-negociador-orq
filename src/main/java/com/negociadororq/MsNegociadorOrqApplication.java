@@ -16,6 +16,7 @@ public class MsNegociadorOrqApplication {
      * @param args argumentos de línea de comandos, delegados a Spring Boot
      */
     public static void main(String[] args) {
+        ValidacionConexionesBd.validarSiempreAlPrestar();
         SpringApplication app = new SpringApplication(MsNegociadorOrqApplication.class);
         app.addListeners(new ConfiguracionObligatoria());
         app.run(args);
