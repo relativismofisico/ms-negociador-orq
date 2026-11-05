@@ -1555,6 +1555,8 @@ Las sondas del orquestador (Kubernetes, ECS, balanceador) deben usar los grupos 
 | Sonda | Ruta | Qué comprueba |
 |---|---|---|
 | Liveness | `/actuator/health/liveness` | Solo el estado interno de la aplicación (`livenessState`). **No consulta la BD ni Redis**: una caída de infraestructura no debe reiniciar el contenedor. |
-| Readiness | `/actuator/health/readiness` | El estado de disponibilidad (`readinessState`) para dejar o sacar la instancia del tráfico. |
+| Readiness | `/actuator/health/readiness` | El estado de disponibilidad (`readinessState`) y MySQL (`db`), MongoDB (`mongo`) y Redis (`redis`): si alguna no responde, la instancia sale del tráfico (503) sin reiniciarse. |
+
+Los dos grupos están declarados de forma explícita en `application.yml` (`management.endpoint.health.group.*.include`) y los cubre `GruposSaludConfigSpec`.
 
 `/actuator/health` (agregado) sí consulta MySQL, Redis y MongoDB y responde 503 si alguna no contesta: sirve para diagnóstico y monitoreo, no como liveness.
