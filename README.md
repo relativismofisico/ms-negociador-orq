@@ -178,6 +178,8 @@ Se pasan al driver por `spring.datasource.hikari.data-source-properties`. `conne
 acota la espera de una conexión libre del pool: sin `socketTimeout`, una BD que deja de responder sin cerrar la
 conexión dejaba la petición colgada. El socket timeout debe ser mayor que la consulta legítima más lenta.
 
+Además, Hikari valida cada conexión al prestarla (`ValidacionConexionesBd`, propiedad de sistema `com.zaxxer.hikari.aliveBypassWindowMs=0` fijada en `main`). Sin eso, con la BD sin responder y sin cerrar la conexión, la primera petición sobre una conexión usada hace menos de 500 ms esperaba el `socketTimeout` completo (30 s) antes del 503. Ahora responde en el plazo de `connection-timeout` (≈6 s medido con la MySQL del e2e pausada), sin acortar el `socketTimeout` de las consultas reales.
+
 ## 4. Configuración
 
 ### Variables de Entorno
