@@ -20,13 +20,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Publica periódicamente los eventos pendientes del patrón Outbox, reintentando hasta un máximo
- * de intentos y descartando los eventos que no pertenecen a este servicio o que ya no reconoce.
+ * Publica periódicamente los eventos pendientes del patrón Outbox de este servicio, reintentando hasta un máximo de
+ * intentos. Lo que no se puede publicar (intentos agotados, topic no registrado) pasa a un estado terminal visible
+ * ({@code fallido}), nunca a enviado: no hay pérdida silenciosa. Limpia a diario los enviados antiguos.
  */
 @Component
 @RequiredArgsConstructor
@@ -59,7 +62,18 @@ public class OutboxScheduler {
     private static final String MS_PROPIETARIO = "ms-negociador-orq";
 
     private Map<String, Class<?>> eventMap;
-    private static final int MAX_INTENTOS = 5;
+    static final int MAX_INTENTOS = 5;
+
+    /** Tamaño del lote, del más antiguo al más nuevo. */
+    private static final PageRequest LOTE = PageRequest.of(0, 50, Sort.by(Sort.Direction.ASC, "fechaCreacion"));
+
+    /** Días que se conservan los eventos enviados ({@code outbox.limpieza.retencion-dias}). */
+    // No final: Spring la asigna por @Value después del constructor; el valor inicial sirve a quien lo construya a mano.
+    @SuppressWarnings("PMD.ImmutableField")
+    @Value("${outbox.limpieza.retencion-dias:30}")
+    private int retencionDias = RETENCION_DIAS_POR_DEFECTO;
+
+    private static final int RETENCION_DIAS_POR_DEFECTO = 30;
 
     /**
      * Construye el mapa de topic → clase de evento usado para deserializar el payload guardado.
@@ -87,8 +101,7 @@ public class OutboxScheduler {
 
         log.info("Scheduler ejecutándose...");
 
-        List<OutboxEventEntity> eventos =
-                repository.findTop50ByEnviadoFalseOrderByFechaCreacionAsc();
+        List<OutboxEventEntity> eventos = repository.findPendientes(MS_PROPIETARIO, LOTE);
 
         log.info("Eventos pendientes: {}", eventos.size());
 
@@ -102,10 +115,7 @@ public class OutboxScheduler {
             try {
 
                 if (evento.getIntentos() >= MAX_INTENTOS) {
-
-                    log.error("Evento {} superó el máximo de intentos", evento.getId());
-
-                    marcarComoEnviado(evento);
+                    marcarComoFallido(evento, "MAX_INTENTOS");
                     continue;
                 }
 
@@ -122,10 +132,7 @@ public class OutboxScheduler {
                 Class<?> eventClass = eventMap.get(tipoEvento);
 
                 if (eventClass == null) {
-
-                    log.info("Evento ignorado por ms-negociador-orq: {}", tipoEvento);
-
-                    marcarComoEnviado(evento);
+                    marcarComoFallido(evento, "TOPIC_DESCONOCIDO");
                     continue;
                 }
 
@@ -155,6 +162,35 @@ public class OutboxScheduler {
         evento.setFechaEnvio(LocalDateTime.now());
 
         repository.save(evento);
+    }
+
+    /**
+     * Estado terminal visible: fuera de los pendientes y con un log de error que no incluye el payload (puede llevar
+     * destinatarios y datos de un correo).
+     */
+    private void marcarComoFallido(OutboxEventEntity evento, String motivo) {
+
+        log.error("Evento {} del outbox pasa a FALLIDO: motivo={} tipoEvento={} intentos={} (no se publicará; revisar)",
+                evento.getId(), motivo, evento.getTipoEvento(), evento.getIntentos());
+
+        evento.setFallido(true);
+        evento.setMotivoFallo(motivo);
+        evento.setFechaFallo(LocalDateTime.now());
+
+        repository.save(evento);
+    }
+
+    /**
+     * Borra los eventos propios ya enviados con más de {@code outbox.limpieza.retencion-dias} días (30 por defecto). Una
+     * vez al día y bajo ShedLock (una sola instancia). Nunca toca pendientes, fallidos ni eventos de otros servicios.
+     */
+    @Scheduled(cron = "${outbox.limpieza.cron:0 30 3 * * *}")
+    @SchedulerLock(name = "ms-negociador-orq_outboxScheduler_limpiarEnviados",
+            lockAtLeastFor = "PT1M", lockAtMostFor = "PT30M")
+    public void limpiarEnviados() {
+        long borrados = repository.deleteByMsPropietarioAndEnviadoTrueAndFechaEnvioBefore(MS_PROPIETARIO,
+                LocalDateTime.now().minusDays(retencionDias));
+        log.info("Limpieza del outbox: {} eventos enviados con más de {} días borrados", borrados, retencionDias);
     }
 
     private void incrementarIntentos(OutboxEventEntity evento) {
