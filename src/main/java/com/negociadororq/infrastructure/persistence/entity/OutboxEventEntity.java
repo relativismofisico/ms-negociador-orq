@@ -46,5 +46,17 @@ public class OutboxEventEntity {
 
     @Builder.Default
     private Integer intentos = 0;
+
+    /**
+     * Estado terminal: el evento no se pudo publicar (agotó los intentos o su topic no está registrado) y queda fuera
+     * de los pendientes, visible para revisión. {@code null} en los documentos anteriores a este campo (= no fallido).
+     */
+    private Boolean fallido;
+
+    /** Por qué pasó a fallido ({@code MAX_INTENTOS}, {@code TOPIC_DESCONOCIDO}); nunca el payload. */
+    private String motivoFallo;
+
+    /** Cuándo pasó a fallido. */
+    private LocalDateTime fechaFallo;
 }
 

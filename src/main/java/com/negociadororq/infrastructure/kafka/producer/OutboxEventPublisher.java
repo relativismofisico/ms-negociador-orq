@@ -1,7 +1,11 @@
 package com.negociadororq.infrastructure.kafka.producer;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.factoring.commons.auditoria.AuditoriaAccionEvent;
 import com.factoring.commons.auditoria.AuditoriaPublisher;
@@ -15,6 +19,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +36,14 @@ public class OutboxEventPublisher {
     private final ObjectProvider<AuditoriaPublisher> auditoriaPublisher;
 
     private Map<Class<?>, String> topicMap;
+
+    /** Espera máxima de la confirmación del broker ({@code outbox.ack-timeout}, 10 s por defecto). */
+    // No final: Spring la asigna por @Value después del constructor; el valor inicial sirve a quien lo construya a mano.
+    @SuppressWarnings("PMD.ImmutableField")
+    @Value("${outbox.ack-timeout:10s}")
+    private Duration esperaAck = ESPERA_ACK_POR_DEFECTO;
+
+    private static final Duration ESPERA_ACK_POR_DEFECTO = Duration.ofSeconds(10);
 
     /**
      * Construye el mapa de clase de evento → topic destino, a partir de {@link TopicsProperties}.
@@ -61,7 +74,16 @@ public class OutboxEventPublisher {
 
         // Solo el tipo de evento y el topic: el evento completo puede llevar destinatarios y data de un correo.
         log.info("Publicando evento {} en topic {}", event.getClass().getSimpleName(), topic);
-        kafkaTemplate.send(topic, event);
+        // Espera la confirmación del broker: el outbox solo marca enviado lo que Kafka confirmó. Si no llega a tiempo o
+        // falla, la excepción deja el evento pendiente y el scheduler suma un intento.
+        try {
+            kafkaTemplate.send(topic, event).get(esperaAck.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrumpido esperando la confirmación de Kafka (topic " + topic + ")", e);
+        } catch (ExecutionException | TimeoutException e) {
+            throw new IllegalStateException("Kafka no confirmó el evento (topic " + topic + ")", e);
+        }
     }
 
     /**

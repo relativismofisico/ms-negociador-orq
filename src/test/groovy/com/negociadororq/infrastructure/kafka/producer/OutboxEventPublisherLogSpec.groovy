@@ -40,7 +40,7 @@ class OutboxEventPublisherLogSpec extends Specification {
         publisher.publicar(event)
 
         then:
-        1 * template.send("notificacion.email", event)
+        1 * template.send("notificacion.email", event) >> java.util.concurrent.CompletableFuture.completedFuture(null)
         def mensajes = appender.list*.formattedMessage
         mensajes.any { it.contains("NotificacionEmailEvent") && it.contains("notificacion.email") }
         mensajes.every { !it.contains("abc123secreto") && !it.contains("800222") }
