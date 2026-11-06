@@ -4,6 +4,7 @@ import java.sql.SQLNonTransientConnectionException;
 import java.sql.SQLRecoverableException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientConnectionException;
+import java.util.Set;
 
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
@@ -12,14 +13,26 @@ import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.transaction.CannotCreateTransactionException;
 
 /**
- * Reconoce un fallo de infraestructura de datos (base caída o sin conexión, timeout) en la cadena de causas de una
- * excepción, para responder 503 en lugar de 500. Los errores de datos normales (violación de integridad, resultado
+ * Reconoce un fallo de infraestructura de datos (base caída o sin conexión, timeout; MySQL o MongoDB) en la cadena de
+ * causas de una excepción, para responder 503 en lugar de 500. De MongoDB cuenta también lo que el driver lanza sin
+ * traducir o que llega envuelto (por ejemplo en {@code UncategorizedMongoDbException}): timeout de selección de
+ * servidor, errores de socket, pool limpiado y servidor no disponible. Los errores de datos normales (violación de integridad, resultado
  * no único, bloqueo optimista) no son fallos de infraestructura y siguen en sus handlers.
  */
 public final class FalloInfraestructuraDatos {
 
     /** Mensaje fijo de la respuesta 503: sin detalle interno. */
     public static final String MENSAJE = "Servicio no disponible temporalmente. Intente de nuevo en unos momentos.";
+
+    /**
+     * Fallos de infraestructura del driver de MongoDB, por nombre de clase (también cuentan sus subclases, p. ej. los
+     * timeouts de lectura de socket). Por nombre y no por tipo: la capa que clasifica no depende del driver.
+     */
+    private static final Set<String> FALLOS_MONGO = Set.of(
+            "com.mongodb.MongoTimeoutException",
+            "com.mongodb.MongoSocketException",
+            "com.mongodb.MongoConnectionPoolClearedException",
+            "com.mongodb.MongoServerUnavailableException");
 
     /** Tope de causas a recorrer, por si una cadena fuera cíclica. */
     private static final int PROFUNDIDAD_MAXIMA = 20;
@@ -81,6 +94,16 @@ public final class FalloInfraestructuraDatos {
                 || t instanceof SQLTransientConnectionException
                 || t instanceof SQLNonTransientConnectionException
                 || t instanceof SQLRecoverableException
-                || t instanceof SQLTimeoutException;
+                || t instanceof SQLTimeoutException
+                || esFalloDeMongo(t);
+    }
+
+    private static boolean esFalloDeMongo(final Throwable t) {
+        for (Class<?> tipo = t.getClass(); tipo != null; tipo = tipo.getSuperclass()) {
+            if (FALLOS_MONGO.contains(tipo.getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
