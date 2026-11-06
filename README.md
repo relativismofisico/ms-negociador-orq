@@ -1562,3 +1562,35 @@ Las sondas del orquestador (Kubernetes, ECS, balanceador) deben usar los grupos 
 Los dos grupos están declarados de forma explícita en `application.yml` (`management.endpoint.health.group.*.include`) y los cubre `GruposSaludConfigSpec`.
 
 `/actuator/health` (agregado) sí consulta MySQL, Redis y MongoDB y responde 503 si alguna no contesta: sirve para diagnóstico y monitoreo, no como liveness.
+
+## MongoDB: tiempos del driver
+
+| Variable de entorno | Por defecto | Qué controla |
+|---|---|---|
+| `MONGO_SERVER_SELECTION_TIMEOUT_MS` | `10000` | Cuánto espera una operación cuando **no hay ningún servidor de Mongo disponible**. Pasado ese tiempo falla y el servicio responde 503 con el mensaje fijo. El valor del driver era 30 s. |
+| `MONGO_CONNECT_TIMEOUT_MS` | `5000` | Cuánto espera para abrir una conexión. |
+
+El timeout de lectura del socket, que es el de las consultas en curso, **no se toca**. Lo fija `TiemposMongoConfig`, que se aplica después de la configuración estándar de Spring Boot, así que manda aunque la URI de conexión traiga otro valor.
+
+**Compromiso:** durante una elección de primario del replica set, que suele completarse en menos de unos 12 s, una operación puede agotar los 10 s y responder un 503 breve. Si en qa o prod se prefiere esperar la elección, súbase `MONGO_SERVER_SELECTION_TIMEOUT_MS`, por ejemplo a `15000`.
+
+## Runbook: eventos fallidos del outbox
+
+Desde la Fase 22, un evento del outbox (`outbox_event`, `msPropietario: "ms-negociador-orq"`) que agota sus 5 intentos, o cuyo topic no está registrado, pasa a **fallido**. Queda con `fallido: true`, `motivoFallo` (`MAX_INTENTOS` o `TOPIC_DESCONOCIDO`) y `fechaFallo`, y deja un log ERROR con el id, sin el payload.
+
+> **Un evento fallido ya no se publica solo.** Hay que revisarlo y reintentarlo o descartarlo a mano.
+
+Desde `mongosh`, en la base del servicio. El payload puede llevar destinatarios y datos de correos: no lo copies a canales abiertos.
+
+```javascript
+// Ver los fallidos, sin el payload
+db.outbox_event.find({ msPropietario: "ms-negociador-orq", fallido: true }, { payload: 0 }).sort({ fechaCreacion: 1 })
+
+// Reintentar uno, después de corregir la causa: vuelve a pendiente con los intentos en 0
+db.outbox_event.updateOne(
+  { _id: ObjectId("<id>"), msPropietario: "ms-negociador-orq", fallido: true },
+  { $set: { fallido: false, intentos: 0 }, $unset: { motivoFallo: "", fechaFallo: "" } })
+
+// Descartarlo (decisión explícita: el evento no se publicará)
+db.outbox_event.deleteOne({ _id: ObjectId("<id>"), msPropietario: "ms-negociador-orq", fallido: true })
+```
