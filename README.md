@@ -180,6 +180,17 @@ conexión dejaba la petición colgada. El socket timeout debe ser mayor que la c
 
 Además, Hikari valida cada conexión al prestarla (`ValidacionConexionesBd`, propiedad de sistema `com.zaxxer.hikari.aliveBypassWindowMs=0` fijada en `main`). Sin eso, con la BD sin responder y sin cerrar la conexión, la primera petición sobre una conexión usada hace menos de 500 ms esperaba el `socketTimeout` completo (30 s) antes del 503. Ahora responde en el plazo de `connection-timeout` (≈6 s medido con la MySQL del e2e pausada), sin acortar el `socketTimeout` de las consultas reales.
 
+### Migración V2: reclamo de la reversión de cupos (antes de desplegar en qa/prod)
+
+`liquidacion-fallida` revierte los cupos de operador, empresa y fondeador **una sola vez** por
+`(numero_factura, negociacion_id)`: el reclamo en `reversion_cupos_factura` y los cupos se confirman en la misma
+transacción de MySQL. Una factura LIQUIDADA o con la firma ya RECHAZADA no se toca.
+
+En qa/prod Flyway está apagado: aplicar a mano `db/manual/V2__reversion_cupos_factura.sql` (copia exacta de
+`src/main/resources/db/migration/V2__reversion_cupos_factura.sql`, idempotente con `IF NOT EXISTS`) **antes** de
+desplegar. Sin la tabla, cada `liquidacion-fallida` falla y, tras sus reintentos, va a la DLT sin revertir nada.
+Para verificarla: `SHOW TABLES LIKE 'reversion_cupos_factura'` devuelve una fila.
+
 ## 4. Configuración
 
 ### Variables de Entorno

@@ -124,6 +124,9 @@ jobs:
       - name: Pre-seed MySQL (tablas ajenas que este repo solo lee)
         run: |
           mysql -h127.0.0.1 -P3306 -uroot -pe2e-root --default-character-set=utf8mb4 dbcompany < .github/ci/pre-seed.sql
+      - name: Aplicar V2 (reversion_cupos_factura; Flyway está apagado en el runner)
+        run: |
+          mysql -h127.0.0.1 -P3306 -uroot -pe2e-root --default-character-set=utf8mb4 dbcompany < src/main/resources/db/migration/V2__reversion_cupos_factura.sql
 
       # Secretos aleatorios por corrida, enmascarados en el log y compartidos por la app y
       # Karate vía GITHUB_ENV. Ningún yml trae su valor; sin ellos la app no arranca.

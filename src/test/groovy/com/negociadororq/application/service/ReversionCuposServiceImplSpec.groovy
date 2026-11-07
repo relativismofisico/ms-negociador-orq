@@ -5,6 +5,7 @@ import com.negociadororq.application.port.output.EndosoPatchOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
 import com.negociadororq.application.port.output.FacturaPatchOutputPort
 import com.negociadororq.application.port.output.NegociacionOutputPort
+import com.negociadororq.application.port.output.ReversionCuposReclamoOutputPort
 import com.negociadororq.application.port.output.UserOutputPort
 import com.negociadororq.domain.enums.EstadoFirma
 import com.negociadororq.domain.model.Company
@@ -14,6 +15,7 @@ import com.negociadororq.domain.model.FondeadorAsignacion
 import com.negociadororq.domain.model.Negociacion
 import com.negociadororq.domain.model.Operacion
 import com.negociadororq.domain.model.User
+import org.springframework.transaction.support.TransactionOperations
 import spock.lang.Specification
 
 import java.math.BigDecimal
@@ -28,11 +30,17 @@ class ReversionCuposServiceImplSpec extends Specification {
     UserOutputPort userPort = Mock()
     CompanyOutputPort companyPort = Mock()
     NotificacionService notificacionService = Mock()
+    ReversionCuposReclamoOutputPort reclamoPort = Mock()
 
     ReversionCuposServiceImpl service = new ReversionCuposServiceImpl(
             negociacionPort, facturaPort, facturaPatchPort, endosoPatchPort,
-            cupoReversionService, userPort, companyPort, notificacionService
+            cupoReversionService, userPort, companyPort, notificacionService,
+            reclamoPort, TransactionOperations.withoutTransaction()
     )
+
+    def setup() {
+        reclamoPort.reclamar(_, _) >> true
+    }
 
     def buildFactura(String numero) {
         def f = new Factura()
@@ -77,7 +85,8 @@ class ReversionCuposServiceImplSpec extends Specification {
 
         then:
         1 * cupoReversionService.revertirCupoUsuario(1L, valor)
-        1 * cupoReversionService.revertirCupoEmpresa(10L, valor)
+        1 * cupoReversionService.revertirCupoEmpresaEnTransaccionActual(10L, valor)
+        0 * cupoReversionService.revertirCupoEmpresa(_, _)
         1 * cupoReversionService.revertirCupoFondeadorFactoring(20L, 30L, valor)
         1 * facturaPatchPort.actualizarEstadoFirmaPorNoFactura(numero, EstadoFirma.RECHAZADA)
         1 * notificacionService.notificarLiquidacionFallida(neg, numero, "Error de pago")
@@ -203,5 +212,50 @@ class ReversionCuposServiceImplSpec extends Specification {
         0 * cupoReversionService.revertirCupoFondeadorFactoring(_, _, _)
         0 * cupoReversionService.revertirCupoFondeadorConfirming(_, _, _)
         1 * facturaPatchPort.actualizarEstadoFirmaPorNoFactura(numero, EstadoFirma.RECHAZADA)
+    }
+
+    // ─── idempotencia ────────────────────────────────────────────────────────
+
+    def "revertirPorFactura sobre factura #estadoNegociacion / firma #estadoFirma no revierte, no marca ni notifica"() {
+        given:
+        def numero = "FECI-GUARDA"
+        def factura = buildFactura(numero)
+        factura.estadoNegociacion = estadoNegociacion
+        factura.estadoFirma = estadoFirma
+        facturaPort.findByNumeroFactura(numero) >> Optional.of(factura)
+
+        when:
+        service.revertirPorFactura(numero, "USR-OP", "Motivo")
+
+        then:
+        0 * negociacionPort._
+        0 * reclamoPort._
+        0 * cupoReversionService._
+        0 * facturaPatchPort._
+        0 * notificacionService._
+
+        where:
+        estadoNegociacion | estadoFirma
+        "LIQUIDADA"       | "CESION"
+        "LIQUIDADA"       | "DESCUENTO"
+        "NEGOCIADA"       | "RECHAZADA"
+    }
+
+    def "revertirPorFactura con la reversión ya reclamada no revierte ni notifica; solo completa la firma"() {
+        given:
+        def numero = "FECI-DUP"
+        def neg = buildNegociacion("FACTORING", numero, new BigDecimal("700.00"))
+        facturaPort.findByNumeroFactura(numero) >> Optional.of(buildFactura(numero))
+        negociacionPort.findByNumeroFactura(numero) >> Optional.of(neg)
+
+        when:
+        service.revertirPorFactura(numero, "USR-OP", "Motivo")
+
+        then:
+        1 * reclamoPort.reclamar(numero, "neg-001") >> false
+        0 * cupoReversionService._
+        0 * userPort._
+        1 * facturaPatchPort.actualizarEstadoFirmaPorNoFactura(numero, EstadoFirma.RECHAZADA)
+        0 * notificacionService._
     }
 }
