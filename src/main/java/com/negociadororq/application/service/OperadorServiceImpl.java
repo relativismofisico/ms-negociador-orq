@@ -74,6 +74,16 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void revertirCupoEmpresa(Long companyId, BigDecimal valor) {
+        aplicarReversionEmpresa(companyId, valor);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void revertirCupoEmpresaEnTransaccionActual(Long companyId, BigDecimal valor) {
+        aplicarReversionEmpresa(companyId, valor);
+    }
+
+    private void aplicarReversionEmpresa(Long companyId, BigDecimal valor) {
         EmpresaQuota empresaQuota = empresaQuotaPort.findByCompanyId(companyId).orElseThrow();
 
         valor = valor.abs();

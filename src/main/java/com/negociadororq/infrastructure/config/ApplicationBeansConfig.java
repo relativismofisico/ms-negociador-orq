@@ -27,6 +27,7 @@ import com.negociadororq.application.port.output.PdfFirmaOutputPort;
 import com.negociadororq.application.port.output.PdfGeneradorOutputPort;
 import com.negociadororq.application.port.output.PendingOtpOutputPort;
 import com.negociadororq.application.port.output.PersonOutputPort;
+import com.negociadororq.application.port.output.ReversionCuposReclamoOutputPort;
 import com.negociadororq.application.port.output.TemplateEngineOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.application.port.output.UserQuotaOutputPort;
@@ -73,6 +74,7 @@ import com.negociadororq.application.service.notificacion.impl.PersonaCuerpoBuil
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.support.TransactionOperations;
 
 /**
  * Cablea manualmente las clases de {@code application/}, que dejaron de llevar
@@ -244,6 +246,7 @@ public class ApplicationBeansConfig {
                 facturaPort, clock, topicNotificacionEmail, urlPlataformaOperador);
     }
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     @Bean
     public ReversionCuposService reversionCuposService(
             final NegociacionOutputPort negociacionPort,
@@ -253,10 +256,13 @@ public class ApplicationBeansConfig {
             final CupoReversionService cupoReversionService,
             final UserOutputPort userPort,
             final CompanyOutputPort companyPort,
-            final NotificacionService notificacionService) {
+            final NotificacionService notificacionService,
+            final ReversionCuposReclamoOutputPort reclamoPort,
+            final TransactionOperations transactionOperations) {
         return new ReversionCuposServiceImpl(
                 negociacionPort, facturaPort, facturaPatchPort, endosoPatchPort,
-                cupoReversionService, userPort, companyPort, notificacionService);
+                cupoReversionService, userPort, companyPort, notificacionService,
+                reclamoPort, transactionOperations);
     }
 
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por
