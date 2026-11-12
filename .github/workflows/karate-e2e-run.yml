@@ -115,7 +115,14 @@ jobs:
       - name: Instalar clientes MySQL y MongoDB Shell
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q mysql-client
+          # La imagen del runner ya trae el cliente; instalarlo con apt actualiza también el mysql-server
+          # preinstalado y su postinst falla (fase 28e-1). apt solo si faltan mysql o mysqladmin.
+          if command -v mysql >/dev/null 2>&1 && command -v mysqladmin >/dev/null 2>&1; then
+            echo "Cliente MySQL de la imagen del runner (sin apt)"
+          else
+            sudo apt-get install -y -q --no-install-recommends mysql-client
+          fi
+          mysql --version
           curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
           echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
           sudo apt-get update -q
