@@ -1,5 +1,7 @@
 package com.negociadororq.domain.model;
 
+import java.time.LocalDateTime;
+
 import com.negociadororq.domain.util.Sensible;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,6 +42,18 @@ public class PendingOtp {
     private String actorRol;
     private Long actorEmpresaId;
     private String requestId;
+    /** Fase 28c: estado de la firma ({@link EstadoFirmaOtp}); null = creada antes (cuenta como PENDIENTE_OTP). */
+    private String estado;
+    /** Fase 28c: referencia del OTP en ms-security-util (llega con la validación). */
+    private String otpId;
+    /** Fase 28c: instante de la validación en security. */
+    private LocalDateTime fechaValidacion;
+    /** Fase 28c: intentos de firma fallidos por causas transitorias. */
+    private Integer intentosFirma;
+    /** Fase 28c: último error de firma (clase y mensaje, sin datos del OTP). */
+    private String ultimoError;
+    /** Fase 28c: última transición de estado. */
+    private LocalDateTime fechaActualizacion;
 
     /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
     @ToString.Include(name = "otp")

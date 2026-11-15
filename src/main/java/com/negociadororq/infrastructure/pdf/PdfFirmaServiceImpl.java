@@ -21,7 +21,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class PdfFirmaServiceImpl implements PdfFirmaOutputPort {
 
-    private static final float BASE_Y = 100f;
+    /** Altura de la ÚLTIMA línea de la primera firma (antes BASE_Y=100 con 9 líneas: la última quedaba en 20). */
+    private static final float BASE_ULTIMA_LINEA = 20f;
     private static final float LINE_HEIGHT = 10f;
     private static final float MARGEN_ENTRE_FIRMAS = 15f;
     private static final float MARGEN_IZQUIERDO = 50f;
@@ -54,7 +55,9 @@ public class PdfFirmaServiceImpl implements PdfFirmaOutputPort {
             // para que nunca vuelva a desincronizarse si se agregan/quitan líneas.
             float x = MARGEN_IZQUIERDO;
             float alturaBloque = lineas.size() * LINE_HEIGHT + MARGEN_ENTRE_FIRMAS;
-            float y = BASE_Y + (indexFirma * alturaBloque);
+            // Fase 28c: la primera línea se ubica de modo que la última quede en BASE_ULTIMA_LINEA. Con 9 líneas
+            // da 100, la misma posición de antes; con las 11 líneas actuales, la última no cae al borde de la página.
+            float y = BASE_ULTIMA_LINEA + (lineas.size() - 1) * LINE_HEIGHT + (indexFirma * alturaBloque);
 
             contentStream.newLineAtOffset(x, y);
 
@@ -77,6 +80,14 @@ public class PdfFirmaServiceImpl implements PdfFirmaOutputPort {
         }
     }
 
+    /** Fase 28c: siempre las mismas líneas (con "-" si falta el dato), para que la altura del bloque no cambie. */
+    private static String valorODato(Object valor) {
+        if (valor == null) {
+            return "-";
+        }
+        return String.valueOf(valor);
+    }
+
     private List<String> construirLineasFirma(FirmaOtpMetadata firma) {
         String resultado;
         if (firma.isAprobado()) {
@@ -97,6 +108,8 @@ public class PdfFirmaServiceImpl implements PdfFirmaOutputPort {
                 "Operador: " + firma.getRutOperador(),
                 "Resultado: " + resultado,
                 "OTP: " + firma.getOtp(),
+                "Referencia OTP: " + valorODato(firma.getOtpId()),
+                "Validado el: " + valorODato(firma.getFechaValidacion()),
                 "IP: " + firma.getIp(),
                 "Fecha: " + firma.getFecha(),
                 "Obs: " + observacion

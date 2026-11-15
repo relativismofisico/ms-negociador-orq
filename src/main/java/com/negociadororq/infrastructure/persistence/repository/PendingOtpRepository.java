@@ -1,5 +1,6 @@
 package com.negociadororq.infrastructure.persistence.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.negociadororq.infrastructure.persistence.entity.PendingOtpDocument;
@@ -20,5 +21,12 @@ public interface PendingOtpRepository extends MongoRepository<PendingOtpDocument
      * @param idNegociacion id de la negociación cuyas solicitudes OTP se eliminan
      */
     void deleteByIdNegociacion(String idNegociacion);
+
+    /**
+     * @param estado estado de la firma (Fase 28c)
+     * @param limite última transición anterior a este instante
+     * @return las solicitudes en ese estado sin cambios desde el límite
+     */
+    List<PendingOtpDocument> findByEstadoAndFechaActualizacionBefore(String estado, LocalDateTime limite);
 }
 

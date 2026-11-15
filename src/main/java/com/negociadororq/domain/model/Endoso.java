@@ -64,6 +64,11 @@ public class Endoso {
     private String documentoHtml;
     private byte[] documentoPdf;
     private String nombreArchivoPdf;
+    /**
+     * Fase 28c: firmas por OTP ya estampadas en {@link #documentoPdf}, como {@code otpId:numeroFactura}. Se
+     * escribe en el mismo guardado que el PDF, así que un reintento no estampa dos veces.
+     */
+    private List<String> firmasOtp;
 
     /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
     @ToString.Include(name = "otp")

@@ -5,6 +5,7 @@ import java.util.List;
 import com.negociadororq.domain.model.AprobacionRequest;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.Negociacion;
+import com.negociadororq.domain.model.PendingOtp;
 
 /**
  * Envía las notificaciones (email) asociadas al ciclo de vida de una
@@ -45,4 +46,12 @@ public interface NotificacionService {
      * @param motivo        motivo del rechazo, para incluir en la notificación
      */
     void notificarLiquidacionFallida(Negociacion negociacion, String numeroFactura, String motivo);
+
+    /**
+     * Fase 28c: avisa a la empresa firmante que su firma por OTP no se completó después de validar el código
+     * (estado {@code FALLO_FIRMA}); requiere revisión manual.
+     *
+     * @param pending solicitud de firma fallida
+     */
+    void notificarFirmaFallida(PendingOtp pending);
 }

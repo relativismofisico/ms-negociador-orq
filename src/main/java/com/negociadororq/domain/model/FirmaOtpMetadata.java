@@ -29,5 +29,9 @@ public class FirmaOtpMetadata {
     private LocalDateTime fecha;
 
     private String observacion;
+    /** Fase 28c: referencia del OTP en security. */
+    private String otpId;
+    /** Fase 28c: instante de la validación del OTP. */
+    private LocalDateTime fechaValidacion;
 }
 

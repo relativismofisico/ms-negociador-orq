@@ -25,6 +25,14 @@ public class OtpValidatedEvent {
     private String otp;
     private String ip;
     private String ipAprobacion;
+    /** Fase 28c: referencia del OTP en security. */
+    private String otpId;
+    /** Fase 28c, con valido=false: INCORRECTO, EXPIRADO, BLOQUEADO o USADO. */
+    private String motivo;
+    /** Fase 28c, con valido=false: intentos que quedan antes del bloqueo. */
+    private Integer intentosRestantes;
+    /** Fase 28c, con valido=true: instante de la validación en security. */
+    private java.time.LocalDateTime fechaValidacion;
 
     /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
     @ToString.Include(name = "otp")

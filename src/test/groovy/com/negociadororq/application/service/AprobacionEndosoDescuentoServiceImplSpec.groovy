@@ -114,6 +114,8 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         def request = new ConfirmacionOtpRequestDto(
                 "neg-001", "EMP-001", "OP-001", "123456", "192.168.1.1", null
         )
+        pendingOtpPort.findByIdNegociacion("neg-001") >> Optional.of(
+                PendingOtp.builder().idNegociacion("neg-001").rutEmpresa("EMP-001").build())
 
         when:
         service.confirmarOtp(request)
@@ -610,5 +612,105 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
 
         then:
         1 * cupoReversionService.revertirCupoUsuario(1L, BigDecimal.ZERO)
+    }
+
+    // ─── Fase 28c ─────────────────────────────────────────────────────────────
+
+    def "Fase 28c: confirmarOtp sin solicitud pendiente (o ya validada) no manda el código a validar"() {
+        given:
+        def request = new ConfirmacionOtpRequestDto("neg-001", "EMP-001", "OP-001", "123456", "192.168.1.1", null)
+        pendingOtpPort.findByIdNegociacion("neg-001") >> pendiente
+
+        when:
+        service.confirmarOtp(request)
+
+        then:
+        def ex = thrown(ConflictoException)
+        ex.codigo == "OTP_SIN_SOLICITUD_PENDIENTE"
+        0 * outboxService.guardarEvento(*_)
+
+        where:
+        pendiente << [Optional.empty(),
+                      Optional.of(PendingOtp.builder().idNegociacion("neg-001").rutEmpresa("EMP-001")
+                              .estado("OTP_VALIDADO").build()),
+                      Optional.of(PendingOtp.builder().idNegociacion("neg-001").rutEmpresa("OTRA-EMP")
+                              .estado("PENDIENTE_OTP").build())]
+    }
+
+    def "Fase 28c: solicitarOtp deja la solicitud en PENDIENTE_OTP"() {
+        given:
+        def request = new AprobacionRequestDto("neg-001", "OP-001", "EMP-001", "PAGADOR", [], null)
+
+        when:
+        service.solicitarOtp(request)
+
+        then:
+        1 * pendingOtpPort.save({ PendingOtp p -> p.estado == "PENDIENTE_OTP" && p.fechaActualizacion != null })
+    }
+
+    def "Fase 28c: la misma validación (mismo otpId) ya aplicada no se aplica otra vez: sin firma, correo ni guardado"() {
+        given:
+        def previa = new AprobacionActorDto("PAG-001", RolActor.PAGADOR, true, null, LocalDateTime.now())
+        previa.otpId = "77"
+        def fn = buildFacturaNeg("FECI001", "PAG-001", "PROV-001", [])
+        fn.aprobaciones = [previa]
+        def neg = Negociacion.builder().id("neg-001").tipoOperacion(new Operacion("FACTORING", "DESC"))
+                .facturas([fn]).estado("EN_APROBACION").build()
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        def pending = buildPending("neg-001", "PAG-001", [new AprobacionFacturaRequest("FECI001", true, null)])
+        pending.otpId = "77"
+
+        when:
+        def r = service.aprobarInterno(pending)
+
+        then:
+        r.estado == "EN_APROBACION"
+        0 * firmaEndosoService.firmarPdfEndoso(*_)
+        0 * notificacionService.notificarFirmaEndoso(_)
+        0 * negociacionPort.save(_)
+    }
+
+    def "Fase 28c: el mismo actor con OTRO otpId sigue siendo ENDOSO_DUPLICADO"() {
+        given:
+        def previa = new AprobacionActorDto("PAG-001", RolActor.PAGADOR, true, null, LocalDateTime.now())
+        previa.otpId = "77"
+        def fn = buildFacturaNeg("FECI001", "PAG-001", "PROV-001", [])
+        fn.aprobaciones = [previa]
+        def neg = Negociacion.builder().id("neg-001").tipoOperacion(new Operacion("FACTORING", "DESC"))
+                .facturas([fn]).build()
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        def pending = buildPending("neg-001", "PAG-001", [new AprobacionFacturaRequest("FECI001", true, null)])
+        pending.otpId = "78"
+
+        when:
+        service.aprobarInterno(pending)
+
+        then:
+        def ex = thrown(ConflictoException)
+        ex.codigo == "ENDOSO_DUPLICADO"
+    }
+
+    def "Fase 28c: CONFIRMING en un reintento con la firma ya estampada NO regenera el documento (borraría la firma)"() {
+        given:
+        def fn = buildFacturaNeg("FECI001", "PAG-001", "PROV-001", [])
+        def neg = Negociacion.builder().id("neg-001").tipoOperacion(new Operacion("CONFIRMING", "PAGO"))
+                .facturas([fn]).build()
+        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        negociacionPort.save(_) >> neg
+        def pending = buildPending("neg-001", "PROV-001", [new AprobacionFacturaRequest("FECI001", true, null)])
+        pending.otpId = "77"
+        firmaEndosoService.yaFirmada("neg-001", "FECI001", "77") >> yaFirmada
+
+        when:
+        service.aprobarInterno(pending)
+
+        then:
+        // una consulta del endoso es del flujo normal (estado del endoso); la regeneración agrega otra
+        consultas * endosoPort.findByNegociacionIdAndNumeroFactura("neg-001", "FECI001") >> Optional.empty()
+
+        where:
+        yaFirmada | consultas
+        true      | 1
+        false     | 2
     }
 }

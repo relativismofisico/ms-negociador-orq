@@ -6,6 +6,7 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -36,6 +37,7 @@ import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Negociacion;
+import com.negociadororq.domain.model.PendingOtp;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -522,6 +524,30 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .build();
 
         outboxService.guardarEvento(negociacion.getId(), topicNotificacionEmail, event);
+    }
+
+    @Override
+    public void notificarFirmaFallida(PendingOtp pending) {
+        List<DestinatarioEmail> destinatarios = new ArrayList<>();
+        if (pending.getRutEmpresa() != null) {
+            destinatarios.add(new DestinatarioEmail(pending.getRolActor(), pending.getRutEmpresa(), "EMPRESA"));
+        }
+        // Sin el código OTP ni el error técnico: solo lo necesario para que la empresa sepa qué pasó.
+        Map<String, Object> data = safeMap(
+                "id", pending.getIdNegociacion(),
+                "nombreEmpresa", nombreCompania(pending.getRutEmpresa()),
+                "referenciaOtp", pending.getOtpId()
+        );
+        NotificacionEmailEvent event = NotificacionEmailEvent.builder()
+                .idEvento("firma-fallida:" + pending.getIdNegociacion() + ":" + pending.getOtpId())
+                .idNegociacion(pending.getIdNegociacion())
+                .tipoNotificacion(TipoNotificacion.FIRMA_FALLIDA.name())
+                .destinatarios(destinatarios)
+                .asunto("FIRMA_FALLIDA")
+                .data(data)
+                .fecha(clock.now())
+                .build();
+        outboxService.guardarEvento(pending.getIdNegociacion(), topicNotificacionEmail, event);
     }
 
     private String nombresCompanias(List<String> nits) {

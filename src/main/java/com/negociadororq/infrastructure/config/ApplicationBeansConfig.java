@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.negociadororq.application.mapper.EstadoFacturaMapper;
 import com.negociadororq.application.mapper.OperacionMapper;
+import com.negociadororq.application.port.output.AlertaFirmaOutputPort;
 import com.negociadororq.application.port.output.AuditoriaOutputPort;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOperationOutputPort;
@@ -32,6 +33,7 @@ import com.negociadororq.application.port.output.TemplateEngineOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.application.port.output.UserQuotaOutputPort;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoServiceImpl;
+import com.negociadororq.application.service.AprobacionInternaService;
 import com.negociadororq.application.service.AuditoriaNegociacionService;
 import com.negociadororq.application.service.CupoConsumidorService;
 import com.negociadororq.application.service.CupoPropioFondeoService;
@@ -46,6 +48,8 @@ import com.negociadororq.application.service.FacturaServiceImpl;
 import com.negociadororq.application.service.FacturaVencimientoService;
 import com.negociadororq.application.service.FirmaEndosoService;
 import com.negociadororq.application.service.FirmaEndosoServiceImpl;
+import com.negociadororq.application.service.FirmaOtpService;
+import com.negociadororq.application.service.FirmaOtpServiceImpl;
 import com.negociadororq.application.service.IndirectFunderOfferSupplierQuotaConsultaService;
 import com.negociadororq.application.service.IndirectFunderOfferSupplierQuotaConsultaServiceImpl;
 import com.negociadororq.application.service.IndirectFunderOfferSupplierQuotaRecargaService;
@@ -189,6 +193,20 @@ public class ApplicationBeansConfig {
             final IndirectFunderOfferSupplierQuotaOutputPort indirectFunderOfferSupplierQuotaPort) {
         return new IndirectFunderOfferSupplierQuotaConsultaServiceImpl(
                 payerFundingVisibilityPort, indirectFunderOfferPort, indirectFunderOfferSupplierQuotaPort);
+    }
+
+    /** Fase 28c: estados de la firma por OTP, reintentos y alerta de firmas fallidas. */
+    @Bean
+    public FirmaOtpService firmaOtpService(
+            final PendingOtpOutputPort pendingOtpPort,
+            final AprobacionInternaService aprobacionInternaService,
+            final NotificacionService notificacionService,
+            final AlertaFirmaOutputPort alertaFirmaPort,
+            final ClockPort clock,
+            @Value("${firma.reconciliador.max-intentos:5}") final int maxIntentosFirma,
+            @Value("${firma.reconciliador.espera:PT2M}") final java.time.Duration esperaReintento) {
+        return new FirmaOtpServiceImpl(pendingOtpPort, aprobacionInternaService, notificacionService,
+                alertaFirmaPort, clock, maxIntentosFirma, esperaReintento);
     }
 
     @Bean

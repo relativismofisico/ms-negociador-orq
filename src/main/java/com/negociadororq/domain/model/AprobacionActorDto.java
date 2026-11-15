@@ -20,5 +20,19 @@ public class AprobacionActorDto {
     private boolean aprobado;
     private String observacion;
     private LocalDateTime fecha;
+    /** Fase 28c: OTP con el que se firmó (idempotencia: la misma validación no se aplica dos veces). */
+    private String otpId;
+
+    /**
+     * @param rutActor    RUT del actor
+     * @param rolActor    rol
+     * @param aprobado    decisión
+     * @param observacion observación
+     * @param fecha       instante de la decisión
+     */
+    public AprobacionActorDto(String rutActor, RolActor rolActor, boolean aprobado, String observacion,
+            LocalDateTime fecha) {
+        this(rutActor, rolActor, aprobado, observacion, fecha, null);
+    }
 }
 

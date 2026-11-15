@@ -36,6 +36,7 @@ import com.negociadororq.domain.model.AprobacionFacturaRequest;
 import com.negociadororq.domain.model.AprobacionRequest;
 import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Endoso;
+import com.negociadororq.domain.model.EstadoFirmaOtp;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
@@ -88,6 +89,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 // pasó (es la única vía de entrada): marca de trazabilidad que se
                 // propaga hasta el evento de liquidación.
                 .validadoEnOrigen(true)
+                .estado(EstadoFirmaOtp.PENDIENTE_OTP.name())
+                .fechaActualizacion(clock.now())
                 .build();
         auditoria.completarSolicitud(pending);
 
@@ -128,6 +131,17 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
     @Override
     public void confirmarOtp(ConfirmacionOtpRequestDto request) {
+        // Fase 28c: precondición. Sin una solicitud que espere el código (o de otra empresa) no se manda a validar:
+        // el código no viaja si no hay nada que firmar.
+        PendingOtp pending = pendingOtpPort.findByIdNegociacion(request.getIdNegociacion())
+                .filter(p -> EstadoFirmaOtp.esperandoCodigo(p.getEstado()))
+                .orElseThrow(() -> new ConflictoException(
+                        "No hay una solicitud de OTP pendiente para la negociación " + request.getIdNegociacion(),
+                        "OTP_SIN_SOLICITUD_PENDIENTE"));
+        if (pending.getRutEmpresa() != null && !pending.getRutEmpresa().equals(request.getRutEmpresa())) {
+            throw new ConflictoException("La solicitud de OTP pendiente es de otra empresa",
+                    "OTP_SIN_SOLICITUD_PENDIENTE");
+        }
         outboxService.guardarEvento(
                 request.getIdNegociacion(),
                 topicValidateOtp,
@@ -152,6 +166,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         "Negociación no encontrada: " + request.getIdNegociacion(), "NEGOCIACION_NO_ENCONTRADA"));
 
         List<String> errores = new ArrayList<>();
+        int yaAplicadas = 0;
 
         for (AprobacionFacturaRequest factReq : request.getFacturas()) {
             Optional<FacturaNegociada> optFactura = negociacion.getFacturas().stream()
@@ -169,10 +184,18 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 factura.setAprobaciones(new ArrayList<>());
             }
 
-            boolean yaEndoso = factura.getAprobaciones().stream()
-                    .anyMatch(a -> a.getRutActor().equals(request.getRutEmpresa()));
+            Optional<AprobacionActorDto> previa = factura.getAprobaciones().stream()
+                    .filter(a -> a.getRutActor().equals(request.getRutEmpresa()))
+                    .findFirst();
 
-            if (yaEndoso) {
+            // Fase 28c: la misma validación (mismo otpId) ya aplicada no se aplica otra vez; con otro OTP, conflicto.
+            if (previa.isPresent() && pending.getOtpId() != null
+                    && pending.getOtpId().equals(previa.get().getOtpId())) {
+                yaAplicadas++;
+                continue;
+            }
+
+            if (previa.isPresent()) {
                 throw new ConflictoException(
                         "El actor " + request.getRutEmpresa()
                         + " ya realizó el endoso para la factura " + factura.getNumeroFactura(),
@@ -184,6 +207,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             AprobacionActorDto aprobacion = new AprobacionActorDto(
                     request.getRutEmpresa(), rolActor, factReq.isAprobado(),
                     request.getObservacion(), clock.now());
+            aprobacion.setOtpId(pending.getOtpId());
 
             // En Confirming, el firmante del documento (usuario de la empresa
             // proveedora) recién se conoce en este punto: quien solicitó el
@@ -192,7 +216,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             // está aprobando.
             if ("CONFIRMING".equalsIgnoreCase(negociacion.getTipoOperacion().getTipo())
                     && rolActor == RolActor.PROVEEDOR
-                    && factReq.isAprobado()) {
+                    && factReq.isAprobado()
+                    // Fase 28c: en un reintento con la firma ya estampada, regenerar borraría la firma del PDF.
+                    && !firmaEndosoService.yaFirmada(negociacion.getId(), factura.getNumeroFactura(), pending.getOtpId())) {
                 regenerarDocumentoConFirmante(
                         negociacion, negociacion.getId(), factura.getNumeroFactura(), request.getRutOperador());
             }
@@ -211,6 +237,16 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     negociacion, negociacion.getId(), factura,
                     negociacion.getTipoOperacion(), request.getRutOperador(),
                     Boolean.TRUE.equals(pending.getValidadoEnOrigen()), pending.getRequestId());
+        }
+
+        if (yaAplicadas > 0 && yaAplicadas == request.getFacturas().size()) {
+            // Reentrega de una validación ya aplicada entera: sin efectos (ni correo, ni estado, ni eventos).
+            AprobacionResponseDto repetida = new AprobacionResponseDto();
+            repetida.setIdNegociacion(negociacion.getId());
+            repetida.setEstado(negociacion.getEstado());
+            repetida.setFacturas(negociacion.getFacturas());
+            repetida.setErrores(errores);
+            return repetida;
         }
 
         notificacionService.notificarFirmaEndoso(request);
