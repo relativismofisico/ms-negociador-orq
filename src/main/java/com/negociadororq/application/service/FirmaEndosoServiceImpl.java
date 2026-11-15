@@ -35,6 +35,17 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
     }
 
     @Override
+    public boolean tieneFirmas(String idNegociacion, String numeroFactura) {
+        return endosoPort.findByNegociacionIdAndNumeroFactura(idNegociacion, numeroFactura)
+                .map(e -> noVacia(e.getFirmasOtp()) || noVacia(e.getAprobaciones()))
+                .orElse(false);
+    }
+
+    private static boolean noVacia(final List<?> lista) {
+        return lista != null && !lista.isEmpty();
+    }
+
+    @Override
     public void firmarPdfEndoso(String idNegociacion, FacturaNegociada factura, PendingOtp pending, String rutEmpresa,
                                 String rutOperador, RolActor rolActor, boolean aprobado, String observacion) {
 

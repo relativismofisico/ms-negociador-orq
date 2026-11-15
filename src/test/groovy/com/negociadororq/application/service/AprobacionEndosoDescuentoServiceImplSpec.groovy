@@ -690,7 +690,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         ex.codigo == "ENDOSO_DUPLICADO"
     }
 
-    def "Fase 28c: CONFIRMING en un reintento con la firma ya estampada NO regenera el documento (borraría la firma)"() {
+    def "Fase 28c: CONFIRMING con alguna firma ya estampada (otro actor o reintento) NO regenera el documento (la borraría)"() {
         given:
         def fn = buildFacturaNeg("FECI001", "PAG-001", "PROV-001", [])
         def neg = Negociacion.builder().id("neg-001").tipoOperacion(new Operacion("CONFIRMING", "PAGO"))
@@ -699,7 +699,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         negociacionPort.save(_) >> neg
         def pending = buildPending("neg-001", "PROV-001", [new AprobacionFacturaRequest("FECI001", true, null)])
         pending.otpId = "77"
-        firmaEndosoService.yaFirmada("neg-001", "FECI001", "77") >> yaFirmada
+        firmaEndosoService.tieneFirmas("neg-001", "FECI001") >> tieneFirmas
 
         when:
         service.aprobarInterno(pending)
@@ -709,9 +709,9 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         consultas * endosoPort.findByNegociacionIdAndNumeroFactura("neg-001", "FECI001") >> Optional.empty()
 
         where:
-        yaFirmada | consultas
-        true      | 1
-        false     | 2
+        tieneFirmas | consultas
+        true        | 1
+        false       | 2
     }
 
     def "Fase 28c: tres reintentos de la misma aprobación (falla al guardar la negociación) => una sola solicitud de liquidación y un solo correo"() {

@@ -223,4 +223,21 @@ class FirmaEndosoServiceImplSpec extends Specification {
         !service.yaFirmada("neg-1", "F2", "77")
         !service.yaFirmada("neg-1", "F1", null)
     }
+
+    def "Fase 28c: tieneFirmas es true con marcas o con aprobaciones registradas (formato anterior), y false sin endoso"() {
+        given:
+        endosoPort.findByNegociacionIdAndNumeroFactura("neg-1", "F1") >> Optional.of(endoso)
+        endosoPort.findByNegociacionIdAndNumeroFactura("neg-1", "F9") >> Optional.empty()
+
+        expect:
+        service.tieneFirmas("neg-1", "F1") == esperado
+        !service.tieneFirmas("neg-1", "F9")
+
+        where:
+        endoso                                                                          | esperado
+        Endoso.builder().build()                                                        | false
+        Endoso.builder().firmasOtp([]).aprobaciones([]).build()                         | false
+        Endoso.builder().firmasOtp(["70:F1"]).build()                                   | true
+        Endoso.builder().aprobaciones([new com.negociadororq.domain.model.AprobacionActorDto()]).build() | true
+    }
 }

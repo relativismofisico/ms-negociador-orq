@@ -219,11 +219,13 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             // descuento fue el Pagador. Antes de estampar la firma OTP, se
             // regenera el documento completo con los datos del Proveedor que
             // está aprobando.
+            // Fase 28c: si el documento ya tiene alguna firma estampada (de otro actor, o la propia en un reintento),
+            // NO se regenera: el documento nuevo no tendría esos bloques (solo existen dentro del PDF) y se perderían.
+            // En ese caso el documento conserva el cuerpo anterior y la firma del Proveedor se estampa debajo.
             if ("CONFIRMING".equalsIgnoreCase(negociacion.getTipoOperacion().getTipo())
                     && rolActor == RolActor.PROVEEDOR
                     && factReq.isAprobado()
-                    // Fase 28c: en un reintento con la firma ya estampada, regenerar borraría la firma del PDF.
-                    && !firmaEndosoService.yaFirmada(negociacion.getId(), factura.getNumeroFactura(), pending.getOtpId())) {
+                    && !firmaEndosoService.tieneFirmas(negociacion.getId(), factura.getNumeroFactura())) {
                 regenerarDocumentoConFirmante(
                         negociacion, negociacion.getId(), factura.getNumeroFactura(), request.getRutOperador());
             }
