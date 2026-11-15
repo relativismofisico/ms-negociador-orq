@@ -100,6 +100,7 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
                 .intentosFirma(doc.getIntentosFirma())
                 .ultimoError(doc.getUltimoError())
                 .fechaActualizacion(doc.getFechaActualizacion())
+                .efectosEmitidos(doc.getEfectosEmitidos())
                 .build();
     }
 
@@ -125,6 +126,7 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
                 .intentosFirma(p.getIntentosFirma())
                 .ultimoError(p.getUltimoError())
                 .fechaActualizacion(p.getFechaActualizacion())
+                .efectosEmitidos(p.getEfectosEmitidos())
                 .build();
     }
 }

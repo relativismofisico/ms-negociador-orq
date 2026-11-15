@@ -75,6 +75,11 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final String topicLiquidacionSolicitada;
     private final AuditoriaNegociacionService auditoria;
 
+    /** Fase 28c: efectos que van al outbox viejo, marcados en la solicitud ({@link PendingOtp#getEfectosEmitidos()}). */
+    static final String EFECTO_LIQUIDACION = "LIQUIDACION:";
+    static final String EFECTO_LIQUIDACION_FALLIDA = "LIQUIDACION_FALLIDA:";
+    static final String EFECTO_CORREO_FIRMA = "CORREO_FIRMA";
+
     @Override
     public void solicitarOtp(AprobacionRequestDto request) {
 
@@ -235,8 +240,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             actualizarEstadosFacturaEndosoNegociacion(
                     negociacion, negociacion.getId(), factura,
-                    negociacion.getTipoOperacion(), request.getRutOperador(),
-                    Boolean.TRUE.equals(pending.getValidadoEnOrigen()), pending.getRequestId());
+                    negociacion.getTipoOperacion(), request.getRutOperador(), pending);
         }
 
         if (yaAplicadas > 0 && yaAplicadas == request.getFacturas().size()) {
@@ -249,7 +253,10 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             return repetida;
         }
 
-        notificacionService.notificarFirmaEndoso(request);
+        if (!yaEmitido(pending, EFECTO_CORREO_FIRMA)) {
+            notificacionService.notificarFirmaEndoso(request);
+            marcarEmitido(pending, EFECTO_CORREO_FIRMA);
+        }
 
         EstadoNegociacion estadoGlobal = calcularEstadoNegociacion(negociacion);
         String estadoAnterior = negociacion.getEstado();
@@ -271,8 +278,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                                                            FacturaNegociada factura,
                                                            Operacion tipoOperacion,
                                                            String rutOperador,
-                                                           boolean validadoEnOrigen,
-                                                           String requestId) {
+                                                           PendingOtp pending) {
 
         Set<RolActor> actoresRequeridos = obtenerActoresRequeridos(tipoOperacion.getTipo());
 
@@ -286,7 +292,11 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     + " fue rechazada durante el proceso de aprobación/endoso";
 
             revertirCupos(factura, tipoOperacion, factura.getRutProveedor(), rutOperador);
-            notificacionService.notificarLiquidacionFallida(negociacion, factura.getNumeroFactura(), motivoError);
+            String efectoFallida = EFECTO_LIQUIDACION_FALLIDA + factura.getNumeroFactura();
+            if (!yaEmitido(pending, efectoFallida)) {
+                notificacionService.notificarLiquidacionFallida(negociacion, factura.getNumeroFactura(), motivoError);
+                marcarEmitido(pending, efectoFallida);
+            }
             facturaPatchPort.actualizarEstadosPorNoFactura(
                     factura.getNumeroFactura(), EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA);
             factura.setEstadoFirma(EstadoFirma.RECHAZADA);
@@ -319,11 +329,19 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     .clase(tipoOperacion.getClase())
                     .build();
 
-            LiquidacionSolicitadaEvent event = new LiquidacionSolicitadaEvent(
-                    idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, clock.now(),
-                    validadoEnOrigen, requestId);
+            String efectoLiquidacion = EFECTO_LIQUIDACION + factura.getNumeroFactura();
+            if (yaEmitido(pending, efectoLiquidacion)) {
+                log.info(String.format("[LIQUIDACION-YA-SOLICITADA] negociación %s factura %s: la solicitud de liquidación ya "
+                        + "se escribió en un intento anterior de esta aprobación; no se repite.", idNegociacion,
+                        factura.getNumeroFactura()));
+            } else {
+                LiquidacionSolicitadaEvent event = new LiquidacionSolicitadaEvent(
+                        idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, clock.now(),
+                        Boolean.TRUE.equals(pending.getValidadoEnOrigen()), pending.getRequestId());
 
-            outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
+                outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
+                marcarEmitido(pending, efectoLiquidacion);
+            }
         } else if (alguienAprobo) {
             estadoFactura = EstadoFirma.EN_APROBACION;
             estadoNegociacionFactura = EstadoNegociacion.EN_APROBACION;
@@ -546,6 +564,25 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 }
             }
         }
+    }
+
+    /**
+     * Fase 28c: el outbox viejo (Mongo) no participa de la transacción JPA de {@link #aprobarInterno}: si un intento
+     * falla después de escribir un evento, el reintento lo escribiría otra vez. Cada efecto se marca en la solicitud
+     * justo después de escribirlo, y un reintento de la misma solicitud lo salta.
+     */
+    private static boolean yaEmitido(PendingOtp pending, String efecto) {
+        return pending.getEfectosEmitidos() != null && pending.getEfectosEmitidos().contains(efecto);
+    }
+
+    private void marcarEmitido(PendingOtp pending, String efecto) {
+        List<String> efectos = new ArrayList<>();
+        if (pending.getEfectosEmitidos() != null) {
+            efectos.addAll(pending.getEfectosEmitidos());
+        }
+        efectos.add(efecto);
+        pending.setEfectosEmitidos(efectos);
+        pendingOtpPort.save(pending);
     }
 
     private void actualizarAprobacionEndoso(String idNegociacion, FacturaNegociada factura, AprobacionActorDto aprobacion) {

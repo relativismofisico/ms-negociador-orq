@@ -175,7 +175,7 @@ class FirmaEndosoServiceImplSpec extends Specification {
         def endoso = Endoso.builder().id("e-1").negociacionId("neg-1").numerosFactura(["F1"])
                 .documentoPdf("PDF".bytes).build()
         def factura = FacturaNegociada.builder().numeroFactura("F1").aprobaciones([]).build()
-        def validado = LocalDateTime.of(2026, 11, 13, 10, 0)
+        def validado = java.time.Instant.parse("2026-11-13T15:00:00Z")
         def pending = PendingOtp.builder().otp("123456").ip("1.1.1.1").otpId("77").fechaValidacion(validado).build()
         endosoPort.findByNegociacionIdAndNumeroFactura("neg-1", "F1") >> Optional.of(endoso)
 
@@ -183,7 +183,7 @@ class FirmaEndosoServiceImplSpec extends Specification {
         service.firmarPdfEndoso("neg-1", factura, pending, "EMP", "OP", RolActor.PAGADOR, true, null)
 
         then:
-        1 * pdfFirmaPort.agregarFirma(_, { it.otpId == "77" && it.fechaValidacion == validado && it.otp == "123456" }, 0) >>
+        1 * pdfFirmaPort.agregarFirma(_, { it.otpId == "77" && it.fechaValidacion == validado && it.otp == "123456" && it.fecha != null }, 0) >>
                 "PDF-FIRMADO".bytes
         1 * endosoPort.save({ Endoso e -> e.firmasOtp == ["77:F1"] && new String(e.documentoPdf) == "PDF-FIRMADO" })
     }

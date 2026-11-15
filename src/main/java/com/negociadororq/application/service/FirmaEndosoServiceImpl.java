@@ -1,6 +1,7 @@
 package com.negociadororq.application.service;
 
 
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -70,7 +71,8 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
                 .otp(pending.getOtp())
                 .ip(pending.getIp())
                 .aprobado(aprobado)
-                .fecha(clock.now())
+                // El reloj da la hora local de la JVM: se pasa a instante con esa misma zona.
+                .fecha(clock.now().atZone(ZoneId.systemDefault()).toInstant())
                 .observacion(observacion)
                 .otpId(pending.getOtpId())
                 .fechaValidacion(pending.getFechaValidacion())

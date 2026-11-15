@@ -1,7 +1,9 @@
 package com.negociadororq.application.service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,7 +31,8 @@ import lombok.extern.java.Log;
  *   <li>Fallo permanente (negociación o endoso inexistente) o reintentos agotados: {@code FALLO_FIRMA}, log
  *       {@code [FIRMA-FALLIDA]}, alerta {@code [ALERTA][FIRMA-FALLIDA]} y aviso a la empresa firmante. Fallo
  *       transitorio: queda en {@code OTP_VALIDADO} con el intento contado y lo reintenta el reconciliador.</li>
- *   <li>{@code ENDOSO_DUPLICADO} (el actor ya firmó con otro OTP): la solicitud se descarta sin alerta.</li>
+ *   <li>{@code ENDOSO_DUPLICADO} (el actor ya firmó con otro OTP): la solicitud se descarta, con log
+ *       {@code [ENDOSO-DUPLICADO]} y su contador (sin datos del OTP), y sin aviso a la empresa.</li>
  *   <li>Duplicados de {@code otp.validate.response}: una solicitud ya FIRMADA o un evento sin solicitud activa se ignoran;
  *       la firma de cada factura es idempotente por {@code (otpId, factura)} en el endoso.</li>
  * </ul>
@@ -98,7 +101,7 @@ public class FirmaOtpServiceImpl implements FirmaOtpService {
         pending.setOtp(event.getOtp());
         pending.setIp(event.getIpAprobacion());
         pending.setOtpId(event.getOtpId());
-        pending.setFechaValidacion(event.getFechaValidacion());
+        pending.setFechaValidacion(instanteValidacion(event));
         pending.setEstado(EstadoFirmaOtp.OTP_VALIDADO.name());
         pending.setFechaActualizacion(clock.now());
         firmar(pendingOtpPort.save(pending));
@@ -139,8 +142,7 @@ public class FirmaOtpServiceImpl implements FirmaOtpService {
             aprobacion.aprobarInterno(pending);
         } catch (ConflictoException e) {
             if (ENDOSO_DUPLICADO.equals(e.getCodigo())) {
-                log.warning(String.format("[ENDOSO-DUPLICADO] negociación %s otpId %s: el actor ya había firmado con otro OTP; se "
-                        + "descarta la solicitud.", pending.getIdNegociacion(), pending.getOtpId()));
+                alerta.endosoDuplicado(pending.getIdNegociacion());
                 pendingOtpPort.deleteById(pending.getId());
                 return;
             }
@@ -189,6 +191,20 @@ public class FirmaOtpServiceImpl implements FirmaOtpService {
             log.severe(String.format("[FIRMA-FALLIDA] negociación %s: no se pudo registrar el aviso a la empresa (%s).",
                     pending.getIdNegociacion(), resumen(aviso)));
         }
+    }
+
+    /**
+     * Instante de la validación en security. Los eventos nuevos traen {@code instanteValidacion} (con zona); los del
+     * formato anterior solo {@code fechaValidacion}, la hora local del servidor de security sin zona, que corre en UTC.
+     */
+    static Instant instanteValidacion(final OtpValidatedEvent event) {
+        if (event.getInstanteValidacion() != null) {
+            return event.getInstanteValidacion();
+        }
+        if (event.getFechaValidacion() != null) {
+            return event.getFechaValidacion().toInstant(ZoneOffset.UTC);
+        }
+        return null;
     }
 
     private static int intentos(final PendingOtp pending) {

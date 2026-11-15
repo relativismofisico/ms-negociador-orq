@@ -1,6 +1,6 @@
 package com.negociadororq.domain.model;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,12 +26,13 @@ public class FirmaOtpMetadata {
 
     private boolean aprobado;
 
-    private LocalDateTime fecha;
+    /** Instante de la firma (Fase 28c: con zona; el PDF lo imprime en hora Colombia). */
+    private Instant fecha;
 
     private String observacion;
     /** Fase 28c: referencia del OTP en security. */
     private String otpId;
     /** Fase 28c: instante de la validación del OTP. */
-    private LocalDateTime fechaValidacion;
+    private Instant fechaValidacion;
 }
 

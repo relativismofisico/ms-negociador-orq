@@ -10,7 +10,9 @@ import com.negociadororq.domain.model.PendingOtp
 import spock.lang.Specification
 
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 /** Máquina de estados de la firma por OTP (Fase 28c). */
 class FirmaOtpServiceImplSpec extends Specification {
@@ -52,7 +54,7 @@ class FirmaOtpServiceImplSpec extends Specification {
         then:
         1 * aprobacion.aprobarInterno({ PendingOtp x ->
             x.estado == "OTP_VALIDADO" && x.otp == "123456" && x.otpId == "77" && x.ip == "10.0.0.1" &&
-                    x.fechaValidacion == AHORA.minusSeconds(5)
+                    x.fechaValidacion == AHORA.minusSeconds(5).toInstant(ZoneOffset.UTC)
         })
         estados == [["OTP_VALIDADO", "123456"], ["FIRMADO", null]]
         0 * alerta.firmaFallida()
@@ -140,7 +142,7 @@ class FirmaOtpServiceImplSpec extends Specification {
                       new ConflictoException("otro", "OTRO_CONFLICTO")]
     }
 
-    def "ENDOSO_DUPLICADO (el actor ya firmó con otro OTP): se descarta sin alerta"() {
+    def "ENDOSO_DUPLICADO (el actor ya firmó con otro OTP): se descarta con [ENDOSO-DUPLICADO] y contador, sin alerta de firma"() {
         given:
         pendientes.findByIdNegociacion("NEG-1") >> Optional.of(pendiente())
         pendientes.save(_) >> { PendingOtp x -> x }
@@ -151,6 +153,7 @@ class FirmaOtpServiceImplSpec extends Specification {
 
         then:
         1 * pendientes.deleteById("p-1")
+        1 * alerta.endosoDuplicado("NEG-1")
         0 * alerta.firmaFallida()
         0 * notificaciones.notificarFirmaFallida(_)
     }
@@ -217,5 +220,32 @@ class FirmaOtpServiceImplSpec extends Specification {
         then:
         notThrown(Exception)
         1 * alerta.firmaFallida()
+    }
+
+    def "Fase 28c: instanteValidacion (con zona) manda; el formato anterior sin zona se toma como UTC (hora de security)"() {
+        expect:
+        FirmaOtpServiceImpl.instanteValidacion(OtpValidatedEvent.builder()
+                .instanteValidacion(Instant.parse("2026-11-13T15:00:00Z"))
+                .fechaValidacion(LocalDateTime.of(2000, 1, 1, 0, 0)).build()) == Instant.parse("2026-11-13T15:00:00Z")
+        FirmaOtpServiceImpl.instanteValidacion(OtpValidatedEvent.builder()
+                .fechaValidacion(LocalDateTime.of(2026, 11, 13, 15, 0)).build()) == Instant.parse("2026-11-13T15:00:00Z")
+        FirmaOtpServiceImpl.instanteValidacion(OtpValidatedEvent.builder().build()) == null
+    }
+
+    def "Fase 28c: el evento nuevo de security (instanteValidacion en ISO con Z) se deserializa y llega a la solicitud"() {
+        given:
+        def json = '{"idNegociacion":"NEG-1","rutEmpresa":"EMP","valido":true,"otpId":"77",' +
+                '"fechaValidacion":"2026-11-13T15:00:00","instanteValidacion":"2026-11-13T15:00:00Z","campoNuevo":1}'
+        def mapper = org.springframework.kafka.support.JacksonUtils.enhancedObjectMapper()
+        def evento = mapper.readValue(json, OtpValidatedEvent)
+        def p = pendiente()
+        pendientes.findByIdNegociacion("NEG-1") >> Optional.of(p)
+        pendientes.save(_) >> { PendingOtp x -> x }
+
+        when:
+        servicio.procesarValidacion(evento)
+
+        then:
+        1 * aprobacion.aprobarInterno({ PendingOtp x -> x.fechaValidacion == Instant.parse("2026-11-13T15:00:00Z") })
     }
 }

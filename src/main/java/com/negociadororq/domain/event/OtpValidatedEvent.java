@@ -31,8 +31,13 @@ public class OtpValidatedEvent {
     private String motivo;
     /** Fase 28c, con valido=false: intentos que quedan antes del bloqueo. */
     private Integer intentosRestantes;
-    /** Fase 28c, con valido=true: instante de la validación en security. */
+    /**
+     * Fase 28c, con valido=true: fecha de la validación en security, en su hora local sin zona (formato anterior; se
+     * conserva por compatibilidad). Usar {@link #instanteValidacion} cuando venga.
+     */
     private java.time.LocalDateTime fechaValidacion;
+    /** Fase 28c, con valido=true: instante (con zona, ISO-8601 en UTC) de la validación en security. */
+    private java.time.Instant instanteValidacion;
 
     /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
     @ToString.Include(name = "otp")

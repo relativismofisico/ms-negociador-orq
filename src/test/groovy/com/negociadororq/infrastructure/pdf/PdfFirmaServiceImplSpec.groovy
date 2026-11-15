@@ -7,7 +7,7 @@ import org.apache.pdfbox.text.PDFTextStripper
 import org.apache.pdfbox.text.TextPosition
 import spock.lang.Specification
 
-import java.time.LocalDateTime
+import java.time.Instant
 
 class PdfFirmaServiceImplSpec extends Specification {
 
@@ -30,7 +30,7 @@ class PdfFirmaServiceImplSpec extends Specification {
                 .otp("123456")
                 .ip("127.0.0.1")
                 .aprobado(true)
-                .fecha(LocalDateTime.now())
+                .fecha(Instant.now())
                 .observacion(null)
                 .build()
     }
@@ -119,8 +119,8 @@ class PdfFirmaServiceImplSpec extends Specification {
     def "Fase 28c: el bloque lleva el OTP completo, la referencia, la fecha de validación y la IP (11 líneas siempre)"() {
         given:
         def conReferencia = FirmaOtpMetadata.builder().rutEmpresa("900111222").rutOperador("11111111")
-                .rolActor("PAGADOR").otp("123456").ip("127.0.0.1").aprobado(true).fecha(LocalDateTime.now())
-                .otpId("77").fechaValidacion(LocalDateTime.of(2026, 11, 13, 10, 0)).build()
+                .rolActor("PAGADOR").otp("123456").ip("127.0.0.1").aprobado(true).fecha(Instant.now())
+                .otpId("77").fechaValidacion(Instant.parse("2026-11-13T15:00:00Z")).build()
 
         when:
         def texto = textoDe(service.agregarFirma(pdfDeUnaPagina(), conReferencia, 0))
@@ -129,7 +129,7 @@ class PdfFirmaServiceImplSpec extends Specification {
         then:
         texto.contains("OTP: 123456")
         texto.contains("Referencia OTP: 77")
-        texto.contains("Validado el: 2026-11-13T10:00")
+        texto.contains("Validado el: 13/11/2026 10:00:00 (hora Colombia)")
         texto.contains("IP: 127.0.0.1")
         anterior.contains("Referencia OTP: -")
         anterior.contains("Validado el: -")
@@ -145,5 +145,47 @@ class PdfFirmaServiceImplSpec extends Specification {
 
     private static int lineasDeFirma(String texto) {
         texto.readLines().findAll { it.trim() }.size()
+    }
+
+    def "Fase 28c: las 11 líneas exactas, con las fechas en hora Colombia sea cual sea la zona de la JVM (#zona)"() {
+        given:
+        def original = TimeZone.getDefault()
+        def firma = FirmaOtpMetadata.builder().rutEmpresa("900111222").rutOperador("11111111")
+                .rolActor("PAGADOR").otp("123456").ip("127.0.0.1").aprobado(true)
+                .fecha(Instant.parse("2026-11-13T15:00:05Z"))
+                .otpId("77").fechaValidacion(Instant.parse("2026-11-13T15:00:00Z"))
+                .observacion("Sin observaciones").build()
+
+        when:
+        TimeZone.setDefault(TimeZone.getTimeZone(zona))
+        List<String> lineas
+        try {
+            lineas = textoDe(service.agregarFirma(pdfDeUnaPagina(), firma, 0)).readLines()*.trim().findAll { it }
+        } finally {
+            TimeZone.setDefault(original)
+        }
+
+        then:
+        lineas == [
+                "===== FIRMA ELECTRONICA =====",
+                "Actor: PAGADOR",
+                "Empresa: 900111222",
+                "Operador: 11111111",
+                "Resultado: APROBADO",
+                "OTP: 123456",
+                "Referencia OTP: 77",
+                "Validado el: 13/11/2026 10:00:00 (hora Colombia)",
+                "IP: 127.0.0.1",
+                "Fecha: 13/11/2026 10:00:05 (hora Colombia)",
+                "Obs: Sin observaciones"]
+
+        where:
+        zona << ["UTC", "America/Bogota", "Asia/Tokyo", "Pacific/Kiritimati", "America/Los_Angeles"]
+    }
+
+    def "Fase 28c: fecha ausente se imprime como -"() {
+        expect:
+        PdfFirmaServiceImpl.fechaColombia(null) == "-"
+        PdfFirmaServiceImpl.fechaColombia(Instant.parse("2026-01-01T04:59:59Z")) == "31/12/2025 23:59:59 (hora Colombia)"
     }
 }

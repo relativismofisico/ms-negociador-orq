@@ -713,4 +713,75 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         true      | 1
         false     | 2
     }
+
+    def "Fase 28c: tres reintentos de la misma aprobación (falla al guardar la negociación) => una sola solicitud de liquidación y un solo correo"() {
+        given:
+        // Cada intento lee la negociación de la BD: como el guardado final falla, la aprobación nunca queda registrada
+        // y el reintento vuelve a recorrer la factura (el outbox viejo no participa de la transacción JPA).
+        negociacionPort.findById("neg-001") >> {
+            def fondeador = new AprobacionActorDto("FOND-001", RolActor.FONDEADOR, true, null, LocalDateTime.now())
+            def fn = buildFacturaNeg("FECI001", "PAG-001", "PROV-001",
+                    [FondeadorAsignacion.builder().rutFondeador("FOND-001").build()])
+            fn.aprobaciones = [fondeador]
+            fn.estadoFirma = EstadoFirma.EN_APROBACION
+            Optional.of(Negociacion.builder().id("neg-001").tipoOperacion(new Operacion("FACTORING", "DESC"))
+                    .facturas([fn]).build())
+        }
+        negociacionPort.save(_) >> { throw new IllegalStateException("Mongo caído") }
+        def pending = buildPending("neg-001", "PAG-001", [new AprobacionFacturaRequest("FECI001", true, null)])
+        pending.otpId = "77"
+        def guardados = []
+        pendingOtpPort.save(_) >> { PendingOtp p -> guardados << List.copyOf(p.efectosEmitidos); p }
+
+        when:
+        3.times {
+            try {
+                service.aprobarInterno(pending)
+            } catch (IllegalStateException ignored) {
+                // el reconciliador lo reintenta
+            }
+        }
+
+        then:
+        1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", _)
+        1 * notificacionService.notificarFirmaEndoso(_)
+        pending.efectosEmitidos == ["LIQUIDACION:FECI001", "CORREO_FIRMA"]
+        guardados == [["LIQUIDACION:FECI001"], ["LIQUIDACION:FECI001", "CORREO_FIRMA"]]
+    }
+
+    def "Fase 28c: reintento de un rechazo => un solo correo de liquidación fallida"() {
+        given:
+        negociacionPort.findById("neg-001") >> {
+            def fn = buildFacturaNeg("FECI001", "PAG-001", "PROV-001",
+                    [FondeadorAsignacion.builder().rutFondeador("FOND-001").build()])
+            Optional.of(Negociacion.builder().id("neg-001").tipoOperacion(new Operacion("FACTORING", "DESC"))
+                    .facturas([fn]).build())
+        }
+        negociacionPort.save(_) >> { throw new IllegalStateException("Mongo caído") }
+        def facturaDb = new Factura()
+        facturaDb.numeroFactura = "FECI001"
+        facturaDb.rutProveedor = "PROV-001"
+        facturaDb.rutPagador = "PAG-001"
+        facturaDb.valorFactura = new BigDecimal("1000.00")
+        facturaPort.findByNumeroFactura("FECI001") >> Optional.of(facturaDb)
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(30L).build())
+        companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(40L).build())
+        def pending = buildPending("neg-001", "FOND-001", [new AprobacionFacturaRequest("FECI001", false, "Rechazo")])
+        pending.otpId = "77"
+
+        when:
+        2.times {
+            try {
+                service.aprobarInterno(pending)
+            } catch (IllegalStateException ignored) {
+                // el reconciliador lo reintenta
+            }
+        }
+
+        then:
+        1 * notificacionService.notificarLiquidacionFallida(_, "FECI001", _)
+        1 * notificacionService.notificarFirmaEndoso(_)
+        0 * outboxService.guardarEvento(_, "topic-liquidacion", _)
+    }
 }
