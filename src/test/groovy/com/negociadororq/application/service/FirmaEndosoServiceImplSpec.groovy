@@ -169,4 +169,75 @@ class FirmaEndosoServiceImplSpec extends Specification {
             it.observacion == "Rechazado"
         }, 0) >> "SIGNED".bytes
     }
+
+    def "Fase 28c: la firma lleva otpId y fecha de validación, y deja la marca otpId:factura en el mismo guardado"() {
+        given:
+        def endoso = Endoso.builder().id("e-1").negociacionId("neg-1").numerosFactura(["F1"])
+                .documentoPdf("PDF".bytes).build()
+        def factura = FacturaNegociada.builder().numeroFactura("F1").aprobaciones([]).build()
+        def validado = java.time.Instant.parse("2026-11-13T15:00:00Z")
+        def pending = PendingOtp.builder().otp("123456").ip("1.1.1.1").otpId("77").fechaValidacion(validado).build()
+        endosoPort.findByNegociacionIdAndNumeroFactura("neg-1", "F1") >> Optional.of(endoso)
+
+        when:
+        service.firmarPdfEndoso("neg-1", factura, pending, "EMP", "OP", RolActor.PAGADOR, true, null)
+
+        then:
+        1 * pdfFirmaPort.agregarFirma(_, { it.otpId == "77" && it.fechaValidacion == validado && it.otp == "123456" && it.fecha != null }, 0) >>
+                "PDF-FIRMADO".bytes
+        1 * endosoPort.save({ Endoso e -> e.firmasOtp == ["77:F1"] && new String(e.documentoPdf) == "PDF-FIRMADO" })
+    }
+
+    def "Fase 28c: reintento de la misma validación sobre la misma factura: no se estampa dos veces"() {
+        given:
+        def endoso = Endoso.builder().id("e-1").negociacionId("neg-1").numerosFactura(["F1", "F2"])
+                .documentoPdf("PDF-FIRMADO".bytes).firmasOtp(["77:F1"]).build()
+        def pending = PendingOtp.builder().otp("123456").otpId("77").build()
+        endosoPort.findByNegociacionIdAndNumeroFactura("neg-1", _) >> Optional.of(endoso)
+
+        when:
+        service.firmarPdfEndoso("neg-1", FacturaNegociada.builder().numeroFactura("F1").build(), pending, "EMP", "OP",
+                RolActor.PAGADOR, true, null)
+
+        then:
+        0 * pdfFirmaPort.agregarFirma(*_)
+        0 * endosoPort.save(_)
+
+        when: "otra factura del mismo endoso grupal sí se firma"
+        service.firmarPdfEndoso("neg-1", FacturaNegociada.builder().numeroFactura("F2").build(), pending, "EMP", "OP",
+                RolActor.PAGADOR, true, null)
+
+        then:
+        1 * pdfFirmaPort.agregarFirma(*_) >> "PDF-2".bytes
+        1 * endosoPort.save({ Endoso e -> e.firmasOtp == ["77:F1", "77:F2"] })
+    }
+
+    def "Fase 28c: yaFirmada mira la marca otpId:factura del endoso; sin otpId (formato anterior) es false"() {
+        given:
+        def endoso = Endoso.builder().firmasOtp(["77:F1"]).build()
+        endosoPort.findByNegociacionIdAndNumeroFactura("neg-1", _) >> Optional.of(endoso)
+
+        expect:
+        service.yaFirmada("neg-1", "F1", "77")
+        !service.yaFirmada("neg-1", "F1", "78")
+        !service.yaFirmada("neg-1", "F2", "77")
+        !service.yaFirmada("neg-1", "F1", null)
+    }
+
+    def "Fase 28c: tieneFirmas es true con marcas o con aprobaciones registradas (formato anterior), y false sin endoso"() {
+        given:
+        endosoPort.findByNegociacionIdAndNumeroFactura("neg-1", "F1") >> Optional.of(endoso)
+        endosoPort.findByNegociacionIdAndNumeroFactura("neg-1", "F9") >> Optional.empty()
+
+        expect:
+        service.tieneFirmas("neg-1", "F1") == esperado
+        !service.tieneFirmas("neg-1", "F9")
+
+        where:
+        endoso                                                                          | esperado
+        Endoso.builder().build()                                                        | false
+        Endoso.builder().firmasOtp([]).aprobaciones([]).build()                         | false
+        Endoso.builder().firmasOtp(["70:F1"]).build()                                   | true
+        Endoso.builder().aprobaciones([new com.negociadororq.domain.model.AprobacionActorDto()]).build() | true
+    }
 }

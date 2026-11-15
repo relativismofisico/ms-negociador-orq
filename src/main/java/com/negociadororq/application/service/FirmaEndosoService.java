@@ -11,6 +11,26 @@ import com.negociadororq.domain.model.PendingOtp;
 public interface FirmaEndosoService {
 
     /**
+     * Fase 28c: si la factura ya tiene estampada la firma de esta validación (marca {@code otpId:factura} del endoso).
+     *
+     * @param idNegociacion negociación
+     * @param numeroFactura factura
+     * @param otpId         referencia del OTP; {@code null} (formato anterior) devuelve false
+     * @return true si ya está firmada con ese OTP
+     */
+    boolean yaFirmada(String idNegociacion, String numeroFactura, String otpId);
+
+    /**
+     * Fase 28c: si el documento del endoso de esta factura ya tiene alguna firma estampada (de cualquier actor). Los
+     * bloques de firma solo existen dentro del PDF: regenerar el documento en ese caso los borraría.
+     *
+     * @param idNegociacion negociación
+     * @param numeroFactura factura
+     * @return true si el endoso tiene marcas de firma o aprobaciones registradas
+     */
+    boolean tieneFirmas(String idNegociacion, String numeroFactura);
+
+    /**
      * @param idNegociacion id de la negociación
      * @param factura       factura negociada sobre la que se firma
      * @param pending       solicitud OTP pendiente asociada a la firma

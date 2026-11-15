@@ -1605,3 +1605,35 @@ db.outbox_event.updateOne(
 // Descartarlo (decisión explícita: el evento no se publicará)
 db.outbox_event.deleteOne({ _id: ObjectId("<id>"), msPropietario: "ms-negociador-orq", fallido: true })
 ```
+
+
+## Firma por OTP: estados, reintentos e idempotencia (Fase 28c)
+
+La solicitud de firma (`pending_otp`) tiene estado:
+
+```
+PENDIENTE_OTP --(otp.validate.response valido=true)--> OTP_VALIDADO --(firma estampada)--> FIRMADO
+                                                            \--(fallo permanente o reintentos agotados)--> FALLO_FIRMA
+```
+
+- **Precondición de `confirmarOtp`:** sin una solicitud que espere el código (o si es de otra empresa) responde 409 `OTP_SIN_SOLICITUD_PENDIENTE`, y el código no se manda a validar.
+- **Código incorrecto con intentos restantes** (`motivo=INCORRECTO`, `intentosRestantes > 0`): la solicitud sigue en `PENDIENTE_OTP` y el usuario puede volver a teclear. Cualquier otro rechazo (vencido, bloqueado, usado o el formato anterior sin motivo) la descarta, como antes.
+- **Validación correcta:** antes de firmar, la solicitud pasa a `OTP_VALIDADO` con el código, `otpId`, fecha de validación e IP. Al terminar queda `FIRMADO` y se borra el código de la solicitud (queda en el PDF).
+- **Fallo transitorio:** la solicitud sigue en `OTP_VALIDADO` con `intentosFirma`. `ReconciliadorFirmaOtpScheduler` la reintenta (ShedLock, una instancia a la vez). Agotados los intentos, pasa a `FALLO_FIRMA`.
+- **Fallo permanente** (negociación o endoso inexistente) o reintentos agotados: `FALLO_FIRMA` con `ultimoError`, log ERROR `[FIRMA-FALLIDA]`, alerta `[ALERTA][FIRMA-FALLIDA]` y correo `FIRMA_FALLIDA` a la empresa firmante. La plantilla `FIRMA_FALLIDA` va en un PR de ms-notificaciones-util, pendiente de aprobar su texto.
+- **`ENDOSO_DUPLICADO`** (el actor ya firmó con otro OTP): la solicitud se descarta sin alerta.
+- **Idempotencia:**
+  - el endoso guarda `firmasOtp` (`otpId:numeroFactura`) en la misma escritura que el PDF sellado, así que un reintento no sella dos veces;
+  - en Confirming, un reintento con la firma ya estampada no regenera el documento, porque eso borraría la firma;
+  - la aprobación del actor guarda su `otpId`: la misma validación otra vez no se aplica (ni correo, ni estado, ni eventos), y otro `otpId` da `ENDOSO_DUPLICADO`;
+  - un `otp.validate.response` sin solicitud activa se ignora (`[OTP-SIN-PENDIENTE]`).
+
+| Propiedad | Default | Uso |
+|---|---|---|
+| `firma.reconciliador.intervalo` | `PT1M` | Cada cuánto corre el reconciliador |
+| `firma.reconciliador.espera` | `PT2M` | Antigüedad mínima en `OTP_VALIDADO` para reintentar |
+| `firma.reconciliador.max-intentos` | `5` | Intentos transitorios antes de `FALLO_FIRMA` |
+
+Alarma recomendada (CloudWatch, filtro de métrica): cualquier ocurrencia de `[ALERTA][FIRMA-FALLIDA]`. Para revisar a mano: `db.pending_otp.find({estado: "FALLO_FIRMA"}, {otp: 0})`.
+
+**Bloque de firma del PDF:** ahora tiene 11 líneas. Después de `OTP: <código completo>` se agregan `Referencia OTP: <otpId>` y `Validado el: <fecha>`, con `-` si el evento es del formato anterior. La posición se calcula para que la última línea quede a 20 pt del borde; con 9 líneas sería la misma posición de antes.

@@ -54,6 +54,7 @@ public class EndosoAdapter implements EndosoOutputPort {
                 .documentoHtml(doc.getDocumentoHtml())
                 .documentoPdf(doc.getDocumentoPdf())
                 .nombreArchivoPdf(doc.getNombreArchivoPdf())
+                .firmasOtp(doc.getFirmasOtp())
                 .build();
     }
 
@@ -78,6 +79,7 @@ public class EndosoAdapter implements EndosoOutputPort {
                 .documentoHtml(e.getDocumentoHtml())
                 .documentoPdf(e.getDocumentoPdf())
                 .nombreArchivoPdf(e.getNombreArchivoPdf())
+                .firmasOtp(e.getFirmasOtp())
                 .build();
     }
 }

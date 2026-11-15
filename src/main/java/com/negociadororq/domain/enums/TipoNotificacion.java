@@ -8,5 +8,6 @@ public enum TipoNotificacion {
     ENDOSO_CREADO,
     ENDOSO_FIRMADO,
     OTP,
-    LIQUIDACION_FALLIDA
+    LIQUIDACION_FALLIDA,
+    FIRMA_FALLIDA
 }

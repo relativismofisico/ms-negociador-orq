@@ -1,5 +1,9 @@
 package com.negociadororq.infrastructure.persistence.entity;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+
 import com.negociadororq.domain.model.AprobacionRequest;
 import com.negociadororq.domain.util.Sensible;
 import lombok.AllArgsConstructor;
@@ -39,6 +43,23 @@ public class PendingOtpDocument {
     private String actorRol;
     private Long actorEmpresaId;
     private String requestId;
+    /** Fase 28c: estado de la firma (EstadoFirmaOtp); null = creada antes (cuenta como PENDIENTE_OTP). */
+    private String estado;
+    /** Fase 28c: referencia del OTP en ms-security-util (llega con la validación). */
+    private String otpId;
+    /** Fase 28c: instante de la validación en security. */
+    private Instant fechaValidacion;
+    /** Fase 28c: intentos de firma fallidos por causas transitorias. */
+    private Integer intentosFirma;
+    /** Fase 28c: último error de firma (clase y mensaje, sin datos del OTP). */
+    private String ultimoError;
+    /** Fase 28c: última transición de estado. */
+    private LocalDateTime fechaActualizacion;
+    /**
+     * Fase 28c: efectos de la aprobación ya escritos en el outbox (solicitud de liquidación y correos) por esta
+     * solicitud. Un reintento (reconciliador o reentrega de Kafka) no los vuelve a escribir.
+     */
+    private List<String> efectosEmitidos;
 
     /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
     @ToString.Include(name = "otp")

@@ -1,6 +1,10 @@
 package com.negociadororq.application.service;
 
 
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.EndosoOutputPort;
@@ -24,6 +28,24 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
     private final AuditoriaNegociacionService auditoria;
 
     @Override
+    public boolean yaFirmada(String idNegociacion, String numeroFactura, String otpId) {
+        return otpId != null && endosoPort.findByNegociacionIdAndNumeroFactura(idNegociacion, numeroFactura)
+                .map(e -> e.getFirmasOtp() != null && e.getFirmasOtp().contains(otpId + ":" + numeroFactura))
+                .orElse(false);
+    }
+
+    @Override
+    public boolean tieneFirmas(String idNegociacion, String numeroFactura) {
+        return endosoPort.findByNegociacionIdAndNumeroFactura(idNegociacion, numeroFactura)
+                .map(e -> noVacia(e.getFirmasOtp()) || noVacia(e.getAprobaciones()))
+                .orElse(false);
+    }
+
+    private static boolean noVacia(final List<?> lista) {
+        return lista != null && !lista.isEmpty();
+    }
+
+    @Override
     public void firmarPdfEndoso(String idNegociacion, FacturaNegociada factura, PendingOtp pending, String rutEmpresa,
                                 String rutOperador, RolActor rolActor, boolean aprobado, String observacion) {
 
@@ -31,6 +53,14 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
                 .findByNegociacionIdAndNumeroFactura(idNegociacion, factura.getNumeroFactura())
                 .orElseThrow(() -> new RecursoNoEncontradoException("Endoso no encontrado"));
 
+        // Fase 28c: idempotente por (otpId, factura). La marca va en el mismo guardado que el PDF.
+        String marca = null;
+        if (pending.getOtpId() != null) {
+            marca = pending.getOtpId() + ":" + factura.getNumeroFactura();
+            if (endoso.getFirmasOtp() != null && endoso.getFirmasOtp().contains(marca)) {
+                return;
+            }
+        }
         byte[] pdfActual = endoso.getDocumentoPdf();
 
         // OJO: el índice de posición de la firma debe salir de endoso.getAprobaciones()
@@ -52,13 +82,24 @@ public class FirmaEndosoServiceImpl implements FirmaEndosoService {
                 .otp(pending.getOtp())
                 .ip(pending.getIp())
                 .aprobado(aprobado)
-                .fecha(clock.now())
+                // El reloj da la hora local de la JVM: se pasa a instante con esa misma zona.
+                .fecha(clock.now().atZone(ZoneId.systemDefault()).toInstant())
                 .observacion(observacion)
+                .otpId(pending.getOtpId())
+                .fechaValidacion(pending.getFechaValidacion())
                 .build();
 
         byte[] pdfFirmado = pdfFirmaPort.agregarFirma(pdfActual, firma, indexFirma);
 
         endoso.setDocumentoPdf(pdfFirmado);
+        if (marca != null) {
+            List<String> marcas = new ArrayList<>();
+            if (endoso.getFirmasOtp() != null) {
+                marcas.addAll(endoso.getFirmasOtp());
+            }
+            marcas.add(marca);
+            endoso.setFirmasOtp(marcas);
+        }
         endosoPort.save(endoso);
         auditoria.endosoFirmado(pending, endoso, factura.getNumeroFactura(), rolActor, aprobado);
     }
