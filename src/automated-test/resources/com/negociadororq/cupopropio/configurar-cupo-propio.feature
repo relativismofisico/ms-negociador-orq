@@ -1,4 +1,5 @@
 @regression @full
+@parallel=false
 Feature: PUT/PATCH /companies/{companyId}/cupo-propio-fondeo — Configurar cupo propio de autofondeo
 
   # PUT (definir) + PATCH .../endoso-grupal, .../rentabilidad-minima, .../restablecer.
