@@ -69,7 +69,6 @@ class FacturasCamposDeCargaIntegracionSpec extends Specification {
                 numeroFactura          : numero,
                 rutPagador             : "800",
                 rutProveedor           : "900",
-                valorFactura           : 1000000G,
                 estadoNegociacion      : estadoNegociacion,
                 estadoFirma            : "SIN_FIRMA",
                 fechavencimientoFactura: Date.from(vencimiento.atStartOfDay().toInstant(ZoneOffset.UTC)),
