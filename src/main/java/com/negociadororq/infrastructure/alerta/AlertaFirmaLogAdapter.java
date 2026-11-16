@@ -18,6 +18,7 @@ public class AlertaFirmaLogAdapter implements AlertaFirmaOutputPort {
 
     private final AtomicLong total = new AtomicLong();
     private final AtomicLong endososDuplicados = new AtomicLong();
+    private final AtomicLong rolesNoPermitidos = new AtomicLong();
 
     @Override
     public void firmaFallida() {
@@ -28,6 +29,14 @@ public class AlertaFirmaLogAdapter implements AlertaFirmaOutputPort {
     public void endosoDuplicado(final String idNegociacion) {
         log.warn("[ENDOSO-DUPLICADO] negociación {}: el actor ya había firmado esta aprobación con otro OTP; se descarta la "
                 + "solicitud. Endosos duplicados desde el arranque: {}", idNegociacion, endososDuplicados.incrementAndGet());
+    }
+
+    @Override
+    public void rolNoPermitido(final String idNegociacion, final String rutEmpresa, final String tipoOperacion,
+            final String rol) {
+        log.warn("[ROL-NO-PERMITIDO] negociación {} empresa {}: el rol {} no aprueba operaciones de {}; la solicitud queda "
+                + "en ROL_NO_PERMITIDO sin firma ni cupos. Desde el arranque: {}", idNegociacion, rutEmpresa, rol,
+                tipoOperacion, rolesNoPermitidos.incrementAndGet());
     }
 
     /**
@@ -42,5 +51,12 @@ public class AlertaFirmaLogAdapter implements AlertaFirmaOutputPort {
      */
     long endososDuplicados() {
         return endososDuplicados.get();
+    }
+
+    /**
+     * @return validaciones de un rol no permitido desde el arranque
+     */
+    long rolesNoPermitidos() {
+        return rolesNoPermitidos.get();
     }
 }
