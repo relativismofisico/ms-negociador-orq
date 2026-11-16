@@ -33,7 +33,7 @@ import java.time.ZoneOffset
  */
 class FacturasCamposDeCargaIntegracionSpec extends Specification {
 
-    static final List<String> CAMPOS_DE_CARGA = ["emailPagador", "emailProveedor", "telefonoPagador",
+    private static final List<String> CAMPOS_DE_CARGA = ["emailPagador", "emailProveedor", "telefonoPagador",
                                                  "telefonoProveedor", "fechaValidacionFactura", "eventosPendientes",
                                                  "eventosPendientesDesde"]
 
