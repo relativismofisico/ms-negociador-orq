@@ -49,4 +49,22 @@ public interface FacturaPatchOutputPort {
      * sub-agrupar facturas liquidadas por negociación (Facturas liquidadas).
      */
     void actualizarNegociacionId(String numeroFactura, String negociacionId);
+
+    /**
+     * Cambia solo el estado de negociación de la factura. Fase 28d: la colección de facturas la escriben también
+     * ms-cargaFacturas-neg y ms-liquidador-neg con campos que este servicio no mapea (contacto, fecha de validación,
+     * marca eventosPendientes); un guardado del documento completo los borraría.
+     *
+     * @param facturaId         id de la factura
+     * @param estadoNegociacion nuevo estado de negociación, tal cual se guarda
+     */
+    void actualizarEstadoNegociacionPorId(String facturaId, String estadoNegociacion);
+
+    /**
+     * Cambia solo el estado de firma de las facturas indicadas (ver {@link #actualizarEstadoNegociacionPorId}).
+     *
+     * @param facturaIds  ids de las facturas
+     * @param estadoFirma nuevo estado de firma, tal cual se guarda
+     */
+    void actualizarEstadoFirmaPorIds(List<String> facturaIds, String estadoFirma);
 }

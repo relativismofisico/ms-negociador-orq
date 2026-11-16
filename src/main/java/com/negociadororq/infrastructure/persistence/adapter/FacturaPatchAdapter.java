@@ -44,4 +44,14 @@ public class FacturaPatchAdapter implements FacturaPatchOutputPort {
     public void actualizarNegociacionId(String numeroFactura, String negociacionId) {
         repository.actualizarNegociacionId(numeroFactura, negociacionId);
     }
+
+    @Override
+    public void actualizarEstadoNegociacionPorId(String facturaId, String estadoNegociacion) {
+        repository.actualizarEstadoNegociacionPorId(facturaId, estadoNegociacion);
+    }
+
+    @Override
+    public void actualizarEstadoFirmaPorIds(List<String> facturaIds, String estadoFirma) {
+        repository.actualizarEstadoFirmaPorIds(facturaIds, estadoFirma);
+    }
 }

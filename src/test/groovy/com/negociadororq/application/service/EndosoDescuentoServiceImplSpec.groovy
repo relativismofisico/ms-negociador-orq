@@ -492,7 +492,8 @@ class EndosoDescuentoServiceImplSpec extends Specification {
         1 * cupoReversionService.revertirCupoUsuario(9L, new BigDecimal("5000.00"))
         1 * cupoReversionService.revertirCupoEmpresa(2L, new BigDecimal("5000.00"))
         1 * cupoReversionService.revertirCupoFondeadorFactoring(1L, 2L, new BigDecimal("5000.00"))
-        1 * facturaPort.save({ it.estadoNegociacion == "SIN_NEGOCIAR" })
+        1 * facturaPatchPort.actualizarEstadoNegociacionPorId(_, "SIN_NEGOCIAR")
+        0 * facturaPort.save(_)
     }
 
     def "factura dentro de vigencia DIAS_ANTES_VENCIMIENTO se endosa normalmente"() {
