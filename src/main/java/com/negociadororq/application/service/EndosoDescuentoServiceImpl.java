@@ -136,7 +136,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                         request.getRutActor(), request.getRutOperador(),
                         factura.getRutProveedor(), factura.getRutPagador());
                 factura.setEstadoNegociacion("SIN_NEGOCIAR");
-                facturaPort.save(factura);
+                // Fase 28d: solo el estado (un save() completo borraría los campos de carga)
+                facturaPatchPort.actualizarEstadoNegociacionPorId(factura.getId(), "SIN_NEGOCIAR");
                 facturasRechazadas.add(numeroFactura + " (vigencia del descuento vencida)");
                 continue;
             }

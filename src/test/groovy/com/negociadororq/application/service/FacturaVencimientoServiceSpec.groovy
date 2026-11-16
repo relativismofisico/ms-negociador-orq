@@ -3,6 +3,7 @@ package com.negociadororq.application.service
 import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
+import com.negociadororq.application.port.output.FacturaPatchOutputPort
 import com.negociadororq.application.port.output.NegociacionOutputPort
 import com.negociadororq.domain.model.Factura
 import spock.lang.Specification
@@ -13,6 +14,7 @@ import java.time.LocalDateTime
 class FacturaVencimientoServiceSpec extends Specification {
 
     FacturaOutputPort facturaPort = Mock()
+    FacturaPatchOutputPort facturaPatchPort = Mock()
     NegociacionOutputPort negociacionPort = Mock()
     CompanyOutputPort companyPort = Mock()
     CupoReversionService cupoReversionService = Mock()
@@ -20,7 +22,7 @@ class FacturaVencimientoServiceSpec extends Specification {
         now() >> LocalDateTime.now()
     }
     FacturaVencimientoService service = new FacturaVencimientoService(
-            facturaPort, negociacionPort, companyPort, cupoReversionService, clock)
+            facturaPort, negociacionPort, companyPort, cupoReversionService, clock, facturaPatchPort)
 
     def "marca facturas con dias <= 10 como VENCIDA"() {
         given:
@@ -40,7 +42,7 @@ class FacturaVencimientoServiceSpec extends Specification {
         then:
         f1.estadoNegociacion == "VENCIDA"
         f2.estadoNegociacion == "VENCIDA"
-        2 * facturaPort.save(_)
+        2 * facturaPatchPort.actualizarEstadoNegociacionPorId(_, "VENCIDA")
     }
 
     def "no marca facturas con dias > 10"() {
@@ -56,7 +58,7 @@ class FacturaVencimientoServiceSpec extends Specification {
 
         then:
         f.estadoNegociacion == null
-        0 * facturaPort.save(_)
+        0 * facturaPatchPort.actualizarEstadoNegociacionPorId(_, "VENCIDA")
     }
 
     def "omite facturas sin fecha de vencimiento"() {
@@ -72,7 +74,7 @@ class FacturaVencimientoServiceSpec extends Specification {
 
         then:
         f.estadoNegociacion == null
-        0 * facturaPort.save(_)
+        0 * facturaPatchPort.actualizarEstadoNegociacionPorId(_, "VENCIDA")
     }
 
     def "cuando no hay facturas pendientes no hace nada"() {
@@ -83,34 +85,37 @@ class FacturaVencimientoServiceSpec extends Specification {
         service.actualizarFacturasVencidas()
 
         then:
-        0 * facturaPort.save(_)
+        0 * facturaPatchPort.actualizarEstadoNegociacionPorId(_, "VENCIDA")
     }
 
     def "continua procesando si una factura lanza excepcion"() {
         given:
         def fError = new Factura()
         fError.numeroFactura = "F_ERROR"
+        fError.id = "id-error"
         fError.fechavencimientoFactura = LocalDate.now().plusDays(5)
 
         def fOk = new Factura()
         fOk.numeroFactura = "F_OK"
+        fOk.id = "id-ok"
         fOk.fechavencimientoFactura = LocalDate.now().plusDays(3)
 
         facturaPort.findFacturasPendientesVencimiento() >> [fError, fOk]
-        facturaPort.save(fError) >> { throw new RuntimeException("Error BD") }
+        facturaPatchPort.actualizarEstadoNegociacionPorId("id-error", "VENCIDA") >> { throw new RuntimeException("Error BD") }
 
         when:
         service.actualizarFacturasVencidas()
 
         then:
         fOk.estadoNegociacion == "VENCIDA"
-        1 * facturaPort.save(fOk)
+        1 * facturaPatchPort.actualizarEstadoNegociacionPorId("id-ok", "VENCIDA")
     }
 
     def "procesa lista con mezcla de vigentes y vencidas"() {
         given:
         def vencida = new Factura()
         vencida.numeroFactura = "F_VENCIDA"
+        vencida.id = "id-vencida"
         vencida.fechavencimientoFactura = LocalDate.now().plusDays(2)
 
         def vigente = new Factura()
@@ -130,9 +135,9 @@ class FacturaVencimientoServiceSpec extends Specification {
         vencida.estadoNegociacion == "VENCIDA"
         vigente.estadoNegociacion == null
         sinFecha.estadoNegociacion == null
-        1 * facturaPort.save(vencida)
-        0 * facturaPort.save(vigente)
-        0 * facturaPort.save(sinFecha)
+        1 * facturaPatchPort.actualizarEstadoNegociacionPorId("id-vencida", "VENCIDA")
+        0 * facturaPatchPort.actualizarEstadoNegociacionPorId(*_)
+        0 * facturaPort.save(_)
     }
 
     // ─── reversion de cupos para negociaciones abandonadas ───────────────────
@@ -188,7 +193,7 @@ class FacturaVencimientoServiceSpec extends Specification {
         f.estadoNegociacion == "VENCIDA"
         1 * cupoReversionService.revertirCupoEmpresa(2L, new BigDecimal("7000.00"))
         1 * cupoReversionService.revertirCupoFondeadorFactoring(1L, 2L, new BigDecimal("7000.00"))
-        1 * facturaPort.save(f)
+        1 * facturaPatchPort.actualizarEstadoNegociacionPorId(_, "VENCIDA")
     }
 
     def "factura EN_REVISION sin negociacionId no reversa nada (no hay como resolverla)"() {

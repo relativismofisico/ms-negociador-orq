@@ -10,6 +10,7 @@ import java.util.Optional;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
 import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Factura;
@@ -36,6 +37,7 @@ public class FacturaVencimientoService {
     private final CompanyOutputPort companyPort;
     private final CupoReversionService cupoReversionService;
     private final ClockPort clock;
+    private final FacturaPatchOutputPort facturaPatchPort;
 
     /**
      * Marca facturas como VENCIDA
@@ -85,7 +87,8 @@ public class FacturaVencimientoService {
 
                     factura.setEstadoNegociacion("VENCIDA");
 
-                    facturaPort.save(factura);
+                    // Fase 28d: solo el estado (un save() completo borraría los campos de carga)
+                    facturaPatchPort.actualizarEstadoNegociacionPorId(factura.getId(), "VENCIDA");
 
                     actualizadas++;
 

@@ -8,7 +8,10 @@ import com.negociadororq.application.port.output.NegociacionOutputPort
 import com.negociadororq.application.service.CupoReversionService
 import com.negociadororq.application.service.FacturaServiceImpl
 import com.negociadororq.application.service.FacturaVencimientoService
+import com.negociadororq.application.mapper.EstadoFacturaMapper
 import com.negociadororq.infrastructure.persistence.adapter.FacturaAdapter
+import com.negociadororq.infrastructure.persistence.adapter.FacturaPatchAdapter
+import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository
 import com.negociadororq.infrastructure.persistence.repository.FacturaRepository
 import org.bson.Document
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -44,6 +47,8 @@ class FacturasCamposDeCargaIntegracionSpec extends Specification {
     MongoTemplate mongo
     @Shared
     FacturaAdapter facturas
+    @Shared
+    FacturaPatchAdapter parches
 
     ClockPort clock = Stub() { now() >> LocalDateTime.of(2026, 11, 16, 3, 0) }
 
@@ -52,6 +57,7 @@ class FacturasCamposDeCargaIntegracionSpec extends Specification {
         cliente = MongoClients.create(mongoDb.replicaSetUrl)
         mongo = new MongoTemplate(new SimpleMongoClientDatabaseFactory(cliente, "negociador"))
         facturas = new FacturaAdapter(new MongoRepositoryFactory(mongo).getRepository(FacturaRepository))
+        parches = new FacturaPatchAdapter(new FacturaPatchRepository(mongo, new EstadoFacturaMapper()))
     }
 
     def cleanupSpec() {
@@ -95,7 +101,7 @@ class FacturasCamposDeCargaIntegracionSpec extends Specification {
         facturaDeCarga("FC-1", "NEGOCIADA", LocalDate.of(2027, 1, 30))
 
         when:
-        new FacturaServiceImpl(facturas).actualizarEstadoFirma("FC-1", "FIRMADA")
+        new FacturaServiceImpl(facturas, parches).actualizarEstadoFirma("FC-1", "FIRMADA")
 
         then:
         leer("FC-1").getString("estadoFirma") == "FIRMADA"
@@ -109,7 +115,7 @@ class FacturasCamposDeCargaIntegracionSpec extends Specification {
         facturaDeCarga("FC-3", "NEGOCIADA", LocalDate.of(2027, 1, 30))
 
         when:
-        new FacturaServiceImpl(facturas).actualizarEstadoFirmaMasivo(["FC-2", "FC-3"], "FIRMADA")
+        new FacturaServiceImpl(facturas, parches).actualizarEstadoFirmaMasivo(["FC-2", "FC-3"], "FIRMADA")
 
         then:
         ["FC-2", "FC-3"].every { leer(it).getString("estadoFirma") == "FIRMADA" }
@@ -122,7 +128,7 @@ class FacturasCamposDeCargaIntegracionSpec extends Specification {
         facturaDeCarga("FC-4", "SIN_NEGOCIAR", LocalDate.of(2026, 11, 21))
         facturaDeCarga("FC-5", "SIN_NEGOCIAR", LocalDate.of(2027, 3, 1))
         def servicio = new FacturaVencimientoService(facturas, Stub(NegociacionOutputPort), Stub(CompanyOutputPort),
-                Mock(CupoReversionService), clock)
+                Mock(CupoReversionService), clock, parches)
 
         when:
         servicio.actualizarFacturasVencidas()
