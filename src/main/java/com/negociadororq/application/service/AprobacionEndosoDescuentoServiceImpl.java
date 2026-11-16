@@ -25,6 +25,7 @@ import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
 import com.negociadororq.application.port.output.PendingOtpOutputPort;
+import com.negociadororq.application.port.output.ResultadoSolicitudOtp;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.domain.enums.EstadoEndoso;
 import com.negociadororq.domain.enums.EstadoFirma;
@@ -81,6 +82,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     static final String EFECTO_LIQUIDACION = "LIQUIDACION:";
     static final String EFECTO_LIQUIDACION_FALLIDA = "LIQUIDACION_FALLIDA:";
     static final String EFECTO_CORREO_FIRMA = "CORREO_FIRMA";
+    /** Fase 28d: código de la firma única por empresa. */
+    static final String CODIGO_FIRMA_EMPRESA_YA_REALIZADA = "FIRMA_EMPRESA_YA_REALIZADA";
+    private static final java.util.concurrent.atomic.AtomicLong REEMPLAZOS = new java.util.concurrent.atomic.AtomicLong();
 
     @Override
     public void solicitarOtp(AprobacionRequestDto request) {
@@ -101,9 +105,19 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
         AprobacionRequest domainRequest = mapToDomainRequest(request, rol);
 
+        // Fase 28d (firma única): una firma por empresa. Si la empresa ya aprobó estas facturas, u otro operador suyo
+        // tiene la firma en curso o ya firmó, no se pide otro OTP.
+        if (empresaYaAprobo(negociacion, request.getRutEmpresa(), numeros)
+                || pendingOtpPort.existeFirmaDeOtroOperador(request.getIdNegociacion(), request.getRutEmpresa(),
+                        request.getRutOperador())) {
+            throw new ConflictoException("Tu empresa ya firmó esta solicitud o tiene una firma en curso de otro usuario.",
+                    CODIGO_FIRMA_EMPRESA_YA_REALIZADA);
+        }
+
         PendingOtp pending = PendingOtp.builder()
                 .idNegociacion(request.getIdNegociacion())
                 .rutEmpresa(request.getRutEmpresa())
+                .rutOperador(request.getRutOperador())
                 .rolActor(rol)
                 .request(domainRequest)
                 // Si este método corre, el CompanyOwnershipGuard del controller ya
@@ -115,7 +129,21 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 .build();
         auditoria.completarSolicitud(pending);
 
-        pendingOtpPort.save(pending);
+        // Fase 28d (2.9): una sola solicitud por (negociación, empresa, operador), con alta atómica.
+        ResultadoSolicitudOtp resultado = pendingOtpPort.registrarSolicitud(pending);
+        switch (resultado.tipo()) {
+            case FIRMA_EN_CURSO -> throw new ConflictoException("Ya hay una firma en curso para tu solicitud.",
+                    "FIRMA_EN_CURSO");
+            case YA_FIRMADA -> throw new ConflictoException(
+                    "Tu empresa ya firmó esta solicitud o tiene una firma en curso de otro usuario.",
+                    CODIGO_FIRMA_EMPRESA_YA_REALIZADA);
+            case REEMPLAZADA -> log.warning(String.format("[OTP-REEMPLAZO] negociación %s: la solicitud anterior del mismo "
+                    + "operador estaba en %s y se reemplaza por una nueva. Reemplazos desde el arranque: %d",
+                    request.getIdNegociacion(), resultado.estadoAnterior(), REEMPLAZOS.incrementAndGet()));
+            default -> {
+                // NUEVA o REFRESCADA: se pide el OTP
+            }
+        }
 
         outboxService.guardarEvento(
                 request.getIdNegociacion(),
@@ -154,7 +182,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     public void confirmarOtp(ConfirmacionOtpRequestDto request) {
         // Fase 28c: precondición. Sin una solicitud que espere el código (o de otra empresa) no se manda a validar:
         // el código no viaja si no hay nada que firmar.
-        PendingOtp pending = pendingOtpPort.findByIdNegociacion(request.getIdNegociacion())
+        PendingOtp pending = pendingOtpPort.findByClave(request.getIdNegociacion(), request.getRutEmpresa(),
+                        request.getRutOperador())
                 .filter(p -> EstadoFirmaOtp.esperandoCodigo(p.getEstado()))
                 .orElseThrow(() -> new ConflictoException(
                         "No hay una solicitud de OTP pendiente para la negociación " + request.getIdNegociacion(),
@@ -250,6 +279,16 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     && !firmaEndosoService.tieneFirmas(negociacion.getId(), factura.getNumeroFactura())) {
                 regenerarDocumentoConFirmante(
                         negociacion, negociacion.getId(), factura.getNumeroFactura(), request.getRutOperador());
+            }
+
+            // Fase 28d (firma única): reclamo atómico de la firma de la empresa sobre esta factura; otro OTP de la
+            // misma empresa (otro operador, a la vez) no estampa un segundo bloque.
+            String otpFirma = Optional.ofNullable(pending.getOtpId()).orElse(pending.getId());
+            if (!endosoPatchPort.reclamarFirmaEmpresa(request.getIdNegociacion(), factura.getNumeroFactura(),
+                    request.getRutEmpresa(), otpFirma)) {
+                throw new ConflictoException(
+                        "El actor " + request.getRutEmpresa() + " ya realizó el endoso para la factura "
+                                + factura.getNumeroFactura(), "ENDOSO_DUPLICADO");
             }
 
             firmaEndosoService.firmarPdfEndoso(
@@ -554,6 +593,13 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             }
         }
         return roles.get(0);
+    }
+
+    private static boolean empresaYaAprobo(Negociacion negociacion, String rutEmpresa, List<String> numerosFactura) {
+        return Optional.ofNullable(negociacion.getFacturas()).orElse(List.of()).stream()
+                .filter(f -> numerosFactura.isEmpty() || numerosFactura.contains(f.getNumeroFactura()))
+                .flatMap(f -> Optional.ofNullable(f.getAprobaciones()).orElse(List.of()).stream())
+                .anyMatch(a -> rutEmpresa.equals(a.getRutActor()));
     }
 
     private static Optional<RolActor> rolEn(String rutActor, FacturaNegociada factura) {

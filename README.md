@@ -1637,3 +1637,34 @@ PENDIENTE_OTP --(otp.validate.response valido=true)--> OTP_VALIDADO --(firma est
 Alarma recomendada (CloudWatch, filtro de métrica): cualquier ocurrencia de `[ALERTA][FIRMA-FALLIDA]`. Para revisar a mano: `db.pending_otp.find({estado: "FALLO_FIRMA"}, {otp: 0})`.
 
 **Bloque de firma del PDF:** ahora tiene 11 líneas. Después de `OTP: <código completo>` se agregan `Referencia OTP: <otpId>` y `Validado el: <fecha>`, con `-` si el evento es del formato anterior. La posición se calcula para que la última línea quede a 20 pt del borde; con 9 líneas sería la misma posición de antes.
+
+## Solicitud de OTP por (negociación, empresa, operador) y firma única por empresa (Fase 28d)
+
+`pending_otp` tiene una solicitud por **(idNegociacion, rutEmpresa, rutOperador)**. `rutOperador` es un campo propio, copiado de la solicitud.
+
+`solicitarOtp` hace un alta atómica por esa clave:
+
+| La solicitud existente está… | Resultado |
+|---|---|
+| esperando código | se refresca (fecha y datos), sin crear otra |
+| en `OTP_VALIDADO` (firma en curso) | 409 `FIRMA_EN_CURSO` |
+| en `FALLO_FIRMA` o `ROL_NO_PERMITIDO` | se reemplaza por una nueva; log `[OTP-REEMPLAZO]` con contador |
+| firmada | 409 `FIRMA_EMPRESA_YA_REALIZADA` |
+
+- Dos solicitudes simultáneas del mismo actor las resuelve el índice único: la que choca reintenta como actualización.
+- `confirmarOtp` busca con la empresa y el operador del DTO; la validación de OTP, con los del evento.
+- Respaldo para solicitudes anteriores sin operador: se usan solo si hay una activa que encaje. Con varias, log `[OTP-AMBIGUO]` y no se firma.
+
+**Firma única por empresa.** Una sola firma por empresa en cada solicitud: el Proveedor en CONFIRMING, el Pagador y el Fondeador en FACTORING.
+- Al pedir el OTP, se rechaza con 409 `FIRMA_EMPRESA_YA_REALIZADA`, sin pedir OTP, si:
+  - la empresa ya aprobó esas facturas, o
+  - otro operador de la empresa tiene la firma en curso o ya firmó.
+- Al firmar, un reclamo atómico en el endoso (`firmasEmpresa`) impide un segundo bloque de la misma empresa (`ENDOSO_DUPLICADO`). Cubre el caso de dos operadores validando a la vez.
+
+### Despliegue (scripts en `db/manual`, mongosh)
+1. Desplegar el código nuevo.
+2. `mongo_28d_1_pending_otp_consulta_previa.js`: solo lectura; conteos de solicitudes sin operador y de claves repetidas.
+3. `mongo_28d_2_pending_otp_backfill_operador.js`: copia `request.rutOperador` a `rutOperador`. Idempotente.
+4. `mongo_28d_3_pending_otp_indice_unico.js`: índice único parcial (solo documentos con `rutOperador`). Se crea solo con 0 claves repetidas; los duplicados se revisan a mano y nunca se borran por script.
+
+Security no cambia: ya guarda el OTP por operador.

@@ -83,7 +83,7 @@ class RolPorTipoOperacionSpec extends Specification {
 
         then: "si no está permitido, ni pendiente ni solicitud de OTP"
         (error == null) == permitido
-        (permitido ? 1 : 0) * pendingOtpPort.save({ PendingOtp p -> p.rolActor == rol })
+        (permitido ? 1 : 0) * pendingOtpPort.registrarSolicitud({ PendingOtp p -> p.rolActor == rol }) >> { args -> new com.negociadororq.application.port.output.ResultadoSolicitudOtp(com.negociadororq.application.port.output.ResultadoSolicitudOtp.Tipo.NUEVA, args[0], null) }
         (permitido ? 1 : 0) * outboxService.guardarEvento("neg-1", "topic-otp-request", { it.rolActor == rol })
         !permitido ? error.codigo == "ROL_NO_PERMITIDO_PARA_OPERACION" : true
         // el mensaje no revela datos de otras empresas
@@ -109,7 +109,7 @@ class RolPorTipoOperacionSpec extends Specification {
 
         then:
         thrown(RolNoPermitidoException)
-        0 * pendingOtpPort.save(_)
+        0 * pendingOtpPort.registrarSolicitud(_)
         0 * outboxService.guardarEvento(*_)
     }
 
@@ -121,7 +121,7 @@ class RolPorTipoOperacionSpec extends Specification {
         service.solicitarOtp(solicitud(FOND, "PAGADOR"))
 
         then:
-        1 * pendingOtpPort.save({ PendingOtp p -> p.rolActor == "FONDEADOR" && p.request.rolActor == "FONDEADOR" })
+        1 * pendingOtpPort.registrarSolicitud({ PendingOtp p -> p.rolActor == "FONDEADOR" && p.request.rolActor == "FONDEADOR" }) >> { args -> new com.negociadororq.application.port.output.ResultadoSolicitudOtp(com.negociadororq.application.port.output.ResultadoSolicitudOtp.Tipo.NUEVA, args[0], null) }
         1 * outboxService.guardarEvento(_, "topic-otp-request", { it.rolActor == "FONDEADOR" })
     }
 
@@ -135,7 +135,7 @@ class RolPorTipoOperacionSpec extends Specification {
         then:
         def e = thrown(ReglaDeNegocioException)
         e.codigo == "ROL_ACTOR_INDETERMINADO"
-        0 * pendingOtpPort.save(_)
+        0 * pendingOtpPort.registrarSolicitud(_)
         0 * outboxService.guardarEvento(*_)
     }
 
