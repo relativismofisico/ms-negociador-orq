@@ -127,6 +127,14 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
                 .build()
     }
 
+    /** Fase 28d: las facturas de la solicitud, en la base con las mismas contrapartes. */
+    void facturasEnBd(List<FacturaNegociada> fns) {
+        fns.each { fn ->
+            facturaPort.findByNumeroFactura(fn.numeroFactura) >> Optional.of(buildFactura(fn.numeroFactura, fn.rutProveedor,
+                    fn.rutPagador))
+        }
+    }
+
     def buildFactura(String numero, String rutProv, String rutPag) {
         def f = new Factura()
         f.numeroFactura = numero
@@ -349,6 +357,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
+        facturasEnBd([fn1, fn2])
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1, fn2])
 
         when:
@@ -367,6 +376,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
+        facturasEnBd([fn1, fn2])
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn1, fn2])
 
         when:
@@ -506,6 +516,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
         def fn = buildFn("FECI018", "PROV-001", "PAG-SIN-FACTORING")
+        facturasEnBd([fn])
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
 
         when:
@@ -524,6 +535,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
         def fn = buildFn("FECI019", "PROV-SIN-CONFIRMING", "PAG-001")
+        facturasEnBd([fn])
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn])
 
         when:
@@ -579,6 +591,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
         def fn = buildFn("FECI022", "PROV-001", "PAG-001")
+        facturasEnBd([fn])
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn])
 
         when:
