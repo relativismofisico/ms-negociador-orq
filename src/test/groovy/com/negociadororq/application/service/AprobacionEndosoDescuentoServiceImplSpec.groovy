@@ -270,7 +270,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         // rolesQueAprobaron = {FONDEADOR} + {PAGADOR} = todosAprobaron = true
         1 * facturaPatchPort.actualizarEstadosPorNoFactura("FECI001", EstadoFirma.CESION, EstadoNegociacion.APROBADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.ACEPTADO)
-        1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", { it.requestId == "req-otp" })
+        1 * outboxService.guardarEventoUnico({ it.startsWith("liquidacion-solicitada:neg-001:") }, "neg-001", "topic-liquidacion", { it.requestId == "req-otp" }) >> true
         1 * auditoriaNegociacion.facturaRevisada(pending, "neg-001", _, _, true)
         1 * auditoriaNegociacion.estadoNegociacion(pending, "neg-001", _, _)
     }
@@ -428,7 +428,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         then:
         1 * facturaPatchPort.actualizarEstadosPorNoFactura("FECI001", EstadoFirma.DESCUENTO, EstadoNegociacion.APROBADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.ACEPTADO)
-        1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", _)
+        1 * outboxService.guardarEventoUnico(_, "neg-001", "topic-liquidacion", _) >> true
     }
 
     def "resolverRolActor lanza ReglaDeNegocioException si actor no identificable"() {
@@ -743,7 +743,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         }
 
         then:
-        1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", _)
+        1 * outboxService.guardarEventoUnico(_, "neg-001", "topic-liquidacion", _) >> true
         1 * notificacionService.notificarFirmaEndoso(_)
         pending.efectosEmitidos == ["LIQUIDACION:FECI001", "CORREO_FIRMA"]
         guardados == [["LIQUIDACION:FECI001"], ["LIQUIDACION:FECI001", "CORREO_FIRMA"]]
@@ -782,6 +782,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         then:
         1 * notificacionService.notificarLiquidacionFallida(_, "FECI001", _)
         1 * notificacionService.notificarFirmaEndoso(_)
+        0 * outboxService.guardarEventoUnico(*_)
         0 * outboxService.guardarEvento(_, "topic-liquidacion", _)
     }
 }

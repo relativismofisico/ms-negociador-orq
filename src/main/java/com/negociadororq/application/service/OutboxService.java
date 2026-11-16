@@ -22,4 +22,18 @@ public class OutboxService {
     public void guardarEvento(String aggregateId, String tipoEvento, Object evento) {
         outboxPort.guardarEvento(aggregateId, tipoEvento, evento);
     }
+
+    /**
+     * Ver {@link OutboxOutputPort#guardarEventoUnico}.
+     *
+     * @param eventId     id determinista del evento
+     * @param aggregateId id del agregado de negocio que originó el evento
+     * @param tipoEvento  tipo de evento
+     * @param evento      payload del evento
+     * @return {@code true} si lo escribió; {@code false} si ya existía
+     */
+    @Transactional
+    public boolean guardarEventoUnico(String eventId, String aggregateId, String tipoEvento, Object evento) {
+        return outboxPort.guardarEventoUnico(eventId, aggregateId, tipoEvento, evento);
+    }
 }

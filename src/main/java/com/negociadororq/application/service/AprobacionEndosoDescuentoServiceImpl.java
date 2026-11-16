@@ -341,7 +341,15 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, clock.now(),
                         Boolean.TRUE.equals(pending.getValidadoEnOrigen()), pending.getRequestId());
 
-                outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
+                // Fase 28d (hueco de 2b): id determinista por negociación y factura. Si un intento anterior escribió
+                // el evento y murió antes de marcarlo, el reintento no escribe una segunda solicitud de liquidación.
+                boolean escrito = outboxService.guardarEventoUnico(idEventoLiquidacion(idNegociacion,
+                        factura.getNumeroFactura()), idNegociacion, topicLiquidacionSolicitada, event);
+                if (!escrito) {
+                    log.info(String.format("[LIQUIDACION-YA-SOLICITADA] negociación %s factura %s: el evento ya estaba en "
+                            + "el outbox (intento anterior sin marca); no se repite.", idNegociacion,
+                            factura.getNumeroFactura()));
+                }
                 marcarEmitido(pending, efectoLiquidacion);
             }
         } else if (alguienAprobo) {
@@ -573,6 +581,15 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
      * falla después de escribir un evento, el reintento lo escribiría otra vez. Cada efecto se marca en la solicitud
      * justo después de escribirlo, y un reintento de la misma solicitud lo salta.
      */
+    /**
+     * @param idNegociacion negociación
+     * @param numeroFactura factura
+     * @return el id determinista del evento de solicitud de liquidación de esa factura en esa negociación
+     */
+    static String idEventoLiquidacion(String idNegociacion, String numeroFactura) {
+        return "liquidacion-solicitada:" + idNegociacion + ":" + numeroFactura;
+    }
+
     private static boolean yaEmitido(PendingOtp pending, String efecto) {
         return pending.getEfectosEmitidos() != null && pending.getEfectosEmitidos().contains(efecto);
     }
