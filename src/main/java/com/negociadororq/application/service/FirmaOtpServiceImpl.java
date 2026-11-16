@@ -10,6 +10,7 @@ import java.util.Optional;
 
 import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
+import com.negociadororq.application.exception.RolNoPermitidoException;
 import com.negociadororq.application.port.output.AlertaFirmaOutputPort;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.PendingOtpOutputPort;
@@ -140,6 +141,14 @@ public class FirmaOtpServiceImpl implements FirmaOtpService {
     private void firmar(final PendingOtp pending) {
         try {
             aprobacion.aprobarInterno(pending);
+        } catch (RolNoPermitidoException e) {
+            pending.setEstado(EstadoFirmaOtp.ROL_NO_PERMITIDO.name());
+            pending.setOtp(null);
+            pending.setUltimoError(e.getCodigo());
+            pending.setFechaActualizacion(clock.now());
+            pendingOtpPort.save(pending);
+            alerta.rolNoPermitido(pending.getIdNegociacion(), pending.getRutEmpresa(), e.getTipoOperacion(), e.getRol());
+            return;
         } catch (ConflictoException e) {
             if (ENDOSO_DUPLICADO.equals(e.getCodigo())) {
                 alerta.endosoDuplicado(pending.getIdNegociacion());
