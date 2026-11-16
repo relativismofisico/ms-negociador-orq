@@ -689,4 +689,84 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         "CONFIRMING" | "COSTO_COMPARTIDO"
         "CONFIRMING" | "CON_GARANTIA"
     }
+
+    // ─── Fase 28d: contraparte única con los RUT de la BASE, antes de reservar cupos ───────────────
+
+    def "Fase 28d: #tipo con RUT de contraparte #caso en la solicitud y facturas de dos contrapartes en la base => MULTIPLES_CONTRAPARTES sin cupos"() {
+        given:
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        boolean confirming = tipo == "CONFIRMING"
+        facturaPort.findByNumeroFactura("F28D-1") >> Optional.of(confirming ? buildFactura("F28D-1", "PROV-A", "PAG-001")
+                : buildFactura("F28D-1", "PROV-001", "PAG-A"))
+        facturaPort.findByNumeroFactura("F28D-2") >> Optional.of(confirming ? buildFactura("F28D-2", "PROV-B", "PAG-001")
+                : buildFactura("F28D-2", "PROV-001", "PAG-B"))
+        def fn1 = confirming ? buildFn("F28D-1", enviado, "PAG-001") : buildFn("F28D-1", "PROV-001", enviado)
+        def fn2 = confirming ? buildFn("F28D-2", enviado, "PAG-001") : buildFn("F28D-2", "PROV-001", enviado)
+        def request = confirming ? buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn1, fn2])
+                : buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1, fn2])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        def ex = thrown(PeticionInvalidaException)
+        ex.codigo == "MULTIPLES_CONTRAPARTES"
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * negociacionPort.save(_)
+
+        where:
+        tipo         | caso    | enviado
+        "CONFIRMING" | "vacío" | ""
+        "CONFIRMING" | "nulo"  | null
+        "CONFIRMING" | "falso" | "PROV-A"
+        "FACTORING"  | "vacío" | ""
+        "FACTORING"  | "nulo"  | null
+        "FACTORING"  | "falso" | "PAG-A"
+    }
+
+    def "Fase 28d: factura sin proveedor en la base (CONFIRMING) => error, sin cupos"() {
+        given:
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findByNumeroFactura("F28D-3") >> Optional.of(buildFactura("F28D-3", null, "PAG-001"))
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [buildFn("F28D-3", "PROV-X", "PAG-001")])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        def ex = thrown(PeticionInvalidaException)
+        ex.codigo == "FACTURA_SIN_CONTRAPARTE"
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+    }
+
+    def "Fase 28d: un solo proveedor en la base pasa aunque el cliente no mande su RUT (CONFIRMING)"() {
+        given:
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findByNumeroFactura("F28D-4") >> Optional.of(buildFactura("F28D-4", "PROV-A", "PAG-001"))
+        facturaPort.findByNumeroFactura("F28D-5") >> Optional.of(buildFactura("F28D-5", "PROV-A", "PAG-001"))
+        procesarFacturaNegociacionService.procesarFactura(_, _) >> { args -> buildFn(args[1].numeroFactura, "PROV-A", "PAG-001") }
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR",
+                [buildFn("F28D-4", "", "PAG-001"), buildFn("F28D-5", null, "PAG-001")])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        1 * negociacionPort.save({ it.rutProveedor == "PROV-A" }) >> { args -> args[0] }
+    }
+
+    def "Fase 28d: la contraparte se valida habilitada con el RUT de la base, no con el del cliente"() {
+        given: "el cliente manda un proveedor habilitado; el de la base no tiene CONFIRMING habilitado"
+        nitsSinOperacionHabilitada = ["PROV-REAL"] as Set
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findByNumeroFactura("F28D-6") >> Optional.of(buildFactura("F28D-6", "PROV-REAL", "PAG-001"))
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [buildFn("F28D-6", "PROV-OTRO", "PAG-001")])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        thrown(com.negociadororq.application.exception.AccionNoPermitidaException)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+    }
 }
