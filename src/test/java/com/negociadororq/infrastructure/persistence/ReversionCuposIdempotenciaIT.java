@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
@@ -94,7 +95,10 @@ class ReversionCuposIdempotenciaIT {
 
     @Container
     @ServiceConnection
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0");
+    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
+            // solo contenedores con prefijo integrity-e2e, con sufijo único por corrida (sin choques)
+            .withCreateContainerCmdModifier(cmd -> cmd.withName(
+                    "integrity-e2e-tc-mysql-" + UUID.randomUUID().toString().substring(0, 8)));
 
     @TestConfiguration
     static class Operador {
