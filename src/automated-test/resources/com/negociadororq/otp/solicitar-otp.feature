@@ -161,7 +161,7 @@ Feature: POST /negociaciones/solicitar-otp — Solicitar OTP para Aprobacion
     And request bodySup
     When method POST
     Then status 404
-    And match response == 'OTP solicitado'
+    And match response.codigo == 'NEGOCIACION_NO_ENCONTRADA'
 
   @regression @full
   Scenario: El operario sombra del asesor (opshadow-8000-7004) pasa el guard como 7004 (404: negociación inexistente, el guard no bloquea)
@@ -170,4 +170,4 @@ Feature: POST /negociaciones/solicitar-otp — Solicitar OTP para Aprobacion
     And request bodySup
     When method POST
     Then status 404
-    And match response == 'OTP solicitado'
+    And match response.codigo == 'NEGOCIACION_NO_ENCONTRADA'
