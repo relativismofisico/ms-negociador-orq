@@ -155,19 +155,19 @@ Feature: POST /negociaciones/solicitar-otp — Solicitar OTP para Aprobacion
     And match response.codigo == 'ACCION_NO_PERMITIDA'
 
   @regression @full
-  Scenario: La empresa propia solicita OTP para sí misma — pasa el guard (202)
+  Scenario: La empresa propia solicita OTP para sí misma — pasa el guard (404: negociación inexistente, el guard no bloquea)
     Given path endpoint
     And headers bearer('KARATE-DESTINO', 'EMPRESA')
     And request bodySup
     When method POST
-    Then status 202
+    Then status 404
     And match response == 'OTP solicitado'
 
   @regression @full
-  Scenario: El operario sombra del asesor (opshadow-8000-7004) pasa el guard como 7004 (202)
+  Scenario: El operario sombra del asesor (opshadow-8000-7004) pasa el guard como 7004 (404: negociación inexistente, el guard no bloquea)
     Given path endpoint
     And headers bearer('opshadow-8000-7004', 'OPERARIO')
     And request bodySup
     When method POST
-    Then status 202
+    Then status 404
     And match response == 'OTP solicitado'
