@@ -1,5 +1,6 @@
 package com.negociadororq.infrastructure.config;
 
+import java.time.Duration;
 import java.util.List;
 
 import com.negociadororq.application.mapper.EstadoFacturaMapper;
@@ -22,6 +23,7 @@ import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuot
 import com.negociadororq.application.port.output.MessageTemplateOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
 import com.negociadororq.application.port.output.NegociacionPatchOutputPort;
+import com.negociadororq.application.port.output.OperacionPendienteOutputPort;
 import com.negociadororq.application.port.output.OutboxOutputPort;
 import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPort;
 import com.negociadororq.application.port.output.PdfFirmaOutputPort;
@@ -62,6 +64,8 @@ import com.negociadororq.application.service.OperadorServiceImpl;
 import com.negociadororq.application.service.OutboxService;
 import com.negociadororq.application.service.ProcesarFacturaNegociacionService;
 import com.negociadororq.application.service.ProcesarFacturaNegociacionServiceImpl;
+import com.negociadororq.application.service.ReanudadorOperacion;
+import com.negociadororq.application.service.ReconciliadorOperacionesService;
 import com.negociadororq.application.service.ReversionCuposService;
 import com.negociadororq.application.service.ReversionCuposServiceImpl;
 import com.negociadororq.application.service.TasaConversionService;
@@ -75,6 +79,7 @@ import com.negociadororq.application.service.notificacion.DestinatarioResolver;
 import com.negociadororq.application.service.notificacion.impl.FacturaCuerpoBuilder;
 import com.negociadororq.application.service.notificacion.impl.NegociacionCuerpoBuilder;
 import com.negociadororq.application.service.notificacion.impl.PersonaCuerpoBuilder;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -387,4 +392,19 @@ public class ApplicationBeansConfig {
     // AprobacionEndosoDescuentoService/AprobacionInternaService — aprobacionEndosoDescuentoServiceImpl()
     // es el único bean asignable a cada una y Spring lo resuelve por tipo. Fue precisamente
     // este par el que disparó el NoUniqueBeanDefinitionException real en bootRun.
+
+    /**
+     * Fase 28d, opción A: reconciliador único de {@code operacion_pendiente}, con un reanudador por tipo (los aporta
+     * cada flujo).
+     */
+    @Bean
+    public ReconciliadorOperacionesService reconciliadorOperacionesService(
+            final OperacionPendienteOutputPort operacionPendienteOutputPort, final ClockPort clockPort,
+            final ObjectProvider<ReanudadorOperacion> reanudadores,
+            @Value("${operaciones.reconciliador.gracia:PT2M}") final Duration gracia,
+            @Value("${operaciones.reconciliador.concesion:PT5M}") final Duration concesion,
+            @Value("${operaciones.reconciliador.lote:50}") final int lote) {
+        return new ReconciliadorOperacionesService(operacionPendienteOutputPort, clockPort,
+                reanudadores.orderedStream().toList(), gracia, concesion, lote);
+    }
 }

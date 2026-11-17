@@ -1668,3 +1668,27 @@ Alarma recomendada (CloudWatch, filtro de métrica): cualquier ocurrencia de `[A
 4. `mongo_28d_3_pending_otp_indice_unico.js`: índice único parcial (solo documentos con `rutOperador`). Se crea solo con 0 claves repetidas; los duplicados se revisan a mano y nunca se borran por script.
 
 Security no cambia: ya guarda el OTP por operador.
+
+## Opción A: base (Fase 28d)
+
+Primera pieza de la opción A, todavía **sin conectar a los flujos**. Cada flujo se conecta en su propio PR, encima de
+la identificación de la factura por CUFE (punto C).
+
+- **Tabla `operacion_pendiente`** (migración `V3__operacion_pendiente.sql`): una sola tabla para crear negociación,
+  rechazo, endoso rechazado, liquidación fallida y vencimiento.
+  - La clave natural es `negociacion|cufe` (`OperacionPendiente.clave`), nunca el número de factura.
+  - El alta es idempotente por `UNIQUE (tipo, clave_natural)`.
+  - Las transiciones son `UPDATE … WHERE estado = ?` (CAS).
+  - Columnas: datos mínimos, concesión (`lease_hasta`), intentos, fechas y último error.
+- **Reconciliador único** (`ReconciliadorOperacionesService`, con ShedLock): toma con concesión las operaciones que
+  siguen en un estado intermedio pasada la gracia y las reanuda con el `ReanudadorOperacion` de su tipo; cada flujo
+  aporta el suyo. Si una falla, queda su último error y se vuelve a tomar.
+  - Propiedades `operaciones.reconciliador.*`: intervalo 1 min, gracia 2 min, concesión 5 min, lote 50.
+- **Cliente HTTP de la OTP** (`ValidacionOtpHttpAdapter`): llama a `POST /auth/internal/otp/validacion` de
+  ms-security-util (#88) con el JWT de servicio (`ms-negociador-orq`, HS384).
+  - Si security está caído, tarda más que el timeout o responde 5xx, devuelve 503 `SERVICIO_DEPENDIENTE_NO_DISPONIBLE`
+    sin cambiar nada.
+  - El código no se escribe en ningún log.
+  - Propiedades `otp.validacion.security-base-url` (`SECURITY_UTIL_BASE_URL`), `otp.validacion.timeout` (3 s) y
+    `security.act-as-operario-service-secret` (`ACT_AS_OPERARIO_SERVICE_SECRET`, sin valor por defecto: se exige al
+    usarlo).

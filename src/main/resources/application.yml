@@ -117,6 +117,9 @@ management:
 # Secreto HMAC sin valor por defecto: el arranque falla si falta la variable o si no es Base64 de
 # 48 a 63 bytes (ver README, "Variables de entorno requeridas").
 security:
+  # Fase 28d (H): secreto de servicio (Base64, 48-63 bytes, el mismo en todos los servicios) para el JWT con que
+  # negociador valida el OTP en ms-security-util. Sin valor por defecto: se exige al usarlo.
+  act-as-operario-service-secret: ${ACT_AS_OPERARIO_SERVICE_SECRET:}
   jwt:
     secret: ${JWT_SECRET}
   # Cuenta de servicio de ms-liquidador-neg (Basic Auth): usuario y hash bcrypt por entorno, sin default. El arranque
@@ -195,3 +198,17 @@ logging:
 # Log de auditoría (ms-commons-util → ms-auditoria-util), publicado por el outbox. auditoria.enabled=false lo apaga.
 auditoria:
   topic: ${AUDITORIA_TOPIC:auditoria.accion}
+
+# Fase 28d (H): validación del OTP por HTTP en ms-security-util (POST /auth/internal/otp/validacion).
+otp:
+  validacion:
+    security-base-url: ${SECURITY_UTIL_BASE_URL:}
+    timeout: ${OTP_VALIDACION_TIMEOUT:PT3S}
+
+# Fase 28d, opción A: reconciliador único de operacion_pendiente.
+operaciones:
+  reconciliador:
+    intervalo: ${OPERACIONES_RECONCILIADOR_INTERVALO:PT1M}
+    gracia: ${OPERACIONES_RECONCILIADOR_GRACIA:PT2M}
+    concesion: ${OPERACIONES_RECONCILIADOR_CONCESION:PT5M}
+    lote: 50
