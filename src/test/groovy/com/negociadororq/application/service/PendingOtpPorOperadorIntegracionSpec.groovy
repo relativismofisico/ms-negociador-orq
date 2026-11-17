@@ -162,6 +162,40 @@ class PendingOtpPorOperadorIntegracionSpec extends Specification {
         doc.estado == "PENDIENTE_OTP" && doc.otp == null && doc.otpId == null && doc.efectosEmitidos == null
     }
 
+    def "Fase 28d (H): n de la clave OTP avanza por CAS, una vez por respuesta, y no se reinicia al refrescar o reemplazar"() {
+        given:
+        def p = pendientes.registrarSolicitud(solicitud(PAG, "op-pag", "PAGADOR")).pendiente()
+
+        when: "dos hilos cuentan la misma respuesta (n=0); después la siguiente (n=1)"
+        def pool = Executors.newFixedThreadPool(4)
+        def salida = new CountDownLatch(1)
+        def tareas = (1..4).collect {
+            pool.submit({ salida.await(); pendientes.registrarRespuestaOtp(p.id, 0) } as java.util.concurrent.Callable)
+        }
+        salida.countDown()
+        def avances = tareas*.get(30, TimeUnit.SECONDS)
+        pool.shutdown()
+        def segundo = pendientes.registrarRespuestaOtp(p.id, 1)
+        def repetido = pendientes.registrarRespuestaOtp(p.id, 1)
+
+        then:
+        avances.count { it } == 1
+        segundo && !repetido
+        mongo.findById(p.id, PendingOtpDocument).respuestasOtp == 2
+
+        when: "la solicitud se refresca y, tras FALLO_FIRMA, se reemplaza"
+        pendientes.registrarSolicitud(solicitud(PAG, "op-pag", "PAGADOR"))
+        def doc = mongo.findById(p.id, PendingOtpDocument)
+        doc.estado = EstadoFirmaOtp.FALLO_FIRMA.name()
+        mongo.save(doc)
+        def r = pendientes.registrarSolicitud(solicitud(PAG, "op-pag", "PAGADOR"))
+
+        then: "n sigue en 2: las claves ...|0 y ...|1, ya vistas por security, no se reusan"
+        r.tipo() == ResultadoSolicitudOtp.Tipo.REEMPLAZADA
+        r.pendiente().respuestasOtp == 2
+        pendientes.findByClave(NEG, PAG, "op-pag").get().respuestasOtp == 2
+    }
+
     def "con el OTP validado (firma en curso) no se toca y se informa FIRMA_EN_CURSO"() {
         given:
         def p = pendientes.registrarSolicitud(solicitud(PAG, "op-pag", "PAGADOR")).pendiente()

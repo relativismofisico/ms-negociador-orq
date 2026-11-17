@@ -63,6 +63,12 @@ public class PendingOtp {
      * solicitud. Un reintento (reconciliador o reentrega de Kafka) no los vuelve a escribir.
      */
     private List<String> efectosEmitidos;
+    /**
+     * Fase 28d (H): respuestas definitivas de security a la validación por HTTP de este pendiente; es el {@code n} de la
+     * clave de idempotencia {@code idNegociacion|rutEmpresa|rutOperador|n}. Solo crece (nunca se reinicia al refrescar
+     * o reemplazar la solicitud). Un timeout, un 5xx o un 503 no lo avanzan. null = 0.
+     */
+    private Integer respuestasOtp;
 
     /** En el toString() el valor sale como {@code ***}: nunca en logs. Lo invoca el toString() que genera Lombok. */
     @ToString.Include(name = "otp")

@@ -1,5 +1,6 @@
 package com.negociadororq.infrastructure.config;
 
+import java.time.Duration;
 import java.util.List;
 
 import com.negociadororq.application.mapper.EstadoFacturaMapper;
@@ -22,6 +23,7 @@ import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuot
 import com.negociadororq.application.port.output.MessageTemplateOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
 import com.negociadororq.application.port.output.NegociacionPatchOutputPort;
+import com.negociadororq.application.port.output.OperacionPendienteOutputPort;
 import com.negociadororq.application.port.output.OutboxOutputPort;
 import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPort;
 import com.negociadororq.application.port.output.PdfFirmaOutputPort;
@@ -32,6 +34,7 @@ import com.negociadororq.application.port.output.ReversionCuposReclamoOutputPort
 import com.negociadororq.application.port.output.TemplateEngineOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.application.port.output.UserQuotaOutputPort;
+import com.negociadororq.application.port.output.ValidacionOtpOutputPort;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoServiceImpl;
 import com.negociadororq.application.service.AprobacionInternaService;
 import com.negociadororq.application.service.AuditoriaNegociacionService;
@@ -62,6 +65,8 @@ import com.negociadororq.application.service.OperadorServiceImpl;
 import com.negociadororq.application.service.OutboxService;
 import com.negociadororq.application.service.ProcesarFacturaNegociacionService;
 import com.negociadororq.application.service.ProcesarFacturaNegociacionServiceImpl;
+import com.negociadororq.application.service.ReanudadorOperacion;
+import com.negociadororq.application.service.ReconciliadorOperacionesService;
 import com.negociadororq.application.service.ReversionCuposService;
 import com.negociadororq.application.service.ReversionCuposServiceImpl;
 import com.negociadororq.application.service.TasaConversionService;
@@ -70,11 +75,13 @@ import com.negociadororq.application.service.TemplateRenderService;
 import com.negociadororq.application.service.TemplateRenderServiceImpl;
 import com.negociadororq.application.service.ValidacionFacturaService;
 import com.negociadororq.application.service.ValidacionFacturaServiceImpl;
+import com.negociadororq.application.service.ValidadorOtpPendiente;
 import com.negociadororq.application.service.notificacion.CuerpoNotificacionFactory;
 import com.negociadororq.application.service.notificacion.DestinatarioResolver;
 import com.negociadororq.application.service.notificacion.impl.FacturaCuerpoBuilder;
 import com.negociadororq.application.service.notificacion.impl.NegociacionCuerpoBuilder;
 import com.negociadororq.application.service.notificacion.impl.PersonaCuerpoBuilder;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -387,4 +394,34 @@ public class ApplicationBeansConfig {
     // AprobacionEndosoDescuentoService/AprobacionInternaService — aprobacionEndosoDescuentoServiceImpl()
     // es el único bean asignable a cada una y Spring lo resuelve por tipo. Fue precisamente
     // este par el que disparó el NoUniqueBeanDefinitionException real en bootRun.
+
+    /**
+     * Fase 28d, opción A: reconciliador único de {@code operacion_pendiente}, con un reanudador por tipo (los aporta
+     * cada flujo).
+     */
+    @Bean
+    public ReconciliadorOperacionesService reconciliadorOperacionesService(
+            final OperacionPendienteOutputPort operacionPendienteOutputPort, final ClockPort clockPort,
+            final ObjectProvider<ReanudadorOperacion> reanudadores,
+            @Value("${operaciones.reconciliador.gracia:PT2M}") final Duration gracia,
+            @Value("${operaciones.reconciliador.concesion:PT5M}") final Duration concesion,
+            @Value("${operaciones.reconciliador.lote:50}") final int lote,
+            @Value("${operaciones.reconciliador.max-intentos:10}") final int maxIntentos) {
+        return new ReconciliadorOperacionesService(operacionPendienteOutputPort, clockPort,
+                reanudadores.orderedStream().toList(), gracia, concesion, lote, maxIntentos);
+    }
+
+    /**
+     * Fase 28d (H): validación por HTTP del código de un pendiente OTP con la clave
+     * {@code idNegociacion|rutEmpresa|rutOperador|n}.
+     *
+     * @param validacionOtpOutputPort cliente HTTP de security
+     * @param pendingOtpOutputPort    pendientes OTP
+     * @return el validador
+     */
+    @Bean
+    public ValidadorOtpPendiente validadorOtpPendiente(final ValidacionOtpOutputPort validacionOtpOutputPort,
+            final PendingOtpOutputPort pendingOtpOutputPort) {
+        return new ValidadorOtpPendiente(validacionOtpOutputPort, pendingOtpOutputPort);
+    }
 }

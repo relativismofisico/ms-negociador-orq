@@ -10,6 +10,7 @@ import com.negociadororq.application.exception.NegociadorException;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
+import com.negociadororq.application.exception.ServicioDependienteNoDisponibleException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.java.Log;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -85,6 +86,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleReglaDeNegocio(
             ReglaDeNegocioException ex, HttpServletRequest request) {
         return handleNegociadorException(ex, HttpStatus.UNPROCESSABLE_ENTITY, request);
+    }
+
+    /** Fase 28d (H): un servicio del que depende la operación no respondió; no se cambió nada. */
+    @ExceptionHandler(ServicioDependienteNoDisponibleException.class)
+    public ResponseEntity<ErrorResponse> handleServicioDependienteNoDisponible(
+            ServicioDependienteNoDisponibleException ex, HttpServletRequest request) {
+        return handleNegociadorException(ex, HttpStatus.SERVICE_UNAVAILABLE, request);
     }
 
     @ExceptionHandler(AccionNoPermitidaException.class)

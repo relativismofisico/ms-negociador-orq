@@ -29,6 +29,7 @@ import org.springframework.stereotype.Component;
 public class PendingOtpAdapter implements PendingOtpOutputPort {
 
     private static final String CAMPO_ESTADO = "estado";
+    private static final String CAMPO_RESPUESTAS = "respuestasOtp";
     private static final int INTENTOS_ALTA = 5;
 
     private final PendingOtpRepository repository;
@@ -142,6 +143,18 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
         return mongoTemplate.exists(query, PendingOtpDocument.class);
     }
 
+    @Override
+    public boolean registrarRespuestaOtp(String id, int vistas) {
+        Criteria esperado = Criteria.where(CAMPO_RESPUESTAS).is(vistas);
+        if (vistas == 0) {
+            esperado = new Criteria().orOperator(Criteria.where(CAMPO_RESPUESTAS).is(0),
+                    Criteria.where(CAMPO_RESPUESTAS).is(null));
+        }
+        Query query = Query.query(Criteria.where("_id").is(id)).addCriteria(esperado);
+        return mongoTemplate.findAndModify(query, new Update().set(CAMPO_RESPUESTAS, vistas + 1),
+                PendingOtpDocument.class) != null;
+    }
+
     private static Query clave(String idNegociacion, String rutEmpresa, String rutOperador) {
         return Query.query(Criteria.where("idNegociacion").is(idNegociacion).and("rutEmpresa").is(rutEmpresa)
                 .and("rutOperador").is(rutOperador));
@@ -183,6 +196,7 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
                 .ultimoError(doc.getUltimoError())
                 .fechaActualizacion(doc.getFechaActualizacion())
                 .efectosEmitidos(doc.getEfectosEmitidos())
+                .respuestasOtp(doc.getRespuestasOtp())
                 .build();
     }
 
@@ -210,6 +224,7 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
                 .ultimoError(p.getUltimoError())
                 .fechaActualizacion(p.getFechaActualizacion())
                 .efectosEmitidos(p.getEfectosEmitidos())
+                .respuestasOtp(p.getRespuestasOtp())
                 .build();
     }
 }

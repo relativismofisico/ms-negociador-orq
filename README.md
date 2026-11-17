@@ -1668,3 +1668,47 @@ Alarma recomendada (CloudWatch, filtro de métrica): cualquier ocurrencia de `[A
 4. `mongo_28d_3_pending_otp_indice_unico.js`: índice único parcial (solo documentos con `rutOperador`). Se crea solo con 0 claves repetidas; los duplicados se revisan a mano y nunca se borran por script.
 
 Security no cambia: ya guarda el OTP por operador.
+
+## Opción A: base (Fase 28d)
+
+Primera pieza de la opción A, todavía **sin conectar a los flujos**. Cada flujo se conecta en su propio PR, encima de
+la identificación de la factura por CUFE (punto C).
+
+- **Tabla `operacion_pendiente`** (migración `V3__operacion_pendiente.sql`): una sola tabla para crear negociación,
+  rechazo, endoso rechazado, liquidación fallida y vencimiento.
+  - La clave natural es `negociacion|cufe` (`OperacionPendiente.clave`), nunca el número de factura.
+  - El alta es idempotente por `UNIQUE (tipo, clave_natural)`.
+  - Las transiciones son `UPDATE … WHERE estado = ?` (CAS).
+  - Columnas: datos mínimos, concesión (`lease_hasta`), intentos, fechas y último error.
+  - `datos` **nunca guarda información sensible**: ni el OTP ni un hash suyo, ni tokens, claves o secretos. El alta
+    rechaza un JSON con un campo así (`OperacionPendiente.exigirDatosNoSensibles`).
+  - En qa/prod (sin Flyway, `ddl-auto=validate`) se aplica a mano `db/manual/V3__operacion_pendiente.sql`, copia
+    exacta de la migración e idempotente (`IF NOT EXISTS`), **antes** de desplegar. Para verificarla:
+    `SHOW TABLES LIKE 'operacion_pendiente'` devuelve una fila.
+- **Reconciliador único** (`ReconciliadorOperacionesService`, con ShedLock): toma con concesión las operaciones que
+  siguen en un estado intermedio pasada la gracia y las reanuda con el `ReanudadorOperacion` de su tipo; cada flujo
+  aporta el suyo. Si una falla, queda su último error y se vuelve a tomar.
+  - Propiedades `operaciones.reconciliador.*`: intervalo 1 min, gracia 2 min, concesión 5 min, lote 50,
+    `max-intentos` 10 (`OPERACIONES_RECONCILIADOR_MAX_INTENTOS`).
+  - Pasado `max-intentos`, la operación pasa al estado terminal `REVISION_MANUAL` (CAS), con el log
+    `[OPERACION-PENDIENTE-ATASCADA]` y el contador `operaciones.pendientes.atascadas`; ya no se vuelve a tomar. Un
+    valor mayor que cero pide revisar la tabla.
+- **Cliente HTTP de la OTP** (`ValidacionOtpHttpAdapter`): llama a `POST /auth/internal/otp/validacion` de
+  ms-security-util (#88) con el JWT de servicio (`ms-negociador-orq`, HS384).
+  - Si security está caído, tarda más que el timeout o responde 5xx, devuelve 503 `SERVICIO_DEPENDIENTE_NO_DISPONIBLE`
+    sin cambiar nada.
+  - El código no se escribe en ningún log, ni un hash suyo.
+  - **Clave de idempotencia** (`ValidacionOtp.clave`, `ValidadorOtpPendiente`): `idNegociacion|rutEmpresa|rutOperador|n`,
+    sin el CUFE ni nada derivado del código, dentro de la regex de security (máx. 150). `n` es
+    `pending_otp.respuestasOtp`: las respuestas definitivas de security ya recibidas para ese pendiente.
+    - Solo avanza (CAS) cuando security responde. Un timeout, un 5xx o un 503 no lo avanzan: el reintento del mismo
+      intento reusa la clave y security no cuenta otro intento.
+    - Un código tecleado después de una respuesta usa `n + 1`.
+    - Misma clave con otro código: security no lo valida y devuelve el estado actual del OTP (el intento de esa clave
+      ya se contó); nunca aprueba por esa vía.
+    - `n` no se reinicia al refrescar o reemplazar la solicitud; el pendiente no debe borrarse mientras pueda volver a
+      pedirse el OTP del mismo actor (un pendiente nuevo reusaría claves ya vistas).
+    - La clave puede salir en los logs (`[OTP-HTTP] clave …`).
+  - Propiedades `otp.validacion.security-base-url` (`SECURITY_UTIL_BASE_URL`), `otp.validacion.timeout` (3 s) y
+    `security.act-as-operario-service-secret` (`ACT_AS_OPERARIO_SERVICE_SECRET`, sin valor por defecto: se exige al
+    usarlo).
