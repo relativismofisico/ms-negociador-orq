@@ -18,13 +18,6 @@ public interface PendingOtpOutputPort {
     PendingOtp save(PendingOtp pendingOtp);
 
     /**
-     * @param idNegociacion id de la negociación
-     * @return la solicitud OTP pendiente para esa negociación, si existe
-     */
-    @Deprecated(since = "28d")
-    Optional<PendingOtp> findByIdNegociacion(String idNegociacion);
-
-    /**
      * Fase 28d (2.9): la solicitud por su clave natural. Para solicitudes anteriores sin operador (o eventos que no
      * lo traen), solo si hay exactamente una activa que encaje; con varias, log {@code [OTP-AMBIGUO]} y vacío.
      *
@@ -54,12 +47,6 @@ public interface PendingOtpOutputPort {
      * @return si existe
      */
     boolean existeFirmaDeOtroOperador(String idNegociacion, String rutEmpresa, String rutOperador);
-
-    /**
-     * @param idNegociacion id de la negociación cuya solicitud OTP se elimina
-     */
-    @Deprecated(since = "28d")
-    void deleteByIdNegociacion(String idNegociacion);
 
     /**
      * @param id id de la solicitud a descartar

@@ -18,6 +18,7 @@ import com.negociadororq.application.port.output.ResultadoSolicitudOtp
 import com.negociadororq.application.port.output.UserOutputPort
 import com.negociadororq.domain.enums.EstadoFirma
 import com.negociadororq.domain.event.OtpValidatedEvent
+import com.negociadororq.application.port.output.PendingOtpOutputPort
 import com.negociadororq.domain.model.Endoso
 import com.negociadororq.domain.model.EstadoFirmaOtp
 import com.negociadororq.domain.model.Factura
@@ -183,6 +184,28 @@ class PendingOtpPorOperadorIntegracionSpec extends Specification {
         pendientes.findByClave(NEG, FOND, "op-fond").get().rolActor == "FONDEADOR"
         // otro operador de la misma empresa no encuentra el pendiente ajeno
         pendientes.findByClave(NEG, PAG, "op-pag-2").isEmpty()
+    }
+
+    def "Fase 28d: dos pendientes activos de la misma negociación nunca se borran entre sí"() {
+        given: "Pagador y Fondeador esperan su código a la vez"
+        pendientes.registrarSolicitud(solicitud(PAG, "op-pag", "PAGADOR"))
+        pendientes.registrarSolicitud(solicitud(FOND, "op-fond", "FONDEADOR"))
+        def idFond = pendientes.findByClave(NEG, FOND, "op-fond").get().id
+
+        when: "el Pagador vuelve a pedir dos veces, se le busca por su clave y se descarta su pendiente por id"
+        pendientes.registrarSolicitud(solicitud(PAG, "op-pag", "PAGADOR"))
+        pendientes.registrarSolicitud(solicitud(PAG, "op-pag", "PAGADOR"))
+        def pag = pendientes.findByClave(NEG, PAG, "op-pag").get()
+        pendientes.deleteById(pag.id)
+
+        then: "el del Fondeador sigue ahí, el mismo documento y activo"
+        cuantos() == 1
+        def fond = pendientes.findByClave(NEG, FOND, "op-fond").get()
+        fond.id == idFond
+        fond.estado == "PENDIENTE_OTP"
+
+        and: "el puerto ya no ofrece buscar ni borrar por negociación (lo que descartaba los pendientes de otros actores)"
+        !(PendingOtpOutputPort.methods*.name.any { it in ["findByIdNegociacion", "deleteByIdNegociacion"] })
     }
 
     def "pendientes anteriores sin operador: respaldo solo si hay uno; con varios, OTP-AMBIGUO y ninguno"() {

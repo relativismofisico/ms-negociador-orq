@@ -69,7 +69,6 @@ class FirmaOtpServiceImplSpec extends Specification {
 
         then:
         0 * pendientes.deleteById(_)
-        0 * pendientes.deleteByIdNegociacion(_)
         0 * aprobacion.aprobarInterno(_)
     }
 

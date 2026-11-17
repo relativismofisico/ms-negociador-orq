@@ -1,7 +1,6 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,38 +37,6 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
     @Override
     public PendingOtp save(PendingOtp pendingOtp) {
         return toDomain(repository.save(toDocument(pendingOtp)));
-    }
-
-    @Override
-    public Optional<PendingOtp> findByIdNegociacion(String idNegociacion) {
-        // Fase 28c: solo las solicitudes activas; FIRMADO y FALLO_FIRMA quedan como historial y no se descartan.
-        List<PendingOtpDocument> documentos = repository.findByIdNegociacion(idNegociacion).stream()
-                .filter(doc -> EstadoFirmaOtp.activa(doc.getEstado()))
-                .toList();
-
-        if (documentos.isEmpty()) {
-            return Optional.empty();
-        }
-
-        // El id de Mongo (ObjectId) es cronológicamente ordenable como texto:
-        // ante solicitudes duplicadas para la misma negociación (no debería
-        // ocurrir, pero ya ocurrió), se toma la más reciente y se descartan
-        // las demás, en vez de fallar de forma permanente.
-        PendingOtpDocument masReciente = documentos.stream()
-                .max(Comparator.comparing(PendingOtpDocument::getId))
-                .orElseThrow();
-
-        if (documentos.size() > 1) {
-            log.warn("Se encontraron {} solicitudes de OTP pendientes para la negociación {}; "
-                            + "se usa la más reciente ({}) y se descartan las demás.",
-                    documentos.size(), idNegociacion, masReciente.getId());
-
-            documentos.stream()
-                    .filter(doc -> !doc.getId().equals(masReciente.getId()))
-                    .forEach(doc -> repository.deleteById(doc.getId()));
-        }
-
-        return Optional.of(toDomain(masReciente));
     }
 
     @Override
@@ -190,11 +157,6 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
         return repository.findByEstadoAndFechaActualizacionBefore(estado, limite).stream()
                 .map(this::toDomain)
                 .toList();
-    }
-
-    @Override
-    public void deleteByIdNegociacion(String idNegociacion) {
-        repository.deleteByIdNegociacion(idNegociacion);
     }
 
     private PendingOtp toDomain(PendingOtpDocument doc) {
