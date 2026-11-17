@@ -67,6 +67,8 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
             "topic-otp-request", "topic-otp-validate", "topic-liquidacion", auditoriaNegociacion)
 
     def setup() {
+        // Fase 28d: el reclamo de la firma de la empresa en el endoso pasa (un solo actor por empresa en estos casos)
+        endosoPatchPort.reclamarFirmaEmpresa(*_) >> true
         // Por defecto, cada factura tiene su propio Endoso sin agrupar (comportamiento
         // previo): así el recálculo de estado grupal de actualizarEstadoEndosoGrupal()
         // se reduce al caso de una sola factura, igual que antes de esta funcionalidad.
@@ -93,7 +95,8 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
 
         then:
         1 * auditoriaNegociacion.completarSolicitud({ it.idNegociacion == "neg-001" })
-        1 * pendingOtpPort.save({ it.idNegociacion == "neg-001" && it.rutEmpresa == "EMP-001" })
+        1 * pendingOtpPort.registrarSolicitud({ it.idNegociacion == "neg-001" && it.rutEmpresa == "EMP-001"
+                && it.rutOperador == "OP-001" }) >> { args -> new com.negociadororq.application.port.output.ResultadoSolicitudOtp(com.negociadororq.application.port.output.ResultadoSolicitudOtp.Tipo.NUEVA, args[0], null) }
         1 * outboxService.guardarEvento("neg-001", "topic-otp-request", {
             it.idNegociacion == "neg-001" && it.rutEmpresa == "EMP-001"
         })
@@ -110,7 +113,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         service.solicitarOtp(request)
 
         then:
-        1 * pendingOtpPort.save({ it.request.facturas.isEmpty() })
+        1 * pendingOtpPort.registrarSolicitud({ it.request.facturas.isEmpty() }) >> { args -> new com.negociadororq.application.port.output.ResultadoSolicitudOtp(com.negociadororq.application.port.output.ResultadoSolicitudOtp.Tipo.NUEVA, args[0], null) }
         1 * outboxService.guardarEvento(_, _, _)
     }
 
@@ -121,7 +124,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         def request = new ConfirmacionOtpRequestDto(
                 "neg-001", "EMP-001", "OP-001", "123456", "192.168.1.1", null
         )
-        pendingOtpPort.findByIdNegociacion("neg-001") >> Optional.of(
+        pendingOtpPort.findByClave("neg-001", _, _) >> Optional.of(
                 PendingOtp.builder().idNegociacion("neg-001").rutEmpresa("EMP-001").build())
 
         when:
@@ -626,7 +629,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
     def "Fase 28c: confirmarOtp sin solicitud pendiente (o ya validada) no manda el código a validar"() {
         given:
         def request = new ConfirmacionOtpRequestDto("neg-001", "EMP-001", "OP-001", "123456", "192.168.1.1", null)
-        pendingOtpPort.findByIdNegociacion("neg-001") >> pendiente
+        pendingOtpPort.findByClave("neg-001", _, _) >> pendiente
 
         when:
         service.confirmarOtp(request)
@@ -655,7 +658,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         service.solicitarOtp(request)
 
         then:
-        1 * pendingOtpPort.save({ PendingOtp p -> p.estado == "PENDIENTE_OTP" && p.fechaActualizacion != null })
+        1 * pendingOtpPort.registrarSolicitud({ PendingOtp p -> p.estado == "PENDIENTE_OTP" && p.fechaActualizacion != null }) >> { args -> new com.negociadororq.application.port.output.ResultadoSolicitudOtp(com.negociadororq.application.port.output.ResultadoSolicitudOtp.Tipo.NUEVA, args[0], null) }
     }
 
     def "Fase 28c: la misma validación (mismo otpId) ya aplicada no se aplica otra vez: sin firma, correo ni guardado"() {

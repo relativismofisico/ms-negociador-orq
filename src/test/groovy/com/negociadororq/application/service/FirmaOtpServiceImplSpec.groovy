@@ -44,7 +44,7 @@ class FirmaOtpServiceImplSpec extends Specification {
     def "valido=true: pasa a OTP_VALIDADO con código, referencia, fecha e IP ANTES de firmar; luego FIRMADO sin código"() {
         given:
         def p = pendiente()
-        pendientes.findByIdNegociacion("NEG-1") >> Optional.of(p)
+        pendientes.findByClave("NEG-1", _, _) >> Optional.of(p)
         def estados = []
         pendientes.save(_) >> { PendingOtp x -> estados << [x.estado, x.otp]; x }
 
@@ -62,20 +62,19 @@ class FirmaOtpServiceImplSpec extends Specification {
 
     def "código incorrecto con intentos restantes: la solicitud sigue pendiente (no se borra)"() {
         given:
-        pendientes.findByIdNegociacion("NEG-1") >> Optional.of(pendiente())
+        pendientes.findByClave("NEG-1", _, _) >> Optional.of(pendiente())
 
         when:
         servicio.procesarValidacion(rechazado("INCORRECTO", 2))
 
         then:
         0 * pendientes.deleteById(_)
-        0 * pendientes.deleteByIdNegociacion(_)
         0 * aprobacion.aprobarInterno(_)
     }
 
     def "rechazo terminal (#motivo, restantes #restantes) descarta la solicitud, como antes"() {
         given:
-        pendientes.findByIdNegociacion("NEG-1") >> Optional.of(pendiente())
+        pendientes.findByClave("NEG-1", _, _) >> Optional.of(pendiente())
 
         when:
         servicio.procesarValidacion(rechazado(motivo, restantes))
@@ -94,7 +93,7 @@ class FirmaOtpServiceImplSpec extends Specification {
 
     def "duplicado: sin solicitud activa (ya FIRMADA) se ignora sin firmar"() {
         given:
-        pendientes.findByIdNegociacion("NEG-1") >> Optional.empty()
+        pendientes.findByClave("NEG-1", _, _) >> Optional.empty()
 
         when:
         servicio.procesarValidacion(valido())
@@ -106,7 +105,7 @@ class FirmaOtpServiceImplSpec extends Specification {
 
     def "una validación de otra empresa o con otro otpId mientras hay una firma en curso se ignora"() {
         given:
-        pendientes.findByIdNegociacion("NEG-1") >> Optional.of(p)
+        pendientes.findByClave("NEG-1", _, _) >> Optional.of(p)
 
         when:
         servicio.procesarValidacion(evento)
@@ -123,7 +122,7 @@ class FirmaOtpServiceImplSpec extends Specification {
 
     def "fallo permanente (#excepcion.class.simpleName): FALLO_FIRMA, alerta y aviso a la empresa"() {
         given:
-        pendientes.findByIdNegociacion("NEG-1") >> Optional.of(pendiente())
+        pendientes.findByClave("NEG-1", _, _) >> Optional.of(pendiente())
         PendingOtp guardada = null
         pendientes.save(_) >> { PendingOtp x -> guardada = x; x }
         aprobacion.aprobarInterno(_) >> { throw excepcion }
@@ -144,7 +143,7 @@ class FirmaOtpServiceImplSpec extends Specification {
 
     def "ENDOSO_DUPLICADO (el actor ya firmó con otro OTP): se descarta con [ENDOSO-DUPLICADO] y contador, sin alerta de firma"() {
         given:
-        pendientes.findByIdNegociacion("NEG-1") >> Optional.of(pendiente())
+        pendientes.findByClave("NEG-1", _, _) >> Optional.of(pendiente())
         pendientes.save(_) >> { PendingOtp x -> x }
         aprobacion.aprobarInterno(_) >> { throw new ConflictoException("dup", "ENDOSO_DUPLICADO") }
 
@@ -161,7 +160,7 @@ class FirmaOtpServiceImplSpec extends Specification {
     def "fallo transitorio: queda OTP_VALIDADO con el intento contado; el reconciliador reintenta y al tercero FALLO_FIRMA"() {
         given:
         def p = pendiente()
-        pendientes.findByIdNegociacion("NEG-1") >> Optional.of(p)
+        pendientes.findByClave("NEG-1", _, _) >> Optional.of(p)
         pendientes.save(_) >> { PendingOtp x -> x }
         pendientes.findByEstadoAndFechaActualizacionBefore("OTP_VALIDADO", AHORA.minusMinutes(2)) >> [p]
         aprobacion.aprobarInterno(_) >> { throw new IllegalStateException("mongo caído") }
@@ -209,7 +208,7 @@ class FirmaOtpServiceImplSpec extends Specification {
 
     def "si el aviso a la empresa falla, la firma igual queda en FALLO_FIRMA con su alerta"() {
         given:
-        pendientes.findByIdNegociacion("NEG-1") >> Optional.of(pendiente())
+        pendientes.findByClave("NEG-1", _, _) >> Optional.of(pendiente())
         pendientes.save(_) >> { PendingOtp x -> x }
         aprobacion.aprobarInterno(_) >> { throw new RecursoNoEncontradoException("x") }
         notificaciones.notificarFirmaFallida(_) >> { throw new IllegalStateException("outbox caído") }
@@ -239,7 +238,7 @@ class FirmaOtpServiceImplSpec extends Specification {
         def mapper = org.springframework.kafka.support.JacksonUtils.enhancedObjectMapper()
         def evento = mapper.readValue(json, OtpValidatedEvent)
         def p = pendiente()
-        pendientes.findByIdNegociacion("NEG-1") >> Optional.of(p)
+        pendientes.findByClave("NEG-1", _, _) >> Optional.of(p)
         pendientes.save(_) >> { PendingOtp x -> x }
 
         when:

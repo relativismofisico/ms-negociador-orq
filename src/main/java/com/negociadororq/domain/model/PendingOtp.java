@@ -24,6 +24,8 @@ public class PendingOtp {
     private String id;
     private String idNegociacion;
     private String rutEmpresa;
+    /** Fase 28d (2.9): operador que pidió el OTP (copiado de la solicitud); parte de la clave natural. */
+    private String rutOperador;
     private String rolActor;
     private String ip;
     @ToString.Exclude

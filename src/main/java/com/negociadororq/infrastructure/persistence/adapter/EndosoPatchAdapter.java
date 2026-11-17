@@ -25,4 +25,9 @@ public class EndosoPatchAdapter implements EndosoPatchOutputPort {
     public void registrarAprobacionActor(String idNegociacion, String numeroFactura, AprobacionActorDto aprobacion, EstadoEndoso estado) {
         repository.registrarAprobacionActor(idNegociacion, numeroFactura, aprobacion, estado);
     }
+
+    @Override
+    public boolean reclamarFirmaEmpresa(String idNegociacion, String numeroFactura, String rutEmpresa, String otpId) {
+        return repository.reclamarFirmaEmpresa(idNegociacion, numeroFactura, rutEmpresa, otpId);
+    }
 }

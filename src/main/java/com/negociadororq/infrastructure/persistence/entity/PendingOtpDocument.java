@@ -29,6 +29,7 @@ public class PendingOtpDocument {
     private String id;
     private String idNegociacion;
     private String rutEmpresa;
+    private String rutOperador;
     private String rolActor;
     private String ip;
     @ToString.Exclude

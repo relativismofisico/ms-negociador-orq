@@ -18,15 +18,35 @@ public interface PendingOtpOutputPort {
     PendingOtp save(PendingOtp pendingOtp);
 
     /**
-     * @param idNegociacion id de la negociación
-     * @return la solicitud OTP pendiente para esa negociación, si existe
+     * Fase 28d (2.9): la solicitud por su clave natural. Para solicitudes anteriores sin operador (o eventos que no
+     * lo traen), solo si hay exactamente una activa que encaje; con varias, log {@code [OTP-AMBIGUO]} y vacío.
+     *
+     * @param idNegociacion negociación
+     * @param rutEmpresa    empresa del actor (puede ser null en eventos antiguos)
+     * @param rutOperador   operador (puede ser null en eventos antiguos)
+     * @return la solicitud, si se identifica sin ambigüedad
      */
-    Optional<PendingOtp> findByIdNegociacion(String idNegociacion);
+    Optional<PendingOtp> findByClave(String idNegociacion, String rutEmpresa, String rutOperador);
 
     /**
-     * @param idNegociacion id de la negociación cuya solicitud OTP se elimina
+     * Fase 28d (2.9): alta atómica por la clave natural: refresca la que espera código, reemplaza una terminada sin
+     * firma, y no toca una con firma en curso o ya firmada.
+     *
+     * @param solicitud solicitud nueva (con negociación, empresa y operador)
+     * @return qué pasó y cómo quedó
      */
-    void deleteByIdNegociacion(String idNegociacion);
+    ResultadoSolicitudOtp registrarSolicitud(PendingOtp solicitud);
+
+    /**
+     * Fase 28d (firma única por empresa): si otro operador de la misma empresa ya tiene el OTP validado (firma en
+     * curso) o ya firmó en la negociación.
+     *
+     * @param idNegociacion negociación
+     * @param rutEmpresa    empresa
+     * @param rutOperador   operador que pide
+     * @return si existe
+     */
+    boolean existeFirmaDeOtroOperador(String idNegociacion, String rutEmpresa, String rutOperador);
 
     /**
      * @param id id de la solicitud a descartar

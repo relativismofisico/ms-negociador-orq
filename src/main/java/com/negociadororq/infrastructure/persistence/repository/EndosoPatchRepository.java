@@ -78,4 +78,21 @@ public class EndosoPatchRepository {
 
         mongoTemplate.updateFirst(query, addUpdate, EndosoDocument.class);
     }
+
+    /**
+     * Fase 28d: {@code firmasEmpresa.<clave>} = otpId, con clave = factura y empresa sin puntos ni signos de dólar. El
+     * update es condicional: solo si la clave no existe o ya es de este OTP.
+     *
+     * @param idNegociacion negociación
+     * @param numeroFactura factura
+     * @param rutEmpresa    empresa
+     * @param otpId         OTP de esta firma
+     * @return si la firma quedó (o ya estaba) a nombre de este OTP
+     */
+    public boolean reclamarFirmaEmpresa(String idNegociacion, String numeroFactura, String rutEmpresa, String otpId) {
+        String campo = "firmasEmpresa." + (numeroFactura + "|" + rutEmpresa).replace('.', '_').replace('$', '_');
+        Query query = Query.query(Criteria.where("negociacionId").is(idNegociacion).and("numerosFactura").is(numeroFactura)
+                .orOperator(Criteria.where(campo).exists(false), Criteria.where(campo).is(otpId)));
+        return mongoTemplate.findAndModify(query, new Update().set(campo, otpId), EndosoDocument.class) != null;
+    }
 }

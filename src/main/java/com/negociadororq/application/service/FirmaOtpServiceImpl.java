@@ -76,7 +76,10 @@ public class FirmaOtpServiceImpl implements FirmaOtpService {
 
     @Override
     public void procesarValidacion(final OtpValidatedEvent event) {
-        final Optional<PendingOtp> encontrada = pendingOtpPort.findByIdNegociacion(event.getIdNegociacion());
+        // Fase 28d (2.9): por la clave natural con la empresa y el operador del evento (respaldo por negociación solo si
+        // hay una sola solicitud activa que encaje; con varias, [OTP-AMBIGUO] y no se firma).
+        final Optional<PendingOtp> encontrada = pendingOtpPort.findByClave(event.getIdNegociacion(), event.getRutEmpresa(),
+                event.getRutOperador());
         if (encontrada.isEmpty()) {
             log.info(String.format("[OTP-SIN-PENDIENTE] negociación %s otpId %s: no hay solicitud activa (duplicado o tardío), "
                     + "se ignora.", event.getIdNegociacion(), event.getOtpId()));
