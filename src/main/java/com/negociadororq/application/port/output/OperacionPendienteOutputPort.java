@@ -19,8 +19,10 @@ public interface OperacionPendienteOutputPort {
      * @param tipo          tipo
      * @param claveNatural  clave natural ({@link OperacionPendiente#clave})
      * @param estadoInicial estado de alta
-     * @param datos         datos mínimos para reanudarla, o null
+     * @param datos         datos mínimos para reanudarla, o null; nunca el OTP ni otra información sensible
      * @return {@code true} si la dio de alta; {@code false} si ya existía
+     * @throws IllegalArgumentException si {@code datos} lleva un campo sensible
+     *         ({@link OperacionPendiente#exigirDatosNoSensibles})
      */
     boolean registrar(TipoOperacionPendiente tipo, String claveNatural, String estadoInicial, String datos);
 

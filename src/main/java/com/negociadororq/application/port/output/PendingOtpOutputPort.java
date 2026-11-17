@@ -59,4 +59,15 @@ public interface PendingOtpOutputPort {
      * @return las solicitudes en ese estado sin cambios desde el límite
      */
     List<PendingOtp> findByEstadoAndFechaActualizacionBefore(String estado, LocalDateTime limite);
+
+    /**
+     * Fase 28d (H): cuenta una respuesta definitiva de security para la clave {@code ...|vistas} (CAS: de
+     * {@code vistas} a {@code vistas + 1}). Una respuesta repetida o concurrente del mismo intento no la cuenta dos
+     * veces.
+     *
+     * @param id     id del pendiente
+     * @param vistas el {@code n} con el que se armó la clave
+     * @return {@code true} si avanzó; {@code false} si otro intento ya lo había avanzado
+     */
+    boolean registrarRespuestaOtp(String id, int vistas);
 }

@@ -147,4 +147,38 @@ class OperacionPendienteJdbcAdapterSpec extends Specification {
         adapter.buscar(TipoOperacionPendiente.RECHAZO, CLAVE).get().leaseHasta() == null
         adapter.tomarParaReanudar(["REVERTIDO_MYSQL"], T0.plusMinutes(10), T0.plusMinutes(10), T0.plusMinutes(15), 10).isEmpty()
     }
+
+    def "REVISION_MANUAL es terminal: el reconciliador no la vuelve a tomar"() {
+        given:
+        ahora = T0.minusMinutes(10)
+        adapter.registrar(TipoOperacionPendiente.RECHAZO, CLAVE, "REVERTIDO_MYSQL", null)
+        ahora = T0
+
+        when:
+        def movida = adapter.transicionar(TipoOperacionPendiente.RECHAZO, CLAVE, "REVERTIDO_MYSQL",
+                com.negociadororq.application.service.ReconciliadorOperacionesService.REVISION_MANUAL)
+
+        then:
+        movida
+        adapter.tomarParaReanudar(["REVERTIDO_MYSQL"], T0.plusMinutes(10), T0.plusMinutes(10), T0.plusMinutes(15), 10).isEmpty()
+        adapter.buscar(TipoOperacionPendiente.RECHAZO, CLAVE).get().estado() == "REVISION_MANUAL"
+    }
+
+    def "datos nunca lleva información sensible: un campo #campo se rechaza sin escribir"() {
+        when:
+        adapter.registrar(TipoOperacionPendiente.RECHAZO, CLAVE, "INICIADA", '{"cufe":"C","' + campo + '":"x"}')
+
+        then:
+        thrown(IllegalArgumentException)
+        jdbc.queryForObject("SELECT COUNT(*) FROM operacion_pendiente", Long) == 0
+
+        where:
+        campo << ["otp", "codigoOtp", "otpHash", "token", "claveSftp", "password", "secreto", "OTP"]
+    }
+
+    def "datos con ids, CUFE, RUTs y montos sí se guarda"() {
+        expect:
+        adapter.registrar(TipoOperacionPendiente.RECHAZO, CLAVE, "INICIADA",
+                '{"negociacionId":"NEG-1","cufe":"C","rutProveedor":"1","rutPagador":"2","monto":10.5}')
+    }
 }

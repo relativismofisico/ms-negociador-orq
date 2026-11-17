@@ -47,7 +47,8 @@ public class OperacionPendienteJdbcAdapter implements OperacionPendienteOutputPo
         try {
             jdbc.update("INSERT INTO operacion_pendiente (tipo, clave_natural, estado, datos, intentos, fecha_creacion,"
                     + " fecha_actualizacion) VALUES (?, ?, ?, ?, 0, ?, ?)",
-                    tipo.name(), claveNatural, estadoInicial, datos, ahora, ahora);
+                    tipo.name(), claveNatural, estadoInicial, OperacionPendiente.exigirDatosNoSensibles(datos), ahora,
+                    ahora);
             return true;
         } catch (DuplicateKeyException e) {
             return false;

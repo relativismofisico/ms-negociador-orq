@@ -61,7 +61,7 @@ class ValidacionOtpHttpAdapterSpec extends Specification {
     }
 
     static ValidacionOtp.Solicitud solicitud() {
-        new ValidacionOtp.Solicitud("NEG-1", "EMP", "OP", "123456", "10.0.0.9", "neg:pend-1:1")
+        new ValidacionOtp.Solicitud("NEG-1", "EMP", "OP", "123456", "10.0.0.9", "NEG-1|EMP|OP|0")
     }
 
     def "código correcto: resultado de security; token de servicio y cuerpo con la IP y la clave"() {
@@ -74,7 +74,7 @@ class ValidacionOtpHttpAdapterSpec extends Specification {
         r.fechaValidacion() == LocalDateTime.of(2026, 11, 17, 10, 0)
         r.instanteValidacion().toString() == "2026-11-17T15:00:00Z"
         recibido == [idNegociacion: "NEG-1", rutEmpresa: "EMP", rutOperador: "OP", otp: "123456",
-                     ipAprobacion: "10.0.0.9", claveIdempotencia: "neg:pend-1:1"]
+                     ipAprobacion: "10.0.0.9", claveIdempotencia: "NEG-1|EMP|OP|0"]
         def claims = Jwts.parser().verifyWith(Keys.hmacShaKeyFor(Base64.decoder.decode(SECRETO))).build()
                 .parseSignedClaims(autorizacion.substring("Bearer ".length())).payload
         claims.getSubject() == "ms-negociador-orq"

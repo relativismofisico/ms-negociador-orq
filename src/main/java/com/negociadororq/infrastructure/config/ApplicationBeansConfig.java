@@ -34,6 +34,7 @@ import com.negociadororq.application.port.output.ReversionCuposReclamoOutputPort
 import com.negociadororq.application.port.output.TemplateEngineOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.application.port.output.UserQuotaOutputPort;
+import com.negociadororq.application.port.output.ValidacionOtpOutputPort;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoServiceImpl;
 import com.negociadororq.application.service.AprobacionInternaService;
 import com.negociadororq.application.service.AuditoriaNegociacionService;
@@ -74,6 +75,7 @@ import com.negociadororq.application.service.TemplateRenderService;
 import com.negociadororq.application.service.TemplateRenderServiceImpl;
 import com.negociadororq.application.service.ValidacionFacturaService;
 import com.negociadororq.application.service.ValidacionFacturaServiceImpl;
+import com.negociadororq.application.service.ValidadorOtpPendiente;
 import com.negociadororq.application.service.notificacion.CuerpoNotificacionFactory;
 import com.negociadororq.application.service.notificacion.DestinatarioResolver;
 import com.negociadororq.application.service.notificacion.impl.FacturaCuerpoBuilder;
@@ -403,8 +405,23 @@ public class ApplicationBeansConfig {
             final ObjectProvider<ReanudadorOperacion> reanudadores,
             @Value("${operaciones.reconciliador.gracia:PT2M}") final Duration gracia,
             @Value("${operaciones.reconciliador.concesion:PT5M}") final Duration concesion,
-            @Value("${operaciones.reconciliador.lote:50}") final int lote) {
+            @Value("${operaciones.reconciliador.lote:50}") final int lote,
+            @Value("${operaciones.reconciliador.max-intentos:10}") final int maxIntentos) {
         return new ReconciliadorOperacionesService(operacionPendienteOutputPort, clockPort,
-                reanudadores.orderedStream().toList(), gracia, concesion, lote);
+                reanudadores.orderedStream().toList(), gracia, concesion, lote, maxIntentos);
+    }
+
+    /**
+     * Fase 28d (H): validación por HTTP del código de un pendiente OTP con la clave
+     * {@code idNegociacion|rutEmpresa|rutOperador|n}.
+     *
+     * @param validacionOtpOutputPort cliente HTTP de security
+     * @param pendingOtpOutputPort    pendientes OTP
+     * @return el validador
+     */
+    @Bean
+    public ValidadorOtpPendiente validadorOtpPendiente(final ValidacionOtpOutputPort validacionOtpOutputPort,
+            final PendingOtpOutputPort pendingOtpOutputPort) {
+        return new ValidadorOtpPendiente(validacionOtpOutputPort, pendingOtpOutputPort);
     }
 }

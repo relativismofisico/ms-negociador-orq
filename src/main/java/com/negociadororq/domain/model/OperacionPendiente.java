@@ -1,6 +1,7 @@
 package com.negociadororq.domain.model;
 
 import java.time.LocalDateTime;
+import java.util.regex.Pattern;
 
 /**
  * Fase 28d, opción A: una operación mixta (MySQL + Mongo) en curso o pendiente de completar.
@@ -9,7 +10,9 @@ import java.time.LocalDateTime;
  * @param tipo               qué operación es
  * @param claveNatural       clave natural, con el CUFE ({@link #clave})
  * @param estado             estado del flujo de ese tipo (lo define cada flujo)
- * @param datos              datos mínimos para reanudarla (JSON del flujo), o null
+ * @param datos              datos mínimos para reanudarla (JSON del flujo: ids, CUFE, RUTs, montos), o null. Nunca
+ *                           información sensible: ni el OTP ni un hash suyo, ni tokens, claves o secretos
+ *                           ({@link #exigirDatosNoSensibles})
  * @param leaseHasta         concesión del reconciliador que la tomó, o null
  * @param intentos           veces que el reconciliador la tomó
  * @param fechaCreacion      alta
@@ -22,6 +25,24 @@ public record OperacionPendiente(Long id, TipoOperacionPendiente tipo, String cl
 
     /** Separador de las partes de la clave natural. */
     public static final String SEPARADOR = "|";
+
+    /** Campos que {@code datos} no puede llevar (en cualquier nivel del JSON). */
+    private static final Pattern CAMPO_SENSIBLE = Pattern.compile(
+            "\"[^\"]*(otp|codigo|hash|token|clave|password|secret)[^\"]*\"\\s*:", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Rechaza {@code datos} con un campo sensible (OTP, código, hash, token, clave, password, secreto): esa
+     * información nunca se guarda en {@code operacion_pendiente}.
+     *
+     * @param datos JSON del flujo, o null
+     * @return los mismos datos
+     */
+    public static String exigirDatosNoSensibles(final String datos) {
+        if (datos != null && CAMPO_SENSIBLE.matcher(datos).find()) {
+            throw new IllegalArgumentException("operacion_pendiente.datos no puede llevar información sensible");
+        }
+        return datos;
+    }
 
     /**
      * Clave natural de una operación sobre una factura de una negociación: {@code negociacion|cufe}, nunca el número.

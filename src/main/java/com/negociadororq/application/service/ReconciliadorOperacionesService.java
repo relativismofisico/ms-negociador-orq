@@ -3,6 +3,7 @@ package com.negociadororq.application.service;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -16,11 +17,17 @@ import com.negociadororq.domain.model.TipoOperacionPendiente;
 /**
  * Fase 28d, opción A: reconciliador único de {@code operacion_pendiente}. En cada vuelta toma, con concesión, las
  * operaciones que siguen en un estado intermedio pasada la gracia, y las reanuda con el {@link ReanudadorOperacion} de
- * su tipo. Una que falla queda con su último error y se vuelve a tomar cuando vence la concesión. Corre en una sola
- * instancia (ShedLock en el scheduler).
+ * su tipo. Una que falla queda con su último error y se vuelve a tomar cuando vence la concesión. Pasado el tope de
+ * intentos, la operación pasa al estado terminal {@link #REVISION_MANUAL} con el log
+ * {@code [OPERACION-PENDIENTE-ATASCADA]} y suma al contador {@link #atascadas()}; ya no se vuelve a tomar. Corre en una
+ * sola instancia (ShedLock en el scheduler).
  */
 public class ReconciliadorOperacionesService {
 
+    /** Estado terminal: el reconciliador agotó los intentos y la operación espera a una persona. */
+    public static final String REVISION_MANUAL = "REVISION_MANUAL";
+
+    private static final AtomicLong ATASCADAS = new AtomicLong();
     private static final Logger LOG = Logger.getLogger(ReconciliadorOperacionesService.class.getName());
 
     private final OperacionPendienteOutputPort operaciones;
@@ -29,6 +36,7 @@ public class ReconciliadorOperacionesService {
     private final Duration gracia;
     private final Duration concesion;
     private final int lote;
+    private final int maxIntentos;
 
     /**
      * @param operaciones  tabla de operaciones pendientes
@@ -37,10 +45,12 @@ public class ReconciliadorOperacionesService {
      * @param gracia       tiempo sin cambios antes de considerar que el flujo en curso murió
      * @param concesion    tiempo que el reconciliador retiene cada operación tomada
      * @param lote         máximo de operaciones por vuelta
+     * @param maxIntentos  tomas del reconciliador antes de pasar a {@link #REVISION_MANUAL}
      */
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public ReconciliadorOperacionesService(final OperacionPendienteOutputPort operaciones, final ClockPort clock,
             final List<ReanudadorOperacion> reanudadores, final Duration gracia, final Duration concesion,
-            final int lote) {
+            final int lote, final int maxIntentos) {
         this.operaciones = operaciones;
         this.clock = clock;
         this.reanudadores = reanudadores.stream()
@@ -48,6 +58,15 @@ public class ReconciliadorOperacionesService {
         this.gracia = gracia;
         this.concesion = concesion;
         this.lote = lote;
+        this.maxIntentos = maxIntentos;
+    }
+
+    /**
+     * @return operaciones pasadas a {@link #REVISION_MANUAL} desde el arranque (métrica
+     *         {@code operaciones.pendientes.atascadas})
+     */
+    public static long atascadas() {
+        return ATASCADAS.get();
     }
 
     /**
@@ -67,6 +86,10 @@ public class ReconciliadorOperacionesService {
             if (reanudador == null || !reanudador.estadosReanudables().contains(op.estado())) {
                 continue;
             }
+            if (op.intentos() > maxIntentos) {
+                atascar(op);
+                continue;
+            }
             try {
                 reanudador.reanudar(op);
                 reanudadas++;
@@ -79,5 +102,14 @@ public class ReconciliadorOperacionesService {
             }
         }
         return reanudadas;
+    }
+
+    private void atascar(final OperacionPendiente op) {
+        if (operaciones.transicionar(op.tipo(), op.claveNatural(), op.estado(), REVISION_MANUAL)) {
+            ATASCADAS.incrementAndGet();
+            LOG.severe(() -> "[OPERACION-PENDIENTE-ATASCADA] " + op.tipo() + " " + op.claveNatural() + " pasa a "
+                    + REVISION_MANUAL + " desde " + op.estado() + " tras " + (op.intentos() - 1)
+                    + " intentos del reconciliador; último error: " + op.ultimoError());
+        }
     }
 }

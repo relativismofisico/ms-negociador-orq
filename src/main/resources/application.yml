@@ -212,3 +212,5 @@ operaciones:
     gracia: ${OPERACIONES_RECONCILIADOR_GRACIA:PT2M}
     concesion: ${OPERACIONES_RECONCILIADOR_CONCESION:PT5M}
     lote: 50
+    # Tomas del reconciliador antes de pasar la operación a REVISION_MANUAL ([OPERACION-PENDIENTE-ATASCADA]).
+    max-intentos: ${OPERACIONES_RECONCILIADOR_MAX_INTENTOS:10}

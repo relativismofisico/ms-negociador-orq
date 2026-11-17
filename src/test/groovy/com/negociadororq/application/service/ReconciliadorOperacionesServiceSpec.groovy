@@ -17,8 +17,8 @@ class ReconciliadorOperacionesServiceSpec extends Specification {
     OperacionPendienteOutputPort operaciones = Mock()
     ClockPort clock = Stub() { now() >> T0 }
 
-    static OperacionPendiente op(long id, TipoOperacionPendiente tipo, String estado) {
-        new OperacionPendiente(id, tipo, "NEG-1|CUFE-" + id, estado, null, null, 1, T0, T0, null)
+    static OperacionPendiente op(long id, TipoOperacionPendiente tipo, String estado, int intentos = 1) {
+        new OperacionPendiente(id, tipo, "NEG-1|CUFE-" + id, estado, null, null, intentos, T0, T0, "Mongo caído")
     }
 
     ReanudadorOperacion reanudador(TipoOperacionPendiente tipo, List<String> estados, Closure efecto) {
@@ -28,7 +28,7 @@ class ReconciliadorOperacionesServiceSpec extends Specification {
     def "sin reanudadores no consulta nada"() {
         when:
         def n = new ReconciliadorOperacionesService(operaciones, clock, [], Duration.ofMinutes(2),
-                Duration.ofMinutes(5), 50).reconciliar()
+                Duration.ofMinutes(5), 50, 10).reconciliar()
 
         then:
         n == 0
@@ -43,7 +43,7 @@ class ReconciliadorOperacionesServiceSpec extends Specification {
                 reanudador(TipoOperacionPendiente.RECHAZO, ["REVERTIDO_MYSQL"], { rechazos << it }),
                 reanudador(TipoOperacionPendiente.VENCIMIENTO, ["REVERTIDO_MYSQL"],
                         { vencimientos << it; throw new IllegalStateException("Mongo caído") })],
-                Duration.ofMinutes(2), Duration.ofMinutes(5), 50)
+                Duration.ofMinutes(2), Duration.ofMinutes(5), 50, 10)
 
         when:
         def n = servicio.reconciliar()
@@ -57,5 +57,55 @@ class ReconciliadorOperacionesServiceSpec extends Specification {
         n == 1
         rechazos*.id() == [1L]
         vencimientos*.id() == [2L]
+    }
+
+    def "pasado el tope de intentos: REVISION_MANUAL (CAS), log [OPERACION-PENDIENTE-ATASCADA] y contador; no se reanuda"() {
+        given:
+        def reanudadas = []
+        def servicio = new ReconciliadorOperacionesService(operaciones, clock, [
+                reanudador(TipoOperacionPendiente.RECHAZO, ["REVERTIDO_MYSQL"], { reanudadas << it })],
+                Duration.ofMinutes(2), Duration.ofMinutes(5), 50, 3)
+        def antes = ReconciliadorOperacionesService.atascadas()
+        def logs = []
+        def manejador = new java.util.logging.Handler() {
+            void publish(java.util.logging.LogRecord r) { logs << r.message }
+            void flush() {}
+            void close() {}
+        }
+        java.util.logging.Logger.getLogger(ReconciliadorOperacionesService.name).addHandler(manejador)
+
+        when:
+        def n = servicio.reconciliar()
+
+        then: "la cuarta toma (intentos=4 > 3) se atasca; la tercera todavía se reanuda"
+        1 * operaciones.tomarParaReanudar(*_) >> [
+                op(1, TipoOperacionPendiente.RECHAZO, "REVERTIDO_MYSQL", 4),
+                op(2, TipoOperacionPendiente.RECHAZO, "REVERTIDO_MYSQL", 3)]
+        1 * operaciones.transicionar(TipoOperacionPendiente.RECHAZO, "NEG-1|CUFE-1", "REVERTIDO_MYSQL",
+                ReconciliadorOperacionesService.REVISION_MANUAL) >> true
+        0 * operaciones.registrarError(*_)
+        n == 1
+        reanudadas*.id() == [2L]
+        ReconciliadorOperacionesService.atascadas() == antes + 1
+        logs.any { it.startsWith("[OPERACION-PENDIENTE-ATASCADA] RECHAZO NEG-1|CUFE-1 pasa a REVISION_MANUAL") }
+
+        cleanup:
+        java.util.logging.Logger.getLogger(ReconciliadorOperacionesService.name).removeHandler(manejador)
+    }
+
+    def "si otro proceso ya movió la operación, no cuenta ni registra el atasco"() {
+        given:
+        def servicio = new ReconciliadorOperacionesService(operaciones, clock, [
+                reanudador(TipoOperacionPendiente.RECHAZO, ["REVERTIDO_MYSQL"], { })],
+                Duration.ofMinutes(2), Duration.ofMinutes(5), 50, 3)
+        def antes = ReconciliadorOperacionesService.atascadas()
+
+        when:
+        servicio.reconciliar()
+
+        then:
+        1 * operaciones.tomarParaReanudar(*_) >> [op(1, TipoOperacionPendiente.RECHAZO, "REVERTIDO_MYSQL", 4)]
+        1 * operaciones.transicionar(*_) >> false
+        ReconciliadorOperacionesService.atascadas() == antes
     }
 }

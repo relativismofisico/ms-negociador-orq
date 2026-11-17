@@ -79,7 +79,7 @@ public class ArchitectureTest {
                         "..infrastructure..", "..application..", "..domain..",
                         "java..", "javax..", "jakarta..", "org.springframework..", "io.swagger.v3.oas..",
                         "com.factoring.commons..", "com.fasterxml.jackson..", "com.github.mustachejava..",
-                        "io.jsonwebtoken..", "net.javacrumbs.shedlock..", "org.apache.kafka..",
+                        "io.jsonwebtoken..", "net.javacrumbs.shedlock..", "io.micrometer..", "org.apache.kafka..",
                         "org.apache.pdfbox..", "org.slf4j..", "com.openhtmltopdf..", "org.bson..");
 
         rule.check(classes);

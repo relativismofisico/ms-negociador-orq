@@ -3,7 +3,7 @@
 -- factura (negociacion|cufe), nunca con el número, que no es único entre emisores. El UNIQUE (tipo, clave_natural) hace
 -- idempotente el alta; las transiciones son UPDATE condicionales sobre el estado (CAS); el reconciliador toma las que
 -- quedaron a medias con una concesión (lease_hasta).
-CREATE TABLE operacion_pendiente (
+CREATE TABLE IF NOT EXISTS operacion_pendiente (
     id                  BIGINT       NOT NULL AUTO_INCREMENT,
     tipo                VARCHAR(40)  NOT NULL,
     clave_natural       VARCHAR(191) NOT NULL,
