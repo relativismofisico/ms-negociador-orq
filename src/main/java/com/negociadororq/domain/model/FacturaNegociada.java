@@ -34,6 +34,12 @@ public class FacturaNegociada {
 
     private String rutPagador;
     private String rutProveedor;
+    /**
+     * Fase 28d (C): CUFE de la factura, leído de la base al crear la negociación (junto con {@link #rutProveedor} y
+     * {@link #rutPagador}, que también se reemplazan por los de la base). Desde ahí, toda lectura o escritura de la
+     * factura va por {@code {cufe, rutProveedor, rutPagador}}, nunca por el número, que no es único entre emisores.
+     */
+    private String cufe;
     // Cada factura puede tener uno o varios fondeadores asociados
     private List<FondeadorAsignacion> fondeadores;
 

@@ -3,6 +3,7 @@ package com.negociadororq.application.service;
 import java.math.BigDecimal;
 import java.util.Locale;
 
+import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.EndosoPatchOutputPort;
@@ -60,20 +61,35 @@ public class ReversionCuposServiceImpl
 
     @Override
     public void revertirPorFactura(
+            String negociacionId,
+            String cufe,
             String numeroFactura,
             String actorId,
             String motivo) {
 
+        if (negociacionId == null || negociacionId.isBlank() || cufe == null || cufe.isBlank()) {
+            throw EventosSinCufe.rechazar("liquidacion-fallida", negociacionId, numeroFactura);
+        }
+
         // ==========================================
-        // FACTURA
+        // NEGOCIACIÓN Y FACTURA (por CUFE)
         // ==========================================
 
-        Factura factura =
-                facturaPort
-                        .findByNumeroFactura(numeroFactura)
+        Negociacion negociacion =
+                negociacionPort
+                        .findById(negociacionId)
                         .orElseThrow(() ->
                                 new RecursoNoEncontradoException(
-                                        "Factura no encontrada"));
+                                        "Negociación no encontrada"));
+
+        FacturaNegociada enNegociacion = negociacion.getFacturas().stream()
+                .filter(f -> cufe.equals(f.getCufe()))
+                .findFirst()
+                .orElseThrow(() -> new ConflictoException("La factura con ese CUFE no está en la negociación "
+                        + negociacionId + ".", ResolutorFactura.FACTURA_NO_COINCIDE));
+        String numero = enNegociacion.getNumeroFactura();
+
+        Factura factura = new ResolutorFactura(facturaPort).deLaNegociacion(enNegociacion);
 
         // ==========================================
         // GUARDA DE ESTADO
@@ -82,35 +98,24 @@ public class ReversionCuposServiceImpl
         if (EstadoNegociacion.LIQUIDADA.name().equals(factura.getEstadoNegociacion())
                 || EstadoFirma.RECHAZADA.name().equals(factura.getEstadoFirma())) {
             log.info(String.format("Reversión ignorada factura=%s: estado negociación=%s, firma=%s",
-                    numeroFactura, factura.getEstadoNegociacion(), factura.getEstadoFirma()));
+                    numero, factura.getEstadoNegociacion(), factura.getEstadoFirma()));
             return;
         }
-
-        // ==========================================
-        // NEGOCIACIÓN
-        // ==========================================
-
-        Negociacion negociacion =
-                negociacionPort
-                        .findByNumeroFactura(numeroFactura)
-                        .orElseThrow(() ->
-                                new RecursoNoEncontradoException(
-                                        "Negociación no encontrada"));
 
         // ==========================================
         // RECLAMO + CUPOS (una transacción)
         // ==========================================
 
         Boolean reclamada = transaccion.execute(estado ->
-                reclamoPort.reclamar(numeroFactura, negociacion.getId())
-                        && revertirCupos(numeroFactura, actorId, factura, negociacion));
+                reclamoPort.reclamar(numero, negociacion.getId())
+                        && revertirCupos(enNegociacion, actorId, factura, negociacion));
 
         if (!Boolean.TRUE.equals(reclamada)) {
             // Otra entrega ya revirtió los cupos de esta negociación. Solo se completa la firma por si aquella
             // falló después de confirmar; no se notifica otra vez.
             log.info(String.format("Reversión ya aplicada factura=%s negociación=%s: no se revierte otra vez",
-                    numeroFactura, negociacion.getId()));
-            facturaPatchPort.actualizarEstadoFirmaPorNoFactura(numeroFactura, EstadoFirma.RECHAZADA);
+                    numero, negociacion.getId()));
+            facturaPatchPort.actualizarEstadoFirmaPorCufe(ResolutorFactura.referencia(enNegociacion), EstadoFirma.RECHAZADA);
             return;
         }
 
@@ -118,27 +123,15 @@ public class ReversionCuposServiceImpl
         // ACTUALIZAR ESTADOS, LOG Y NOTIFICACIÓN
         // ==========================================
 
-        finalizarReversion(numeroFactura, motivo, negociacion);
+        finalizarReversion(enNegociacion, motivo, negociacion);
     }
 
     /**
      * Las cuatro reversiones, dentro de la transacción del reclamo: si una falla (p. ej. un fondeador que no
      * existe), ninguna queda confirmada y el reclamo tampoco.
      */
-    private boolean revertirCupos(String numeroFactura, String actorId, Factura factura, Negociacion negociacion) {
-
-        // ==========================================
-        // FACTURA NEGOCIADA
-        // ==========================================
-
-        FacturaNegociada facturaNegociada =
-                negociacion.getFacturas()
-                        .stream()
-                        .filter(f ->
-                                f.getNumeroFactura()
-                                        .equals(numeroFactura))
-                        .findFirst()
-                        .orElseThrow();
+    private boolean revertirCupos(FacturaNegociada facturaNegociada, String actorId, Factura factura,
+            Negociacion negociacion) {
 
         // ==========================================
         // TIPO OPERACIÓN
@@ -226,8 +219,8 @@ public class ReversionCuposServiceImpl
         }
     }
 
-    private void finalizarReversion(String numeroFactura, String motivo, Negociacion negociacion) {
-        facturaPatchPort.actualizarEstadoFirmaPorNoFactura(numeroFactura, EstadoFirma.RECHAZADA);
-        notificacionService.notificarLiquidacionFallida(negociacion, numeroFactura, motivo);
+    private void finalizarReversion(FacturaNegociada enNegociacion, String motivo, Negociacion negociacion) {
+        facturaPatchPort.actualizarEstadoFirmaPorCufe(ResolutorFactura.referencia(enNegociacion), EstadoFirma.RECHAZADA);
+        notificacionService.notificarLiquidacionFallida(negociacion, enNegociacion.getNumeroFactura(), motivo);
     }
 }

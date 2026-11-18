@@ -154,6 +154,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
     def buildFacturaNeg(String numero, String rutPag, String rutProv, List<FondeadorAsignacion> fondeadores) {
         FacturaNegociada.builder()
                 .numeroFactura(numero)
+                .cufe("CUFE-" + numero)
                 .rutPagador(rutPag)
                 .rutProveedor(rutProv)
                 .fondeadores(fondeadores)
@@ -278,9 +279,11 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         // En este caso fn.aprobaciones tiene FONDEADOR, el actor es PAG-001
         // actoresRequeridos FACTORING = {PAGADOR, FONDEADOR}
         // rolesQueAprobaron = {FONDEADOR} + {PAGADOR} = todosAprobaron = true
-        1 * facturaPatchPort.actualizarEstadosPorNoFactura("FECI001", EstadoFirma.CESION, EstadoNegociacion.APROBADA)
+        1 * facturaPatchPort.actualizarEstadosPorCufe({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.CESION, EstadoNegociacion.APROBADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.ACEPTADO)
-        1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", { it.requestId == "req-otp" })
+        1 * outboxService.guardarEventoConId({ it.startsWith("liquidacion.solicitada|neg-001|CUFE-") }, "neg-001", "topic-liquidacion", {
+            it.requestId == "req-otp" && it.cufe == "CUFE-FECI001" && it.rutProveedor == "PROV-001" && it.rutPagador == "PAG-001"
+        })
         1 * auditoriaNegociacion.facturaRevisada(pending, "neg-001", _, _, true)
         1 * auditoriaNegociacion.estadoNegociacion(pending, "neg-001", _, _)
     }
@@ -308,7 +311,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         facturaDb.rutProveedor = "PROV-001"
         facturaDb.rutPagador = "PAG-001"
         facturaDb.valorFactura = new BigDecimal("1000.00")
-        facturaPort.findByNumeroFactura("FECI001") >> Optional.of(facturaDb)
+        facturaPort.findByCufe("CUFE-FECI001") >> Optional.of(facturaDb.tap { numeroFactura = "FECI001"; cufe = "CUFE-FECI001" })
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(30L).build())
         companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(40L).build())
@@ -318,7 +321,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         def resultado = service.aprobarInterno(pending)
 
         then:
-        1 * facturaPatchPort.actualizarEstadosPorNoFactura("FECI001", EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA)
+        1 * facturaPatchPort.actualizarEstadosPorCufe({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.RECHAZADO)
         1 * cupoReversionService.revertirCupoUsuario(1L, _)
         resultado.estado == EstadoNegociacion.RECHAZADA.name()
@@ -338,7 +341,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         negociacionPort.save(_) >> neg
         // El proveedor aprueba -> se intenta regenerar el documento con el
         // firmante; sin factura real que devolver, la regeneración se omite.
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
 
         def facturaReq = new AprobacionFacturaRequest("FECI001", true, null)
         def pending = buildPending("neg-001", "PROV-001", [facturaReq])
@@ -366,7 +369,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
 
         negociacionPort.findById("neg-001") >> Optional.of(neg)
         negociacionPort.save(_) >> neg
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
 
         def facturaReq = new AprobacionFacturaRequest("FECI001", true, null)
         def pending = buildPending("neg-001", "PROV-001", [facturaReq])
@@ -399,8 +402,8 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         facturaDb.rutProveedor = "PROV-001"
         facturaDb.rutPagador = "PAG-001"
         facturaDb.valorFactura = new BigDecimal("1000.00")
-        facturaPort.findByNumeroFactura("FECI002") >> Optional.of(facturaDb)
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe("CUFE-FECI002") >> Optional.of(facturaDb.tap { numeroFactura = "FECI002"; cufe = "CUFE-FECI002" })
+        facturaPort.findByCufe(_) >> Optional.empty()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         companyPort.findByNit(_) >> Optional.of(Company.builder().ideCompany(1L).build())
 
@@ -427,7 +430,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
 
         negociacionPort.findById("neg-001") >> Optional.of(neg)
         negociacionPort.save(_) >> neg
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
 
         def facturaReq = new AprobacionFacturaRequest("FECI001", true, null)
         def pending = buildPending("neg-001", "PROV-001", [facturaReq])
@@ -436,9 +439,9 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         service.aprobarInterno(pending)
 
         then:
-        1 * facturaPatchPort.actualizarEstadosPorNoFactura("FECI001", EstadoFirma.DESCUENTO, EstadoNegociacion.APROBADA)
+        1 * facturaPatchPort.actualizarEstadosPorCufe({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.DESCUENTO, EstadoNegociacion.APROBADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.ACEPTADO)
-        1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", _)
+        1 * outboxService.guardarEventoConId({ it.startsWith("liquidacion.solicitada|neg-001|CUFE-") }, "neg-001", "topic-liquidacion", _)
     }
 
     def "resolverRolActor lanza ReglaDeNegocioException si actor no identificable"() {
@@ -520,6 +523,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         given:
         def fn = FacturaNegociada.builder()
                 .numeroFactura("FECI-R")
+                .cufe("CUFE-FECI-R").rutProveedor("PROV-001").rutPagador("PAG-001")
                 .fondeadores([FondeadorAsignacion.builder().rutFondeador("FOND-001").build()])
                 .build()
 
@@ -528,7 +532,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         facturaDb.rutProveedor = "PROV-001"
         facturaDb.rutPagador = "PAG-001"
 
-        facturaPort.findByNumeroFactura("FECI-R") >> Optional.of(facturaDb)
+        facturaPort.findByCufe("CUFE-FECI-R") >> Optional.of(facturaDb.tap { numeroFactura = "FECI-R"; cufe = "CUFE-FECI-R" })
         userPort.findByUsername("OP") >> Optional.of(User.builder().ideUser(5L).build())
         companyPort.findByNit("EMP") >> Optional.of(Company.builder().ideCompany(20L).build())
         companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(30L).build())
@@ -548,6 +552,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         given:
         def fn = FacturaNegociada.builder()
                 .numeroFactura("FECI-C")
+                .cufe("CUFE-FECI-C").rutProveedor("PROV-CF").rutPagador("PAG-CF")
                 .fondeadores([FondeadorAsignacion.builder().rutFondeador("FOND-CF").build()])
                 .build()
 
@@ -556,7 +561,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         facturaDb.rutProveedor = "PROV-CF"
         facturaDb.rutPagador = "PAG-CF"
 
-        facturaPort.findByNumeroFactura("FECI-C") >> Optional.of(facturaDb)
+        facturaPort.findByCufe("CUFE-FECI-C") >> Optional.of(facturaDb.tap { numeroFactura = "FECI-C"; cufe = "CUFE-FECI-C" })
         userPort.findByUsername("OP-CF") >> Optional.of(User.builder().ideUser(6L).build())
         companyPort.findByNit("EMP-CF") >> Optional.of(Company.builder().ideCompany(21L).build())
         companyPort.findByNit("FOND-CF") >> Optional.of(Company.builder().ideCompany(31L).build())
@@ -576,6 +581,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         given:
         def fn = FacturaNegociada.builder()
                 .numeroFactura("FECI-V")
+                .cufe("CUFE-FECI-V").rutProveedor("PROV").rutPagador("PAG")
                 .fondeadores([])
                 .build()
 
@@ -585,7 +591,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         facturaDb.rutProveedor = "PROV"
         facturaDb.rutPagador = "PAG"
 
-        facturaPort.findByNumeroFactura("FECI-V") >> Optional.of(facturaDb)
+        facturaPort.findByCufe("CUFE-FECI-V") >> Optional.of(facturaDb.tap { numeroFactura = "FECI-V"; cufe = "CUFE-FECI-V" })
         userPort.findByUsername("OP") >> Optional.of(User.builder().ideUser(1L).build())
         companyPort.findByNit("EMP") >> Optional.of(Company.builder().ideCompany(10L).build())
 
@@ -602,6 +608,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         given:
         def fn = FacturaNegociada.builder()
                 .numeroFactura("FECI-NULL")
+                .cufe("CUFE-FECI-NULL").rutProveedor("PROV").rutPagador("PAG")
                 .fondeadores([])
                 .build()
 
@@ -611,7 +618,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         facturaDb.rutProveedor = "PROV"
         facturaDb.rutPagador = "PAG"
 
-        facturaPort.findByNumeroFactura("FECI-NULL") >> Optional.of(facturaDb)
+        facturaPort.findByCufe("CUFE-FECI-NULL") >> Optional.of(facturaDb.tap { numeroFactura = "FECI-NULL"; cufe = "CUFE-FECI-NULL" })
         userPort.findByUsername("OP") >> Optional.of(User.builder().ideUser(1L).build())
         companyPort.findByNit("EMP") >> Optional.of(Company.builder().ideCompany(10L).build())
 
@@ -638,6 +645,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         def ex = thrown(ConflictoException)
         ex.codigo == "OTP_SIN_SOLICITUD_PENDIENTE"
         0 * outboxService.guardarEvento(*_)
+        0 * outboxService.guardarEventoConId(*_)
 
         where:
         pendiente << [Optional.empty(),
@@ -756,7 +764,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         }
 
         then:
-        1 * outboxService.guardarEvento("neg-001", "topic-liquidacion", _)
+        1 * outboxService.guardarEventoConId({ it.startsWith("liquidacion.solicitada|neg-001|CUFE-") }, "neg-001", "topic-liquidacion", _)
         1 * notificacionService.notificarFirmaEndoso(_)
         pending.efectosEmitidos == ["LIQUIDACION:FECI001", "CORREO_FIRMA"]
         guardados == [["LIQUIDACION:FECI001"], ["LIQUIDACION:FECI001", "CORREO_FIRMA"]]
@@ -776,7 +784,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         facturaDb.rutProveedor = "PROV-001"
         facturaDb.rutPagador = "PAG-001"
         facturaDb.valorFactura = new BigDecimal("1000.00")
-        facturaPort.findByNumeroFactura("FECI001") >> Optional.of(facturaDb)
+        facturaPort.findByCufe("CUFE-FECI001") >> Optional.of(facturaDb.tap { numeroFactura = "FECI001"; cufe = "CUFE-FECI001" })
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(30L).build())
         companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(40L).build())
@@ -795,6 +803,6 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         then:
         1 * notificacionService.notificarLiquidacionFallida(_, "FECI001", _)
         1 * notificacionService.notificarFirmaEndoso(_)
-        0 * outboxService.guardarEvento(_, "topic-liquidacion", _)
+        0 * outboxService.guardarEventoConId(_, _, "topic-liquidacion", _)
     }
 }

@@ -2,17 +2,22 @@ package com.negociadororq.infrastructure.persistence.adapter;
 
 import java.util.List;
 
+import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.port.output.FacturaPatchOutputPort;
+import com.negociadororq.application.service.ResolutorFactura;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.enums.EstadoNegociacion;
 import com.negociadororq.domain.model.ActorFactura;
+import com.negociadororq.domain.model.ReferenciaFactura;
 import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
  * Implementación de {@link FacturaPatchOutputPort}.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class FacturaPatchAdapter implements FacturaPatchOutputPort {
@@ -30,18 +35,27 @@ public class FacturaPatchAdapter implements FacturaPatchOutputPort {
     }
 
     @Override
-    public void actualizarEstadoFirmaPorNoFactura(String numeroFactura, EstadoFirma estadoFirma) {
-        repository.actualizarEstadoFirmaPorNoFactura(numeroFactura, estadoFirma);
+    public void actualizarEstadoFirmaPorCufe(ReferenciaFactura ref, EstadoFirma estadoFirma) {
+        exigirCoincidencia(repository.actualizarEstadoFirmaPorCufe(ref, estadoFirma), ref);
     }
 
     @Override
-    public void actualizarEstadosPorNoFactura(String numeroFactura, EstadoFirma estadoFirma,
-                                               EstadoNegociacion estadoNegociacion) {
-        repository.actualizarEstadosPorNoFactura(numeroFactura, estadoFirma, estadoNegociacion);
+    public void actualizarEstadosPorCufe(ReferenciaFactura ref, EstadoFirma estadoFirma,
+                                         EstadoNegociacion estadoNegociacion) {
+        exigirCoincidencia(repository.actualizarEstadosPorCufe(ref, estadoFirma, estadoNegociacion), ref);
     }
 
     @Override
-    public void actualizarNegociacionId(String numeroFactura, String negociacionId) {
-        repository.actualizarNegociacionId(numeroFactura, negociacionId);
+    public void actualizarNegociacionIdPorCufe(ReferenciaFactura ref, String negociacionId) {
+        exigirCoincidencia(repository.actualizarNegociacionIdPorCufe(ref, negociacionId), ref);
+    }
+
+    /** Fase 28d (C): exactamente una factura con ese CUFE y esas empresas (el CUFE es único). */
+    private static void exigirCoincidencia(boolean actualizada, ReferenciaFactura ref) {
+        if (!actualizada) {
+            log.warn("[FACTURA-NO-COINCIDE] ninguna factura con el CUFE {} y las empresas de la negociación", ref.cufe());
+            throw new ConflictoException("La factura de la negociación no coincide con la base (CUFE y empresas).",
+                    ResolutorFactura.FACTURA_NO_COINCIDE);
+        }
     }
 }

@@ -92,11 +92,20 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
         // Fase 28d: las contrapartes salen de la BASE (factura por factura), no de lo que manda el cliente, y se
         // validan antes de procesar cualquier factura (antes de reservar cupos).
-        Map<String, Factura> facturasBd = new HashMap<>();
+        // Fase 28d (C): cada factura se resuelve por CUFE o por número + RUT de proveedor y pagador (exactamente una, de
+        // la empresa que negocia); desde aquí la solicitud lleva el CUFE y los RUT de la base, no los del cliente.
+        ResolutorFactura resolutor = new ResolutorFactura(facturaPort);
+        String tipo = null;
+        if (request.getTipoOperacion() != null) {
+            tipo = request.getTipoOperacion().getTipo();
+        }
+        List<Factura> facturasBd = new ArrayList<>();
         for (FacturaNegociada fn : request.getFacturas()) {
-            facturasBd.put(fn.getNumeroFactura(), facturaPort.findByNumeroFactura(fn.getNumeroFactura())
-                    .orElseThrow(() -> new RecursoNoEncontradoException(
-                            "Factura no encontrada: " + fn.getNumeroFactura(), "FACTURA_NO_ENCONTRADA")));
+            Factura factura = resolutor.resolverSolicitud(fn, tipo, request.getRutEmpresa());
+            fn.setCufe(factura.getCufe());
+            fn.setRutProveedor(factura.getRutProveedor());
+            fn.setRutPagador(factura.getRutPagador());
+            facturasBd.add(factura);
         }
         Set<String> contrapartes = contrapartesDesdeBd(request, facturasBd);
         validarOperacionHabilitada(request, contrapartes);
@@ -107,13 +116,10 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         ====================================================== */
         Map<String, List<FacturaNegociada>> facturasPorPagador = new HashMap<>();
 
-        for (FacturaNegociada fn : request.getFacturas()) {
-
-            Factura factura = facturasBd.get(fn.getNumeroFactura());
-
+        for (int i = 0; i < request.getFacturas().size(); i++) {
             facturasPorPagador
-                    .computeIfAbsent(factura.getRutPagador(), k -> new ArrayList<>())
-                    .add(fn);
+                    .computeIfAbsent(facturasBd.get(i).getRutPagador(), k -> new ArrayList<>())
+                    .add(request.getFacturas().get(i));
         }
 
         for (FacturaNegociada facturaReq : request.getFacturas()) {
@@ -194,7 +200,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         // factura aceptada para poder sub-agrupar facturas liquidadas por negociación.
         String idNegociacionGuardada = negociacion.getId();
         facturasAceptadas.forEach(fn ->
-                facturaPatchPort.actualizarNegociacionId(fn.getNumeroFactura(), idNegociacionGuardada));
+                facturaPatchPort.actualizarNegociacionIdPorCufe(ResolutorFactura.referencia(fn), idNegociacionGuardada));
 
         notificacionService.notificarCreacionNegociacion(negociacion);
         auditoria.negociacionCreada(negociacion, request, facturasRechazadas.size());
@@ -302,7 +308,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
      * Fase 28d: las contrapartes de la solicitud (pagador en FACTORING, proveedor en CONFIRMING) tal como están en la
      * base, factura por factura. Una factura sin esa contraparte en la base es un error de la solicitud entera.
      */
-    private static Set<String> contrapartesDesdeBd(NegociacionRequestDto request, Map<String, Factura> facturasBd) {
+    private static Set<String> contrapartesDesdeBd(NegociacionRequestDto request, List<Factura> facturasBd) {
         if (request.getTipoOperacion() == null || request.getTipoOperacion().getTipo() == null) {
             return Set.of();
         }
@@ -314,8 +320,9 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         } else {
             tipoContraparte = "proveedor";
         }
-        for (FacturaNegociada fn : request.getFacturas()) {
-            Factura factura = facturasBd.get(fn.getNumeroFactura());
+        for (int i = 0; i < request.getFacturas().size(); i++) {
+            FacturaNegociada fn = request.getFacturas().get(i);
+            Factura factura = facturasBd.get(i);
             String rut;
             if (esFactoring) {
                 rut = factura.getRutPagador();

@@ -105,7 +105,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                 continue;
             }
 
-            Factura factura = facturaPort.findByNumeroFactura(numeroFactura)
+            // Fase 28d (C): por el CUFE y los RUT de la negociación, no por el número.
+            Factura factura = new ResolutorFactura(facturaPort).buscarDeLaNegociacion(facturaNegociada)
                     .orElse(null);
 
             if (factura == null) {

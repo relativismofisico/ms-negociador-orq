@@ -22,4 +22,18 @@ public class OutboxService {
     public void guardarEvento(String aggregateId, String tipoEvento, Object evento) {
         outboxPort.guardarEvento(aggregateId, tipoEvento, evento);
     }
+
+    /**
+     * Fase 28d (C): con id determinista; si ya existe, no escribe nada.
+     *
+     * @param idEvento    id del evento
+     * @param aggregateId id del agregado de negocio que originó el evento
+     * @param tipoEvento  tipo de evento
+     * @param evento      payload
+     * @return {@code true} si lo guardó; {@code false} si ya existía
+     */
+    @Transactional
+    public boolean guardarEventoConId(String idEvento, String aggregateId, String tipoEvento, Object evento) {
+        return outboxPort.guardarEventoConId(idEvento, aggregateId, tipoEvento, evento);
+    }
 }

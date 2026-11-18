@@ -4,6 +4,7 @@ import com.negociadororq.application.exception.RecursoNoEncontradoException
 import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.FacturaOutputPort
 import com.negociadororq.domain.model.Factura
+import com.negociadororq.application.dto.ValidacionFacturaRequestDto
 import spock.lang.Specification
 
 import java.time.LocalDate
@@ -23,10 +24,10 @@ class ValidacionFacturaServiceImplSpec extends Specification {
         def fechaProceso = LocalDate.of(2024, 1, 1)
         def factura = new Factura()
         factura.fechavencimientoFactura = LocalDate.of(2024, 2, 1) // 31 días después
-        facturaPort.findByNumeroFactura("FECI001") >> Optional.of(factura)
+        facturaPort.findAllByNumeroFactura("FECI001") >> [factura]
 
         when:
-        def resultado = service.validarFacturaVencida("FECI001", fechaProceso)
+        def resultado = service.validarFacturaVencida(new ValidacionFacturaRequestDto("FECI001", null, null, null, fechaProceso))
 
         then:
         resultado.valida == true
@@ -41,10 +42,10 @@ class ValidacionFacturaServiceImplSpec extends Specification {
         def fechaProceso = LocalDate.of(2024, 2, 1)
         def factura = new Factura()
         factura.fechavencimientoFactura = LocalDate.of(2024, 2, 5) // solo 4 días
-        facturaPort.findByNumeroFactura("FECI002") >> Optional.of(factura)
+        facturaPort.findAllByNumeroFactura("FECI002") >> [factura]
 
         when:
-        def resultado = service.validarFacturaVencida("FECI002", fechaProceso)
+        def resultado = service.validarFacturaVencida(new ValidacionFacturaRequestDto("FECI002", null, null, null, fechaProceso))
 
         then:
         resultado.valida == false
@@ -58,10 +59,10 @@ class ValidacionFacturaServiceImplSpec extends Specification {
         given:
         def factura = new Factura()
         factura.fechavencimientoFactura = null
-        facturaPort.findByNumeroFactura("FECI003") >> Optional.of(factura)
+        facturaPort.findAllByNumeroFactura("FECI003") >> [factura]
 
         when:
-        def resultado = service.validarFacturaVencida("FECI003", LocalDate.now())
+        def resultado = service.validarFacturaVencida(new ValidacionFacturaRequestDto("FECI003", null, null, null, LocalDate.now()))
 
         then:
         resultado.valida == false
@@ -72,10 +73,10 @@ class ValidacionFacturaServiceImplSpec extends Specification {
 
     def "factura no encontrada lanza RecursoNoEncontradoException"() {
         given:
-        facturaPort.findByNumeroFactura("INEXISTENTE") >> Optional.empty()
+        facturaPort.findAllByNumeroFactura("INEXISTENTE") >> []
 
         when:
-        service.validarFacturaVencida("INEXISTENTE", LocalDate.now())
+        service.validarFacturaVencida(new ValidacionFacturaRequestDto("INEXISTENTE", null, null, null, LocalDate.now()))
 
         then:
         def ex = thrown(RecursoNoEncontradoException)
@@ -87,10 +88,10 @@ class ValidacionFacturaServiceImplSpec extends Specification {
         given:
         def factura = new Factura()
         factura.fechavencimientoFactura = LocalDate.now().plusDays(20)
-        facturaPort.findByNumeroFactura("FECI004") >> Optional.of(factura)
+        facturaPort.findAllByNumeroFactura("FECI004") >> [factura]
 
         when:
-        def resultado = service.validarFacturaVencida("FECI004", null)
+        def resultado = service.validarFacturaVencida(new ValidacionFacturaRequestDto("FECI004", null, null, null, null))
 
         then:
         resultado.valida == true
@@ -102,10 +103,10 @@ class ValidacionFacturaServiceImplSpec extends Specification {
         def fechaProceso = LocalDate.of(2024, 1, 1)
         def factura = new Factura()
         factura.fechavencimientoFactura = LocalDate.of(2024, 1, 11) // exactamente 10 días - NO mayor que 10
-        facturaPort.findByNumeroFactura("FECI005") >> Optional.of(factura)
+        facturaPort.findAllByNumeroFactura("FECI005") >> [factura]
 
         when:
-        def resultado = service.validarFacturaVencida("FECI005", fechaProceso)
+        def resultado = service.validarFacturaVencida(new ValidacionFacturaRequestDto("FECI005", null, null, null, fechaProceso))
 
         then:
         resultado.valida == false // días == 10 no es > 10
@@ -118,10 +119,10 @@ class ValidacionFacturaServiceImplSpec extends Specification {
         def fechaProceso = LocalDate.of(2024, 1, 1)
         def factura = new Factura()
         factura.fechavencimientoFactura = LocalDate.of(2024, 1, 12) // 11 días -> > 10 -> válida
-        facturaPort.findByNumeroFactura("FECI006") >> Optional.of(factura)
+        facturaPort.findAllByNumeroFactura("FECI006") >> [factura]
 
         when:
-        def resultado = service.validarFacturaVencida("FECI006", fechaProceso)
+        def resultado = service.validarFacturaVencida(new ValidacionFacturaRequestDto("FECI006", null, null, null, fechaProceso))
 
         then:
         resultado.valida == true
@@ -133,12 +134,48 @@ class ValidacionFacturaServiceImplSpec extends Specification {
         def fechaProceso = LocalDate.of(2024, 1, 1)
         def factura = new Factura()
         factura.fechavencimientoFactura = LocalDate.of(2024, 1, 6) // 5 días
-        facturaPort.findByNumeroFactura("FECI007") >> Optional.of(factura)
+        facturaPort.findAllByNumeroFactura("FECI007") >> [factura]
 
         when:
-        def resultado = service.validarFacturaVencida("FECI007", fechaProceso)
+        def resultado = service.validarFacturaVencida(new ValidacionFacturaRequestDto("FECI007", null, null, null, fechaProceso))
 
         then:
         resultado.mensaje.contains("5")
+    }
+
+    def "Fase 28d (C): dos facturas con el mismo número sin RUT ni CUFE => FACTURA_AMBIGUA; con el RUT o el CUFE, la correcta"() {
+        given:
+        def a = new com.negociadororq.domain.model.Factura(numeroFactura: "1", cufe: "CUFE-A", rutProveedor: "PROV-A",
+                rutPagador: "PAG", fechavencimientoFactura: LocalDate.of(2030, 1, 1))
+        def b = new com.negociadororq.domain.model.Factura(numeroFactura: "1", cufe: "CUFE-B", rutProveedor: "PROV-B",
+                rutPagador: "PAG", fechavencimientoFactura: LocalDate.of(2026, 1, 1))
+        facturaPort.findAllByNumeroFactura("1") >> [a, b]
+        facturaPort.findByCufe("CUFE-B") >> Optional.of(b)
+
+        when:
+        service.validarFacturaVencida(new ValidacionFacturaRequestDto("1", null, null, null, LocalDate.of(2026, 6, 1)))
+
+        then:
+        def ex = thrown(com.negociadororq.application.exception.ConflictoException)
+        ex.codigo == "FACTURA_AMBIGUA"
+
+        and: "con el RUT o el CUFE, la correcta"
+        service.validarFacturaVencida(new ValidacionFacturaRequestDto("1", null, "PROV-A", null,
+                LocalDate.of(2026, 6, 1))).valida
+        !service.validarFacturaVencida(new ValidacionFacturaRequestDto("1", "CUFE-B", null, null,
+                LocalDate.of(2026, 6, 1))).valida
+    }
+
+    def "Fase 28d (C): CUFE que no corresponde al número => CUFE_NO_COINCIDE"() {
+        given:
+        facturaPort.findByCufe("CUFE-B") >> Optional.of(new com.negociadororq.domain.model.Factura(numeroFactura: "2",
+                cufe: "CUFE-B", rutProveedor: "PROV-B"))
+
+        when:
+        service.validarFacturaVencida(new ValidacionFacturaRequestDto("1", "CUFE-B", null, null, null))
+
+        then:
+        def ex = thrown(com.negociadororq.application.exception.PeticionInvalidaException)
+        ex.codigo == "CUFE_NO_COINCIDE"
     }
 }

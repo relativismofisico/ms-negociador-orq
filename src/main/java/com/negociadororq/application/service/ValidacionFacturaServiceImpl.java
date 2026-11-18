@@ -3,8 +3,8 @@ package com.negociadororq.application.service;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 
+import com.negociadororq.application.dto.ValidacionFacturaRequestDto;
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
-import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.domain.model.Factura;
@@ -23,19 +23,20 @@ public class ValidacionFacturaServiceImpl implements ValidacionFacturaService {
     private final long diasMinimosVencimiento;
 
     @Override
-    public ValidacionFacturaResponseDto validarFacturaVencida(String numeroFactura, LocalDate fechaProceso) {
+    public ValidacionFacturaResponseDto validarFacturaVencida(ValidacionFacturaRequestDto request) {
+        Factura factura = new ResolutorFactura(facturaPort).resolverConsulta(request.getNumeroFactura(),
+                request.getCufe(), request.getRutProveedor(), request.getRutPagador());
+        return validarFacturaVencida(factura, request.getFechaProceso());
+    }
 
+    @Override
+    public ValidacionFacturaResponseDto validarFacturaVencida(Factura factura, LocalDate fechaProceso) {
         LocalDate fechaValidacion;
         if (fechaProceso != null) {
             fechaValidacion = fechaProceso;
         } else {
             fechaValidacion = clock.now().toLocalDate();
         }
-
-        Factura factura = facturaPort
-                .findByNumeroFactura(numeroFactura)
-                .orElseThrow(() ->
-                        new RecursoNoEncontradoException("Factura no encontrada: " + numeroFactura, "FACTURA_NO_ENCONTRADA"));
 
         if (factura.getFechavencimientoFactura() == null) {
 

@@ -1712,3 +1712,32 @@ la identificación de la factura por CUFE (punto C).
   - Propiedades `otp.validacion.security-base-url` (`SECURITY_UTIL_BASE_URL`), `otp.validacion.timeout` (3 s) y
     `security.act-as-operario-service-secret` (`ACT_AS_OPERARIO_SERVICE_SECRET`, sin valor por defecto: se exige al
     usarlo).
+
+## Identificación de la factura por CUFE (Fase 28d, punto C, fase 1)
+
+El número de factura es el consecutivo de cada emisor: dos empresas tienen legítimamente su factura `1`. Negociador ya
+no lee ni escribe `Facturas` por el número solo.
+
+- **Al negociar** (`ResolutorFactura.resolverSolicitud`), cada factura se resuelve por **CUFE** (si el cliente lo manda)
+  o por **número + RUT del proveedor + RUT del pagador** (si falta el RUT del lado de la empresa que negocia, es el de
+  ella). Exactamente una; si no:
+  - `FACTURA_NO_ENCONTRADA` (404): ninguna coincide;
+  - `FACTURA_AMBIGUA` (409): más de una coincide (envíe el CUFE);
+  - `FACTURA_DE_OTRA_EMPRESA` (403): no es de la empresa que negocia (proveedor en FACTORING, pagador en CONFIRMING);
+  - `CUFE_NO_COINCIDE` (400): el CUFE no corresponde al número o a los RUT enviados.
+  - Se rechaza la solicitud entera, antes de reservar cupos.
+- **La negociación guarda por factura el `cufe` y los RUT de la base**, no los del cliente.
+- **Escrituras** (`FacturaPatchOutputPort.…PorCufe`): filtro `{cufe, rutProveedor, rutPagador}`; si ninguna factura
+  coincide, `FACTURA_NO_COINCIDE` (409) y no se escribe nada.
+- **Lecturas** de la factura de una negociación (aprobación, endoso, reversión, documento del endoso): por el CUFE de la
+  negociación (`ResolutorFactura.deLaNegociacion`). Los correos toman el valor por CUFE o de la negociación.
+- **`liquidacion.solicitada`** lleva `cufe`, `rutProveedor` y `rutPagador`; su id en el outbox es
+  `liquidacion.solicitada|<negociación>|<cufe>`: una segunda escritura no hace nada (nunca se sobrescribe ni se
+  reenvía).
+- **`liquidacion-fallida`** se revierte por `negociacionId` + `cufe`. Un evento sin ellos **no se ignora**: log
+  `[EVENTO-SIN-CUFE]`, contador `eventos.sin.cufe` y el evento queda fallido (reintentos y DLT).
+- **`POST /validaciones/facturas/vencimiento`** acepta además `cufe`, `rutProveedor` y `rutPagador` (opcionales); con
+  varias facturas del mismo número sin forma de distinguirlas responde `FACTURA_AMBIGUA`.
+- Se quitó `findFirstByNumeroFacturaOrderByIdDesc` (devolvía "la más reciente") y el `FacturaService` sin uso.
+- Sin migración: no hay datos reales. Fase 2 (consultas, auditoría, CSV de conciliación y front) aparte.
+

@@ -8,6 +8,7 @@ import com.negociadororq.domain.enums.EstadoFactura;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.enums.EstadoNegociacion;
 import com.negociadororq.domain.model.ActorFactura;
+import com.negociadororq.domain.model.ReferenciaFactura;
 import com.negociadororq.infrastructure.persistence.entity.FacturaDocument;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -71,52 +72,48 @@ public class FacturaPatchRepository {
     }
 
     /**
-     * @param numeroFactura número de la factura
-     * @param estadoFirma   nuevo estado de firma
+     * Fase 28d (C): filtro exacto de una factura de una negociación: {@code {cufe, rutProveedor, rutPagador}}.
      */
-    public void actualizarEstadoFirmaPorNoFactura(String numeroFactura, EstadoFirma estadoFirma) {
-
-        Query query = Query.query(
-                Criteria.where("numeroFactura").is(numeroFactura));
-
-        Update update = new Update()
-                .set("estadoFirma", estadoFirma.name())
-                .set("fechaUltimaActualizacion", LocalDateTime.now());
-
-        mongoTemplate.updateFirst(query, update, FacturaDocument.class);
+    private static Query exacta(ReferenciaFactura ref) {
+        return Query.query(Criteria.where("cufe").is(ref.cufe())
+                .and("rutProveedor").is(ref.rutProveedor())
+                .and("rutPagador").is(ref.rutPagador()));
     }
 
     /**
-     * @param numeroFactura     número de la factura
+     * @param ref         factura (CUFE y RUT de la negociación)
+     * @param estadoFirma nuevo estado de firma
+     * @return {@code true} si una factura coincidió y se actualizó
+     */
+    public boolean actualizarEstadoFirmaPorCufe(ReferenciaFactura ref, EstadoFirma estadoFirma) {
+        Update update = new Update()
+                .set("estadoFirma", estadoFirma.name())
+                .set("fechaUltimaActualizacion", LocalDateTime.now());
+        return mongoTemplate.findAndModify(exacta(ref), update, FacturaDocument.class) != null;
+    }
+
+    /**
+     * @param ref               factura (CUFE y RUT de la negociación)
      * @param estadoFirma       nuevo estado de firma
      * @param estadoNegociacion nuevo estado de negociación, traducido al vocabulario de Factura
+     * @return {@code true} si una factura coincidió y se actualizó
      */
-    public void actualizarEstadosPorNoFactura(String numeroFactura, EstadoFirma estadoFirma,
-                                               EstadoNegociacion estadoNegociacion) {
-
-        Query query = Query.query(
-                Criteria.where("numeroFactura").is(numeroFactura));
-
+    public boolean actualizarEstadosPorCufe(ReferenciaFactura ref, EstadoFirma estadoFirma,
+                                            EstadoNegociacion estadoNegociacion) {
         Update update = new Update()
                 .set("estadoFirma", estadoFirma.name())
                 .set("estadoNegociacion", estadoFacturaMapper.aEstadoFactura(estadoNegociacion).name())
                 .set("fechaUltimaActualizacion", LocalDateTime.now());
-
-        mongoTemplate.updateFirst(query, update, FacturaDocument.class);
+        return mongoTemplate.findAndModify(exacta(ref), update, FacturaDocument.class) != null;
     }
 
     /**
-     * @param numeroFactura número de la factura
+     * @param ref           factura (CUFE y RUT de la negociación)
      * @param negociacionId id de la negociación a la que pertenece
+     * @return {@code true} si una factura coincidió y se actualizó
      */
-    public void actualizarNegociacionId(String numeroFactura, String negociacionId) {
-
-        Query query = Query.query(
-                Criteria.where("numeroFactura").is(numeroFactura));
-
-        Update update = new Update().set("negociacionId", negociacionId);
-
-        mongoTemplate.updateFirst(query, update, FacturaDocument.class);
+    public boolean actualizarNegociacionIdPorCufe(ReferenciaFactura ref, String negociacionId) {
+        return mongoTemplate.findAndModify(exacta(ref), new Update().set("negociacionId", negociacionId),
+                FacturaDocument.class) != null;
     }
 }
-

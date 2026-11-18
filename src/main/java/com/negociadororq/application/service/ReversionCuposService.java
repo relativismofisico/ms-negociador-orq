@@ -7,10 +7,15 @@ package com.negociadororq.application.service;
 public interface ReversionCuposService {
 
     /**
-     * @param numeroFactura número de la factura cuyo cupo se revierte
+     * Fase 28d (C): la factura se identifica por la negociación y el CUFE (nunca por el número solo). Sin CUFE o sin
+     * negociación lanza {@link IllegalArgumentException} ({@code [EVENTO-SIN-CUFE]}).
+     *
+     * @param negociacionId negociación
+     * @param cufe          CUFE de la factura
+     * @param numeroFactura número de la factura (trazabilidad)
      * @param actorId       id/RUT del actor que origina la reversión
      * @param motivo        motivo de la reversión, para trazabilidad
      */
-    void revertirPorFactura(String numeroFactura, String actorId, String motivo);
+    void revertirPorFactura(String negociacionId, String cufe, String numeroFactura, String actorId, String motivo);
 }
 

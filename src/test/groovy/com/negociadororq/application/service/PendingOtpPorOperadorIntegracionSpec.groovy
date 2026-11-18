@@ -276,12 +276,12 @@ class PendingOtpPorOperadorIntegracionSpec extends Specification {
     Negociacion negociacion
 
     def armar() {
-        def fn = FacturaNegociada.builder().numeroFactura(FAC).rutPagador(PAG).rutProveedor(PROV)
+        def fn = FacturaNegociada.builder().numeroFactura(FAC).cufe("CUFE-" + FAC).rutPagador(PAG).rutProveedor(PROV)
                 .fondeadores([FondeadorAsignacion.builder().rutFondeador(FOND).nombreFondeador("Fondo").build()])
                 .aprobaciones([]).estadoFirma(EstadoFirma.EN_REVISION).build()
         negociacion = Negociacion.builder().id(NEG).tipoOperacion(new Operacion("FACTORING", "CON_RESPONSABILIDAD"))
                 .facturas([fn]).build()
-        def factura = new Factura(numeroFactura: FAC, rutPagador: PAG, nombrePagador: "Pagador", rutProveedor: PROV,
+        def factura = new Factura(numeroFactura: FAC, cufe: "CUFE-" + FAC, rutPagador: PAG, nombrePagador: "Pagador", rutProveedor: PROV,
                 nombreProveedor: "Proveedor", valorFactura: 1000000G)
         EndosoOutputPort endosoPort = Stub() {
             findByNegociacionIdAndNumeroFactura(_, _) >> { Optional.ofNullable(endoso) }
@@ -298,7 +298,7 @@ class PendingOtpPorOperadorIntegracionSpec extends Specification {
             findById(NEG) >> { Optional.of(negociacion) }
             save(_) >> { Negociacion n -> negociacion = n; n }
         }
-        FacturaOutputPort facturaPort = Stub() { findByNumeroFactura(FAC) >> Optional.of(factura) }
+        FacturaOutputPort facturaPort = Stub() { findByCufe("CUFE-" + FAC) >> Optional.of(factura) }
         // El reclamo de la firma va a Mongo real; la aprobación registrada se refleja también en el endoso en memoria
         // (donde vive el PDF), como lo deja el patch real en Mongo.
         def endosoPatchConMemoria = new com.negociadororq.application.port.output.EndosoPatchOutputPort() {

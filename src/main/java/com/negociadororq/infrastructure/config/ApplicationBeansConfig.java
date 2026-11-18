@@ -46,8 +46,6 @@ import com.negociadororq.application.service.DocumentoEndosoService;
 import com.negociadororq.application.service.DocumentoEndosoServiceImpl;
 import com.negociadororq.application.service.EndosoDescuentoService;
 import com.negociadororq.application.service.EndosoDescuentoServiceImpl;
-import com.negociadororq.application.service.FacturaService;
-import com.negociadororq.application.service.FacturaServiceImpl;
 import com.negociadororq.application.service.FacturaVencimientoService;
 import com.negociadororq.application.service.FirmaEndosoService;
 import com.negociadororq.application.service.FirmaEndosoServiceImpl;
@@ -180,11 +178,6 @@ public class ApplicationBeansConfig {
     @Bean
     public TasaConversionService tasaConversionService() {
         return new TasaConversionServiceImpl();
-    }
-
-    @Bean
-    public FacturaService facturaService(final FacturaOutputPort facturaPort) {
-        return new FacturaServiceImpl(facturaPort);
     }
 
     @Bean
