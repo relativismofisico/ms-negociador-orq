@@ -34,8 +34,9 @@ import lombok.extern.java.Log;
  *       transitorio: queda en {@code OTP_VALIDADO} con el intento contado y lo reintenta el reconciliador.</li>
  *   <li>{@code ENDOSO_DUPLICADO} (el actor ya firmó con otro OTP): la solicitud se descarta, con log
  *       {@code [ENDOSO-DUPLICADO]} y su contador (sin datos del OTP), y sin aviso a la empresa.</li>
- *   <li>Duplicados de {@code otp.validate.response}: una solicitud ya FIRMADA o un evento sin solicitud activa se ignoran;
- *       la firma de cada factura es idempotente por {@code (otpId, factura)} en el endoso.</li>
+ *   <li>Validaciones repetidas (dos confirmaciones simultáneas del mismo actor): una solicitud ya terminada o sin
+ *       solicitud activa se ignora; la firma de cada factura es idempotente por {@code (otpId, factura)} en el
+ *       endoso.</li>
  * </ul>
  */
 @Log
@@ -96,9 +97,9 @@ public class FirmaOtpServiceImpl implements FirmaOtpService {
             rechazado(event, pending);
             return;
         }
-        // Fase 28d (A1): la misma validación llega por HTTP y, después, por otp.validate.response (security la sigue
-        // publicando en la transición), o el evento se reentrega. Con la solicitud ya terminada (FIRMADO, FALLO_FIRMA o
-        // ROL_NO_PERMITIDO) no se vuelve a firmar: un fallo se repetiría con otra alerta y otro aviso a la empresa.
+        // Fase 28d (A1): con la solicitud ya terminada (FIRMADO, FALLO_FIRMA o ROL_NO_PERMITIDO) no se vuelve a firmar:
+        // un fallo se repetiría con otra alerta y otro aviso a la empresa. Desde la A1b la validación tiene un solo
+        // camino (HTTP); esto queda como defensa ante dos confirmaciones simultáneas del mismo actor.
         if (!EstadoFirmaOtp.activa(pending.getEstado())) {
             log.info(String.format("[OTP-VALIDACION-REPETIDA] negociación %s otpId %s: la solicitud ya está en %s, se ignora.",
                     event.getIdNegociacion(), event.getOtpId(), pending.getEstado()));

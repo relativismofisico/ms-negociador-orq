@@ -3,8 +3,8 @@ Feature: POST /negociaciones/confirmar-otp — Confirmar OTP y Aprobar Endoso
 
   # Endpoint: POST /negociaciones/confirmar-otp  -> 202 "Validando OTP..."
   # Roles permitidos: ADMINISTRADOR, EMPRESA, FONDEADOR
-  # CRITICO: confirma endoso y dispara liquidacion. Fase 28d (A1): el codigo se valida por HTTP en security (ya no por
-  # Kafka otp.validate); security no disponible -> 503 sin cambiar nada.
+  # CRITICO: confirma endoso y dispara liquidacion. Fase 28d (A1/A1b): el codigo se valida por HTTP en security, el
+  # unico camino (sin Kafka); security no disponible -> 503 sin cambiar nada.
   # Solo en @full — requiere OTP real generado previamente.
 
   Background:

@@ -12,7 +12,7 @@ name: Karate E2E run (reusable)
 # containers, portado del mismo patron ya usado 7 veces esta sesion.
 #
 # Kafka con auto-startup deshabilitado a proposito: los 2 @KafkaListener
-# reales (LiquidacionFallidaConsumer/OtpValidatedListener) no los ejercita
+# reales (LiquidacionFallidaConsumer) no los ejercita
 # ningun escenario de Karate -- el container solo hace falta para que la app
 # no falle al arrancar el cliente Kafka.
 #

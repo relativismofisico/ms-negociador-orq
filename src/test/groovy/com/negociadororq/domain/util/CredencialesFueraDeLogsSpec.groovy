@@ -5,7 +5,6 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import com.negociadororq.application.dto.ConfirmacionOtpRequestDto
-import com.negociadororq.domain.event.OtpValidateRequestEvent
 import com.negociadororq.domain.event.OtpValidatedEvent
 import com.negociadororq.domain.model.Endoso
 import com.negociadororq.domain.model.FacturaNegociada
@@ -75,7 +74,6 @@ class CredencialesFueraDeLogsSpec extends Specification {
         where:
         tipo                      | campo
         ConfirmacionOtpRequestDto | 'otp'
-        OtpValidateRequestEvent   | 'otp'
         OtpValidatedEvent         | 'otp'
         Endoso                    | 'otp'
         PendingOtp                | 'otp'
@@ -92,7 +90,6 @@ class CredencialesFueraDeLogsSpec extends Specification {
         where:
         tipo                      | campo
         ConfirmacionOtpRequestDto | 'otp'
-        OtpValidateRequestEvent   | 'otp'
         OtpValidatedEvent         | 'otp'
         Endoso                    | 'otp'
         PendingOtp                | 'otp'

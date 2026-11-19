@@ -32,27 +32,7 @@ public interface OutboxEventRepository extends MongoRepository<OutboxEventEntity
     long deleteByMsPropietarioAndEnviadoTrueAndFechaEnvioBefore(String msPropietario, LocalDateTime limite);
 
     /**
-     * Fase 28d (2.4): limpieza por tipo (los {@code otp.validate} enviados llevan el código tecleado).
-     *
-     * @param msPropietario servicio dueño de los eventos
-     * @param tipoEvento    topic del evento
-     * @param limite        fecha de envío límite (exclusiva)
-     * @return cantidad de eventos enviados borrados
-     */
-    long deleteByMsPropietarioAndTipoEventoAndEnviadoTrueAndFechaEnvioBefore(String msPropietario, String tipoEvento,
-            LocalDateTime limite);
-
-    /**
-     * Fase 28d (2.4): fallidos de un tipo (se conservan; solo se les retira el código).
-     *
-     * @param msPropietario servicio dueño de los eventos
-     * @param tipoEvento    topic del evento
-     * @return los fallidos de ese tipo
-     */
-    List<OutboxEventEntity> findByMsPropietarioAndTipoEventoAndFallidoTrue(String msPropietario, String tipoEvento);
-
-    /**
-     * Fase 28d (2.4): fallidos del servicio, para la alerta de revisión manual.
+     * Fase 28d: fallidos del servicio, para la alerta de revisión manual.
      *
      * @param msPropietario servicio dueño de los eventos
      * @return cantidad de eventos fallidos

@@ -15,7 +15,7 @@ import java.time.LocalDateTime
 
 /**
  * Fase 28d (A1): confirmar-otp valida por HTTP y entrega la respuesta a la misma lógica de firma que
- * otp.validate.response; sin pendiente que espere el código, no llama a security.
+ * la vía Kafka retirada en la A1b; sin pendiente que espere el código, no llama a security.
  */
 class ConfirmacionOtpServiceImplSpec extends Specification {
 

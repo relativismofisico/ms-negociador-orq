@@ -103,7 +103,7 @@ class FirmaOtpServiceImplSpec extends Specification {
         0 * pendientes.save(_)
     }
 
-    def "Fase 28d (A1): la misma validación repetida (HTTP y luego otp.validate.response) con la solicitud en #estado se ignora: sin firmar, sin alerta ni aviso"() {
+    def "Fase 28d (A1): la misma validación repetida (dos confirmaciones o un reintento; antes HTTP y luego otp.validate.response) con la solicitud en #estado se ignora: sin firmar, sin alerta ni aviso"() {
         given:
         def p = pendiente(estado)
         p.otpId = "77"

@@ -4,7 +4,7 @@ package com.negociadororq.domain.model;
  * Estado de una solicitud de firma por OTP (Fase 28c), guardado en {@code pending_otp}.
  *
  * <pre>
- * PENDIENTE_OTP --(otp.validate.response valido=true)--> OTP_VALIDADO --(firma estampada)--> FIRMADO
+ * PENDIENTE_OTP --(validación por HTTP valido=true)--> OTP_VALIDADO --(firma estampada)--> FIRMADO
  *                                                              \--(fallo permanente o reintentos agotados)--> FALLO_FIRMA
  * </pre>
  *
