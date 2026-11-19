@@ -15,18 +15,17 @@ import com.negociadororq.domain.model.ValidacionOtp;
  *   <li>Precondición (igual que en la 28c): sin un pendiente que espere el código, o de otra empresa, el código no se
  *       manda a validar ({@code 409 OTP_SIN_SOLICITUD_PENDIENTE}).</li>
  *   <li>El código va por HTTP a {@code POST /auth/internal/otp/validacion} con la clave
- *       {@code idNegociacion|rutEmpresa|rutOperador|n} ({@link ValidadorOtpPendiente}); ya no viaja por el outbox ni
- *       por Kafka ({@code otp.validate}).</li>
- *   <li>La respuesta definitiva de security entra por la misma lógica que {@code otp.validate.response}
- *       ({@link FirmaOtpService#procesarValidacion}): incorrecto con intentos, rechazo, o firma.</li>
+ *       {@code idNegociacion|rutEmpresa|rutOperador|n} ({@link ValidadorOtpPendiente}); no viaja por el outbox ni por
+ *       Kafka. Es el único camino (A1b: retirados {@code otp.validate} y {@code otp.validate.response}).</li>
+ *   <li>La respuesta definitiva de security entra en {@link FirmaOtpService#procesarValidacion}: incorrecto con
+ *       intentos, rechazo, o firma.</li>
  *   <li>Security caído, timeout, 5xx o 503: la excepción sube antes de tocar el pendiente; no avanza {@code n} ni
  *       cambia el estado, y la firma se reintenta con la misma clave.</li>
  *   <li>El código no se escribe en ningún log.</li>
  * </ul>
  *
- * <p>El consumidor de {@code otp.validate.response} sigue activo durante la transición, para las validaciones que
- * se pidieron por Kafka antes del despliegue; las dos vías convergen en {@link FirmaOtpService}, que es idempotente
- * por pendiente y {@code otpId}.</p>
+ * <p>{@link FirmaOtpService} sigue siendo idempotente por pendiente y {@code otpId} (dos confirmaciones simultáneas
+ * del mismo actor firman una vez).</p>
  */
 public class ConfirmacionOtpServiceImpl implements ConfirmacionOtpService {
 
@@ -65,8 +64,8 @@ public class ConfirmacionOtpServiceImpl implements ConfirmacionOtpService {
     }
 
     /**
-     * La respuesta de security con la forma de {@code otp.validate.response}. El código solo acompaña a una validación
-     * correcta (lo estampa la firma en el PDF), como hacía security en el evento.
+     * La respuesta de security como entrada de la firma. El código solo acompaña a una validación correcta (lo
+     * estampa la firma en el PDF).
      */
     static OtpValidatedEvent evento(final PendingOtp pending, final ConfirmacionOtpRequestDto request,
             final ValidacionOtp.Resultado resultado) {

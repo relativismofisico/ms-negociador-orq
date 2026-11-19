@@ -420,8 +420,8 @@ public class ApplicationBeansConfig {
     }
 
     /**
-     * Fase 28d (A1): {@code confirmar-otp} valida el código por HTTP contra security y sigue la firma con la misma
-     * lógica que {@code otp.validate.response}.
+     * Fase 28d (A1): {@code confirmar-otp} valida el código por HTTP contra security (el único camino) y sigue la
+     * firma.
      *
      * @param pendingOtpOutputPort  pendientes OTP
      * @param validadorOtpPendiente validación por HTTP

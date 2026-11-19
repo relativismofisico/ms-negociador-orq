@@ -9,7 +9,7 @@ import com.negociadororq.domain.event.OtpValidatedEvent;
 public interface FirmaOtpService {
 
     /**
-     * @param event {@code otp.validate.response}
+     * @param event respuesta de security a la validación por HTTP (A1)
      */
     void procesarValidacion(OtpValidatedEvent event);
 

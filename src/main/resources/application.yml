@@ -61,8 +61,6 @@ spring:
 topics:
   liquidacion: liquidacion.solicitada
   otp-request: otp.requested
-  otp-validate: otp.validate
-  otp-validate-response: otp.validate.response
   notificacion-email: notificacion.email
   liquidacion-fallida: liquidacion.fallida
 
@@ -215,12 +213,10 @@ operaciones:
     # Tomas del reconciliador antes de pasar la operación a REVISION_MANUAL ([OPERACION-PENDIENTE-ATASCADA]).
     max-intentos: ${OPERACIONES_RECONCILIADOR_MAX_INTENTOS:10}
 
-# Fase 28d (2.4): el outbox Mongo viejo. otp.validate lleva el código tecleado: desde la A1 ya no se produce, y lo que
-# quede de antes del despliegue se borra al enviarse (limpieza propia cada 10 min). Los fallidos no se borran nunca:
-# se conservan para revisión manual ([OUTBOX-FALLIDO]) y solo se les retira el código. Los demás tipos: 30 días.
+# Fase 28d: el outbox Mongo viejo. El código tecleado ya no pasa por él (A1/A1b). Los enviados se borran a los 30 días;
+# los fallidos no se borran nunca: se conservan para revisión manual, con la alerta [OUTBOX-FALLIDO] cada 10 min.
 outbox:
   limpieza:
     retencion-dias: ${OUTBOX_LIMPIEZA_RETENCION_DIAS:30}
-    otp-validacion:
-      retencion: ${OUTBOX_LIMPIEZA_OTP_VALIDACION_RETENCION:PT0S}
-      cron: ${OUTBOX_LIMPIEZA_OTP_VALIDACION_CRON:0 */10 * * * *}
+  fallidos:
+    alerta-cron: ${OUTBOX_FALLIDOS_ALERTA_CRON:0 */10 * * * *}

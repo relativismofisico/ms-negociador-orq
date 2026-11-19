@@ -121,14 +121,12 @@ java -version
 |---|---|
 | `liquidacion.solicitada` | Evento de solicitud de liquidación |
 | `otp.requested` | Solicitud de generación de OTP |
-| `otp.validate` | Solicitud de validación de OTP |
-| `otp.validate.response` | Respuesta de validación de OTP |
 | `notificacion.email` | Eventos de notificación por email |
 | `liquidacion.fallida` | Evento de liquidación fallida |
 
 ### Dependencias Externas
 
-- Servicio externo de validación y entrega de OTP (consume `otp.requested`, produce `otp.validate.response`).
+- ms-security-util: genera el OTP (consume `otp.requested`) y lo valida por HTTP (`POST /auth/internal/otp/validacion`, Fase 28d A1/A1b).
 - Servicio de liquidación (consume `liquidacion.solicitada`).
 - Servicio de notificación de emails (consume `notificacion.email`).
 
@@ -310,8 +308,6 @@ kafka:
   topics:
     liquidacion: liquidacion.solicitada
     otp-request: otp.requested
-    otp-validate: otp.validate
-    otp-validate-response: otp.validate.response
     notificacion-email: notificacion.email
     liquidacion-fallida: liquidacion.fallida
 
@@ -1168,7 +1164,7 @@ ms-negociador-orq/
     │   │   └── infrastructure/
     │   │       ├── kafka/
     │   │       │   ├── config/                  # Configuración de Kafka
-    │   │       │   ├── consumer/                # LiquidacionFallidaConsumer, OtpValidatedListener
+    │   │       │   ├── consumer/                # LiquidacionFallidaConsumer
     │   │       │   └── producer/                # Publicadores de eventos
     │   │       ├── persistence/
     │   │       │   ├── mongodb/                 # Adapters y repositories MongoDB
@@ -1256,7 +1252,7 @@ graph TB
     KAFKA --> OTP_SVC
     KAFKA --> LIQ_SVC
     KAFKA --> EMAIL_SVC
-    OTP_SVC -->|otp.validate.response| KAFKA_A
+    API -->|POST /auth/internal/otp/validacion| OTP_SVC
     LIQ_SVC -->|liquidacion.fallida| KAFKA_A
 ```
 
@@ -1296,7 +1292,7 @@ sequenceDiagram
     API->>DB_M: Guardar PendingOtp
     API->>DB_M: Guardar OutboxEvent (otp.requested)
     API-->>-C: 202 Accepted
-    K-->>API: otp.validate.response (OTP válido)
+    C->>API: POST /negociaciones/confirmar-otp (valida por HTTP en security, A1/A1b)
     API->>DB_M: Actualizar estados (CESION/DESCUENTO)
     API->>DB_M: Guardar OutboxEvent (liquidacion.solicitada)
 ```
@@ -1608,11 +1604,10 @@ db.outbox_event.updateOne(
 db.outbox_event.deleteOne({ _id: ObjectId("<id>"), msPropietario: "ms-negociador-orq", fallido: true })
 ```
 
-**Política de fallidos (Fase 28d, 2.4):** los fallidos **nunca se borran solos**. Se conservan para revisión manual y,
-mientras exista alguno, la limpieza de cada 10 minutos deja el log ERROR `[OUTBOX-FALLIDO] … N evento(s) fallido(s)`
-(filtro de alerta). Solo se descartan con el `deleteOne` de arriba, como decisión explícita. A un `otp.validate`
-fallido se le retira el código del payload (`otp: null`, `otpRetirado: true`, log `[OUTBOX-OTP-RETIRADO]`); el resto
-del evento se conserva.
+**Política de fallidos (Fase 28d):** los fallidos **nunca se borran solos**. Se conservan para revisión manual y,
+mientras exista alguno, `OutboxScheduler.alertarFallidos` deja cada 10 minutos el log ERROR
+`[OUTBOX-FALLIDO] … N evento(s) fallido(s)` (filtro de alerta; `outbox.fallidos.alerta-cron`,
+`OUTBOX_FALLIDOS_ALERTA_CRON`). Solo se descartan con el `deleteOne` de arriba, como decisión explícita.
 
 
 ## Firma por OTP: estados, reintentos e idempotencia (Fase 28c)
@@ -1620,7 +1615,7 @@ del evento se conserva.
 La solicitud de firma (`pending_otp`) tiene estado:
 
 ```
-PENDIENTE_OTP --(otp.validate.response valido=true)--> OTP_VALIDADO --(firma estampada)--> FIRMADO
+PENDIENTE_OTP --(validación por HTTP valido=true)--> OTP_VALIDADO --(firma estampada)--> FIRMADO
                                                             \--(fallo permanente o reintentos agotados)--> FALLO_FIRMA
 ```
 
@@ -1634,7 +1629,8 @@ PENDIENTE_OTP --(otp.validate.response valido=true)--> OTP_VALIDADO --(firma est
   - el endoso guarda `firmasOtp` (`otpId:numeroFactura`) en la misma escritura que el PDF sellado, así que un reintento no sella dos veces;
   - en Confirming, un reintento con la firma ya estampada no regenera el documento, porque eso borraría la firma;
   - la aprobación del actor guarda su `otpId`: la misma validación otra vez no se aplica (ni correo, ni estado, ni eventos), y otro `otpId` da `ENDOSO_DUPLICADO`;
-  - un `otp.validate.response` sin solicitud activa se ignora (`[OTP-SIN-PENDIENTE]`).
+  - una validación sin solicitud activa se ignora (`[OTP-SIN-PENDIENTE]`), y una con la solicitud ya terminada, también
+    (`[OTP-VALIDACION-REPETIDA]`).
 
 | Propiedad | Default | Uso |
 |---|---|---|
@@ -1725,24 +1721,21 @@ la identificación de la factura por CUFE (punto C).
 
 - **`POST /negociaciones/confirmar-otp`** valida el código por HTTP (`ConfirmacionOtpServiceImpl`): llama a
   `POST /auth/internal/otp/validacion` de ms-security-util (#88) con la clave `idNegociacion|rutEmpresa|rutOperador|n`
-  (ver "Opción A: base") y entrega la respuesta a la misma lógica de firma que `otp.validate.response`
-  (`FirmaOtpService`): incorrecto con intentos → sigue esperando; otro rechazo → se descarta; correcto → firma.
-  - Ya **no publica `otp.validate`**: el código no pasa por el outbox ni por Kafka.
+  (ver "Opción A: base") y entrega la respuesta a la firma (`FirmaOtpService`): incorrecto con intentos → sigue
+  esperando; otro rechazo → se descarta; correcto → firma.
+  - **Un solo camino (A1b):** ni `otp.validate` ni `otp.validate.response`; el código no pasa por el outbox ni por
+    Kafka. Una validación llega una sola vez.
   - Security caído, lento o 5xx: **503** sin cambiar nada (ni el estado ni `n`); el actor reintenta con la misma clave.
   - El código ni un hash suyo salen en los logs.
-  - **Transición:** el consumidor de `otp.validate.response` sigue activo para las validaciones pedidas por Kafka antes
-    del despliegue. Las dos vías terminan en `FirmaOtpService`, idempotente por pendiente y `otpId`.
+  - `FirmaOtpService` sigue idempotente por pendiente y `otpId` (dos confirmaciones simultáneas del mismo actor firman
+    una vez).
   - **Orden de despliegue:** security (#88) primero, después negociador. Variables sin valor por defecto:
     `SECURITY_UTIL_BASE_URL` y `ACT_AS_OPERARIO_SERVICE_SECRET` (el mismo valor en todos los servicios del ambiente).
 - **2.4, el código tecleado en el outbox viejo** (`outbox_event`): hasta la A1, un `otp.validate` enviado quedaba con el
-  código en claro 30-31 días (retención diaria de 30 días) y un fallido, para siempre. Ahora, solo para ese tipo:
-  - los enviados se borran en una limpieza propia (`OutboxScheduler.limpiarValidacionesOtp`, ShedLock) cada 10 minutos
-    (`outbox.limpieza.otp-validacion.cron`, `OUTBOX_LIMPIEZA_OTP_VALIDACION_CRON`), con retención 0
-    (`outbox.limpieza.otp-validacion.retencion`, `OUTBOX_LIMPIEZA_OTP_VALIDACION_RETENCION`, ISO-8601);
-  - los fallidos se conservan (política de fallidos del runbook) y se les retira el código;
-  - los pendientes de antes del despliegue se publican como siempre y se borran al enviarse.
-  - Los demás tipos del outbox siguen con la retención de 30 días (`outbox.limpieza.retencion-dias`).
-  - No toca ms-commons-util: este outbox es propio del negociador.
+  código en claro 30-31 días y un fallido, para siempre. Con la A1 el código dejó de pasar por el outbox; con la A1b
+  (sin ambientes desplegados que drenar) se retiraron el tipo `otp.validate` y su limpieza propia. Un evento de ese
+  tipo, si existiera, pasaría a FALLIDO como topic desconocido sin publicarse (y conviene descartarlo a mano).
+  La política de fallidos (conservarlos con alerta) queda para todos los tipos.
 
 ## Identificación de la factura por CUFE (Fase 28d, punto C, fase 1)
 

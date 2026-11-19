@@ -28,8 +28,6 @@ class OutboxSchedulerSpec extends Specification {
 
     def setup() {
         scheduler.topicRequestOtp = "otp.request"
-        scheduler.topicValidateOtp = "otp.validate"
-        scheduler.topicValidateResponse = "otp.validate.response"
         scheduler.liquidacionFactura = "liquidacion"
         scheduler.notificacionEmail = "notificacion.email"
         scheduler.topicAuditoria = "auditoria.accion"
