@@ -312,7 +312,7 @@ class PendingOtpPorOperadorIntegracionSpec extends Specification {
         def aprobacion = new AprobacionEndosoDescuentoServiceImpl(negociacionPort, Mock(FacturaPatchOutputPort), endosoPatchConMemoria,
                 Mock(OutboxService), Mock(CupoReversionService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort),
                 facturaPort, userPort, pendientes, firmaEndoso, Mock(NotificacionService), endosoPort, documento, clock,
-                "topic-otp-request", "topic-otp-validate", "topic-liquidacion", Mock(AuditoriaNegociacionService))
+                "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService))
         endoso = Endoso.builder().id("end-29").negociacionId(NEG).numerosFactura([FAC]).aprobaciones([]).firmasOtp([]).build()
         documento.generarDocumentoFormal(endoso, negociacion, [factura], [fn], "op-prov")
         mongo.getCollection("endosos").insertOne(new Document([negociacionId: NEG, numerosFactura: [FAC]]))

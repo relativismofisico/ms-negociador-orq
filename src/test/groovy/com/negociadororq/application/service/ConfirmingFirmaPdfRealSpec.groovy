@@ -89,7 +89,7 @@ class ConfirmingFirmaPdfRealSpec extends Specification {
             Mock(CupoReversionService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort), facturaPort,
             userPort, Mock(PendingOtpOutputPort), firma, Mock(NotificacionService), endosoPort,
             documento, clock,
-            "topic-otp-request", "topic-otp-validate", "topic-liquidacion", Mock(AuditoriaNegociacionService))
+            "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService))
 
     PendingOtp pending(String rut, String rol, String otp, String otpId, String ip, String operador) {
         def req = new AprobacionRequest(NEG, operador, rut, rol, [new AprobacionFacturaRequest(FAC, true, null)], "ok " + rol)

@@ -55,7 +55,7 @@ class RolPorTipoOperacionSpec extends Specification {
             cupoReversionService, Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort), Mock(FacturaOutputPort),
             Mock(UserOutputPort), pendingOtpPort, firmaEndosoService, notificacionService, Mock(EndosoOutputPort),
             Mock(DocumentoEndosoService), clock,
-            "topic-otp-request", "topic-otp-validate", "topic-liquidacion", Mock(AuditoriaNegociacionService))
+            "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService))
 
     Negociacion negociacion(String tipo) {
         def fn = FacturaNegociada.builder().numeroFactura("FC-1").rutPagador(PAG).rutProveedor(PROV)

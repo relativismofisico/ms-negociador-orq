@@ -3,7 +3,8 @@ Feature: POST /negociaciones/confirmar-otp — Confirmar OTP y Aprobar Endoso
 
   # Endpoint: POST /negociaciones/confirmar-otp  -> 202 "Validando OTP..."
   # Roles permitidos: ADMINISTRADOR, EMPRESA, FONDEADOR
-  # CRITICO: confirma endoso, dispara liquidacion (Kafka: otp.validate).
+  # CRITICO: confirma endoso y dispara liquidacion. Fase 28d (A1): el codigo se valida por HTTP en security (ya no por
+  # Kafka otp.validate); security no disponible -> 503 sin cambiar nada.
   # Solo en @full — requiere OTP real generado previamente.
 
   Background:
@@ -169,3 +170,33 @@ Feature: POST /negociaciones/confirmar-otp — Confirmar OTP y Aprobar Endoso
     Then assert responseStatus != 500
     * def esGuard403 = responseStatus == 403 && response.mensaje == 'No tiene permisos para operar sobre esta empresa.'
     And match esGuard403 == false
+  # ─── Fase 28d (A1): validación por HTTP en security ─────────────
+  @full
+  Scenario: A1 - sin pendiente que espere el codigo, 409 OTP_SIN_SOLICITUD_PENDIENTE (no se llama a security)
+    Given path endpoint
+    And header Authorization = 'Bearer ' + tokenAdmin
+    And request { idNegociacion: 'NEG-A1-SIN-PENDIENTE', rutEmpresa: 'KARATE-A1-EMP', rutOperador: 'op-karate-a1', otp: '123456' }
+    When method POST
+    Then status 409
+    And match response.codigo == 'OTP_SIN_SOLICITUD_PENDIENTE'
+
+  @full
+  Scenario: A1 - con pendiente: security caido da 503 y nada cambia; con security real, 202 y el pendiente se descarta
+    # Pendiente sembrado (post-seed.mongo.js): NEG-A1-HTTP / KARATE-A1-EMP / op-karate-a1.
+    # CI: SECURITY_UTIL_BASE_URL apunta a un puerto cerrado -> 503 dos veces (el reintento encuentra el mismo pendiente).
+    # e2e: security real no tiene OTP para esta negociacion -> EXPIRADO -> 202; el segundo intento ya no tiene pendiente.
+    * def body = { idNegociacion: 'NEG-A1-HTTP', rutEmpresa: 'KARATE-A1-EMP', rutOperador: 'op-karate-a1', otp: '123456' }
+    Given path endpoint
+    And header Authorization = 'Bearer ' + tokenAdmin
+    And request body
+    When method POST
+    Then assert responseStatus == 503 || responseStatus == 202
+    * def primero = responseStatus
+    * if (primero == 503) karate.match(response.codigo, 'SERVICIO_DEPENDIENTE_NO_DISPONIBLE').pass || karate.fail('503 sin el codigo esperado')
+    Given path endpoint
+    And header Authorization = 'Bearer ' + tokenAdmin
+    And request body
+    When method POST
+    * def esperado = primero == 503 ? 503 : 409
+    Then match responseStatus == esperado
+    * if (esperado == 409) karate.match(response.codigo, 'OTP_SIN_SOLICITUD_PENDIENTE').pass || karate.fail('409 sin el codigo esperado')

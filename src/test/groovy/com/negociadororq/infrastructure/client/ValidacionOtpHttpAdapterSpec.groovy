@@ -128,17 +128,25 @@ class ValidacionOtpHttpAdapterSpec extends Specification {
         logs.list.every { !it.formattedMessage.contains("123456") }
     }
 
-    def "sin URL de security o sin secreto: error de configuración claro"() {
+    def "sin secreto: error de configuración claro"() {
         when:
-        new ValidacionOtpHttpAdapter(base, secreto, Duration.ofSeconds(1)).validar(solicitud())
+        new ValidacionOtpHttpAdapter("http://127.0.0.1:1", "", Duration.ofSeconds(1)).validar(solicitud())
 
         then:
         def e = thrown(IllegalStateException)
         e.message.startsWith("[OTP-HTTP]")
+    }
+
+    def "Fase 28d (A1): sin URL de security, 503 como security caído (nada cambia) y ERROR de configuración, sin el código"() {
+        when:
+        new ValidacionOtpHttpAdapter(base, SECRETO, Duration.ofSeconds(1)).validar(solicitud())
+
+        then:
+        thrown(ServicioDependienteNoDisponibleException)
+        logs.list.any { it.level.toString() == "ERROR" && it.formattedMessage.contains("SECURITY_UTIL_BASE_URL") }
+        logs.list.every { !it.formattedMessage.contains("123456") }
 
         where:
-        base                   | secreto
-        ""                     | SECRETO
-        "http://127.0.0.1:1"   | ""
+        base << ["", "   ", null]
     }
 }
