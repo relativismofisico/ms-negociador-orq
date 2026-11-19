@@ -64,6 +64,10 @@ db.negociacion.insertOne({
   fechaUltimaActualizacion: ISODate("2026-08-20T10:00:00Z")
 });
 
+// Fase 28d (C): tras C la negociación guarda el CUFE de cada factura (lo copia de la base al negociar); sin él, el
+// endoso, la OTP y la liquidación no la identifican ([FACTURA-SIN-CUFE]).
+db.negociacion.updateOne({ _id: NEG, "facturas.numeroFactura": NUM }, { $set: { "facturas.$.cufe": CUFE } });
+
 print("seed ms-negociador-orq: negociacion=" + db.negociacion.countDocuments({ _id: NEG })
   + " factura=" + db.Facturas.countDocuments({ _id: NUM })
   + " endosos(previos borrados)=" + db.endosos.countDocuments({ negociacionId: NEG }));
