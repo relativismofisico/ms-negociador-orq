@@ -69,7 +69,7 @@ public class ValidacionFacturaController {
     public ResponseEntity<ValidacionFacturaResponseDto> validarFacturaVencida(
             @RequestBody ValidacionFacturaRequestDto request) {
         ValidacionFacturaResponseDto response = validacionFacturaService
-                .validarFacturaVencida(request.getNumeroFactura(), request.getFechaProceso());
+                .validarFacturaVencida(request);
         return ResponseEntity.ok(response);
     }
 }

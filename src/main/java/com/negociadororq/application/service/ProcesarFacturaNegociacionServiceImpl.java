@@ -66,17 +66,15 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FacturaNegociada procesarFactura(NegociacionRequestDto request, FacturaNegociada reqFact) {
 
-        String numero = reqFact.getNumeroFactura();
-
-        Factura factura = facturaPort.findByNumeroFactura(numero)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Factura no encontrada: " + numero));
+        // Fase 28d (C): la solicitud ya trae el CUFE y los RUT de la base (resueltos en crearNegociacion).
+        Factura factura = new ResolutorFactura(facturaPort).resuelta(reqFact);
 
         // ==========================================
         // VALIDAR VENCIMIENTO
         // ==========================================
 
         ValidacionFacturaResponseDto validacion =
-                validacionFacturaService.validarFacturaVencida(numero, null);
+                validacionFacturaService.validarFacturaVencida(factura, null);
 
         if (!validacion.isValida()) {
             throw new ReglaDeNegocioException(validacion.getMensaje());
@@ -192,6 +190,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         // ==========================================
 
         reqFact.setFondeadores(fondeadores);
+        reqFact.setCufe(factura.getCufe());
         reqFact.setRutProveedor(factura.getRutProveedor());
         reqFact.setRutPagador(factura.getRutPagador());
         reqFact.setValorFactura(factura.getValorFactura());

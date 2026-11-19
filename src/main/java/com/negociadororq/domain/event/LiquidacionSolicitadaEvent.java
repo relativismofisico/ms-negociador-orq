@@ -33,5 +33,17 @@ public class LiquidacionSolicitadaEvent {
      * correlacionar sus logs y su auditoría con los de la aprobación.
      */
     private String requestId;
+
+    /**
+     * Fase 28d (C): CUFE de la factura (de la negociación, leído de la base al crearla). ms-liquidador-neg busca y
+     * liquida por CUFE y comprueba el número y las empresas; nunca por el número solo.
+     */
+    private String cufe;
+
+    /** Fase 28d (C): RUT del proveedor de la factura (de la base). */
+    private String rutProveedor;
+
+    /** Fase 28d (C): RUT del pagador de la factura (de la base). */
+    private String rutPagador;
 }
 

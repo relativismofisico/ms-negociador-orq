@@ -9,6 +9,7 @@ import com.negociadororq.application.port.output.OutboxOutputPort;
 import com.negociadororq.infrastructure.persistence.entity.OutboxEventEntity;
 import com.negociadororq.infrastructure.persistence.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,9 +24,27 @@ public class OutboxAdapter implements OutboxOutputPort {
 
     @Override
     public void guardarEvento(String aggregateId, String tipoEvento, Object evento) {
+        repository.save(entidad(UUID.randomUUID().toString(), aggregateId, tipoEvento, evento));
+    }
+
+    @Override
+    public boolean guardarEventoConId(String idEvento, String aggregateId, String tipoEvento, Object evento) {
+        if (repository.existsById(idEvento)) {
+            return false;
+        }
+        try {
+            // insert, no save: con un id existente save lo sobrescribiría (y lo volvería a enviar).
+            repository.insert(entidad(idEvento, aggregateId, tipoEvento, evento));
+            return true;
+        } catch (DuplicateKeyException e) {
+            return false;
+        }
+    }
+
+    private OutboxEventEntity entidad(String id, String aggregateId, String tipoEvento, Object evento) {
         try {
             OutboxEventEntity entity = new OutboxEventEntity();
-            entity.setId(UUID.randomUUID().toString());
+            entity.setId(id);
             entity.setAggregateId(aggregateId);
             entity.setTipoEvento(tipoEvento);
             entity.setPayload(objectMapper.writeValueAsString(evento));
@@ -33,7 +52,7 @@ public class OutboxAdapter implements OutboxOutputPort {
             entity.setEnviado(false);
             entity.setMsPropietario("ms-negociador-orq");
             entity.setIntentos(0);
-            repository.save(entity);
+            return entity;
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Error serializando evento en outbox", e);
         }

@@ -68,10 +68,10 @@ class ConfirmingFirmaPdfRealSpec extends Specification {
     FirmaEndosoServiceImpl firma = new FirmaEndosoServiceImpl(endosoPort, new PdfFirmaServiceImpl(), clock,
             Mock(AuditoriaNegociacionService))
 
-    Factura factura = new Factura(numeroFactura: FAC, rutPagador: PAG, nombrePagador: "Pagador Uno", rutProveedor: PROV,
+    Factura factura = new Factura(numeroFactura: FAC, cufe: "CUFE-" + FAC, rutPagador: PAG, nombrePagador: "Pagador Uno", rutProveedor: PROV,
             nombreProveedor: "Proveedor Uno", valorFactura: 1000000G)
     FacturaNegociada facturaNeg = FacturaNegociada.builder()
-            .numeroFactura(FAC).rutPagador(PAG).rutProveedor(PROV)
+            .numeroFactura(FAC).cufe("CUFE-" + FAC).rutPagador(PAG).rutProveedor(PROV)
             .fondeadores([FondeadorAsignacion.builder().rutFondeador(FOND).nombreFondeador("Fondo Uno").build()])
             .aprobaciones([]).estadoFirma(EstadoFirma.EN_REVISION).build()
     Negociacion negociacion = Negociacion.builder().id(NEG).tipoOperacion(new Operacion("CONFIRMING", "NORMAL"))
@@ -81,7 +81,7 @@ class ConfirmingFirmaPdfRealSpec extends Specification {
         findById(NEG) >> Optional.of(negociacion)
         save(_) >> { Negociacion n -> n }
     }
-    FacturaOutputPort facturaPort = Stub() { findByNumeroFactura(FAC) >> Optional.of(factura) }
+    FacturaOutputPort facturaPort = Stub() { findByCufe("CUFE-" + FAC) >> Optional.of(factura) }
 
     AprobacionEndosoDescuentoServiceImpl service = new AprobacionEndosoDescuentoServiceImpl(
             negociacionPort, Mock(FacturaPatchOutputPort), Stub(EndosoPatchOutputPort) { reclamarFirmaEmpresa(*_) >> true },

@@ -21,26 +21,13 @@ public class FacturaAdapter implements FacturaOutputPort {
     private final FacturaRepository repository;
 
     @Override
-    public Optional<Factura> findByNumeroFactura(String numeroFactura) {
-        // findFirst...OrderByIdDesc: numeroFactura no es único global (consecutivo por
-        // emisor). Ante colisión devuelve la más reciente en vez de reventar con 500.
-        return repository.findFirstByNumeroFacturaOrderByIdDesc(numeroFactura).map(this::toDomain);
+    public Optional<Factura> findByCufe(String cufe) {
+        return repository.findByCufe(cufe).map(this::toDomain);
     }
 
     @Override
-    public List<Factura> findByNumeroFacturaIn(List<String> numerosFactura) {
-        return repository.findByNumeroFacturaIn(numerosFactura).stream()
-                .map(this::toDomain).collect(Collectors.toList());
-    }
-
-    @Override
-    public boolean existsByNumeroFacturaInAndRutPagador(List<String> numerosFactura, String rutPagador) {
-        return repository.existsByNumeroFacturaInAndRutPagador(numerosFactura, rutPagador);
-    }
-
-    @Override
-    public boolean existsByNumeroFacturaInAndRutProveedor(List<String> numerosFactura, String rutProveedor) {
-        return repository.existsByNumeroFacturaInAndRutProveedor(numerosFactura, rutProveedor);
+    public List<Factura> findAllByNumeroFactura(String numeroFactura) {
+        return repository.findByNumeroFactura(numeroFactura).stream().map(this::toDomain).collect(Collectors.toList());
     }
 
     @Override
@@ -52,12 +39,6 @@ public class FacturaAdapter implements FacturaOutputPort {
     @Override
     public Factura save(Factura factura) {
         return toDomain(repository.save(toDocument(factura)));
-    }
-
-    @Override
-    public List<Factura> saveAll(List<Factura> facturas) {
-        return repository.saveAll(facturas.stream().map(this::toDocument).collect(Collectors.toList()))
-                .stream().map(this::toDomain).collect(Collectors.toList());
     }
 
     private Factura toDomain(FacturaDocument doc) {

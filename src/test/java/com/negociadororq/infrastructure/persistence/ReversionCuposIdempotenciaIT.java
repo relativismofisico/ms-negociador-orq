@@ -39,6 +39,7 @@ import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.model.Operacion;
+import com.negociadororq.domain.model.ReferenciaFactura;
 import com.negociadororq.domain.model.User;
 import com.negociadororq.infrastructure.persistence.adapter.EmpresaQuotaAdapter;
 import com.negociadororq.infrastructure.persistence.adapter.FondeadorQuotaAdapter;
@@ -94,7 +95,11 @@ class ReversionCuposIdempotenciaIT {
 
     @Container
     @ServiceConnection
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0");
+    // Nombre integrity-e2e-tc-*: el aislamiento local solo admite contenedores con ese prefijo (sin él, el IT no se
+    // puede correr en local junto al resto de la suite).
+    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
+            .withCreateContainerCmdModifier(c -> c.withName("integrity-e2e-tc-mysql-"
+                    + java.util.UUID.randomUUID().toString().substring(0, 8)));
 
     @TestConfiguration
     static class Operador {
@@ -125,6 +130,7 @@ class ReversionCuposIdempotenciaIT {
     private final NotificacionService notificacionService = mock(NotificacionService.class);
 
     private ReversionCuposServiceImpl service;
+    private final java.util.Map<String, String> negociacionPorFactura = new java.util.concurrent.ConcurrentHashMap<>();
 
     @BeforeEach
     void preparar() {
@@ -158,10 +164,10 @@ class ReversionCuposIdempotenciaIT {
         registrar("F-FACT", "neg-1", "FACTORING", VALOR_FACTORING, "CESION");
         registrar("F-CONF", "neg-2", "CONFIRMING", VALOR_CONFIRMING, "DESCUENTO");
 
-        service.revertirPorFactura("F-FACT", "op-1", "fallo");
-        service.revertirPorFactura("F-FACT", "op-1", "fallo");
-        service.revertirPorFactura("F-CONF", "op-1", "fallo");
-        service.revertirPorFactura("F-CONF", "op-1", "fallo");
+        revertir("F-FACT");
+        revertir("F-FACT");
+        revertir("F-CONF");
+        revertir("F-CONF");
 
         BigDecimal total = VALOR_FACTORING.add(VALOR_CONFIRMING);
         assertThat(cupoUsuario()).isEqualByComparingTo(new BigDecimal("400000.00").add(total));
@@ -172,7 +178,8 @@ class ReversionCuposIdempotenciaIT {
         verify(notificacionService, times(1)).notificarLiquidacionFallida(any(), eq("F-FACT"), anyString());
         verify(notificacionService, times(1)).notificarLiquidacionFallida(any(), eq("F-CONF"), anyString());
         // El duplicado completa la firma (idempotente) por si el primero no llegó a marcarla.
-        verify(facturaPatchPort, times(2)).actualizarEstadoFirmaPorNoFactura("F-FACT", EstadoFirma.RECHAZADA);
+        verify(facturaPatchPort, times(2)).actualizarEstadoFirmaPorCufe(
+                new ReferenciaFactura("CUFE-F-FACT", "PROV", "PAG"), EstadoFirma.RECHAZADA);
     }
 
     @Test
@@ -180,7 +187,7 @@ class ReversionCuposIdempotenciaIT {
         registrar("F-MITAD", "neg-3", "FACTORING", VALOR_FACTORING, "CESION");
         when(companyPort.findByNit("FOND")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.revertirPorFactura("F-MITAD", "op-1", "fallo"))
+        assertThatThrownBy(() -> revertir("F-MITAD"))
                 .isInstanceOf(RecursoNoEncontradoException.class);
 
         // Operador y empresa ya se habían revertido antes del fondeador: nada quedó confirmado.
@@ -188,11 +195,11 @@ class ReversionCuposIdempotenciaIT {
         assertThat(cupoEmpresa()).isEqualByComparingTo("2000000.00");
         assertThat(cupoFondeadorFactoring()).isEqualByComparingTo("1000000.00");
         assertThat(reclamos()).isZero();
-        verify(facturaPatchPort, never()).actualizarEstadoFirmaPorNoFactura(anyString(), any());
+        verify(facturaPatchPort, never()).actualizarEstadoFirmaPorCufe(any(), any());
         verify(notificacionService, never()).notificarLiquidacionFallida(any(), anyString(), anyString());
 
         when(companyPort.findByNit("FOND")).thenReturn(Optional.of(empresa(FONDEADOR)));
-        service.revertirPorFactura("F-MITAD", "op-1", "fallo");
+        revertir("F-MITAD");
 
         assertThat(cupoUsuario()).isEqualByComparingTo(new BigDecimal("400000.00").add(VALOR_FACTORING));
         assertThat(cupoEmpresa()).isEqualByComparingTo(new BigDecimal("2000000.00").add(VALOR_FACTORING));
@@ -206,13 +213,13 @@ class ReversionCuposIdempotenciaIT {
         Factura factura = registrar("F-LIQ", "neg-4", "FACTORING", VALOR_FACTORING, "CESION");
         factura.setEstadoNegociacion("LIQUIDADA");
 
-        service.revertirPorFactura("F-LIQ", "op-1", "fallo");
+        revertir("F-LIQ");
 
         assertThat(cupoUsuario()).isEqualByComparingTo("400000.00");
         assertThat(cupoEmpresa()).isEqualByComparingTo("2000000.00");
         assertThat(cupoFondeadorFactoring()).isEqualByComparingTo("1000000.00");
         assertThat(reclamos()).isZero();
-        verify(facturaPatchPort, never()).actualizarEstadoFirmaPorNoFactura(anyString(), any());
+        verify(facturaPatchPort, never()).actualizarEstadoFirmaPorCufe(any(), any());
         verify(notificacionService, never()).notificarLiquidacionFallida(any(), anyString(), anyString());
     }
 
@@ -227,7 +234,7 @@ class ReversionCuposIdempotenciaIT {
             listos.countDown();
             try {
                 largada.await();
-                service.revertirPorFactura("F-CONC", "op-1", "fallo");
+                revertir("F-CONC");
             } catch (Exception e) {
                 fallos.add(e);
             }
@@ -256,8 +263,12 @@ class ReversionCuposIdempotenciaIT {
         factura.setRutPagador("PAG");
         factura.setEstadoNegociacion("NEGOCIADA");
         factura.setEstadoFirma(firma);
+        factura.setCufe("CUFE-" + numero);
         FacturaNegociada negociada = FacturaNegociada.builder()
                 .numeroFactura(numero)
+                .cufe("CUFE-" + numero)
+                .rutProveedor("PROV")
+                .rutPagador("PAG")
                 .valorFactura(valor)
                 .fondeadores(List.of(FondeadorAsignacion.builder().rutFondeador("FOND").build()))
                 .build();
@@ -267,9 +278,15 @@ class ReversionCuposIdempotenciaIT {
                 .tipoOperacion(new Operacion(tipo, "CON_RESPONSABILIDAD"))
                 .facturas(List.of(negociada))
                 .build();
-        when(facturaPort.findByNumeroFactura(numero)).thenReturn(Optional.of(factura));
-        when(negociacionPort.findByNumeroFactura(numero)).thenReturn(Optional.of(negociacion));
+        when(facturaPort.findByCufe("CUFE-" + numero)).thenReturn(Optional.of(factura));
+        when(negociacionPort.findById(negociacionId)).thenReturn(Optional.of(negociacion));
+        negociacionPorFactura.put(numero, negociacionId);
         return factura;
+    }
+
+    /** Fase 28d (C): la reversión llega con la negociación y el CUFE de la factura. */
+    private void revertir(String numero) {
+        service.revertirPorFactura(negociacionPorFactura.get(numero), "CUFE-" + numero, numero, "op-1", "fallo");
     }
 
     private static Company empresa(long id) {

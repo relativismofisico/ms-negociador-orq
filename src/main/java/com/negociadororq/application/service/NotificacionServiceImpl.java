@@ -208,15 +208,16 @@ public class NotificacionServiceImpl implements NotificacionService {
         List<String> numerosFactura = Optional.ofNullable(endoso.getNumerosFactura()).orElse(List.of());
         String estadoAmigable = estadoEndosoAmigable(endoso.getEstado());
 
+        Map<String, BigDecimal> valores = valoresDelEndoso(endoso);
         List<Map<String, Object>> facturas = numerosFactura.stream()
                 .map(numeroFactura -> safeMap(
                         "numeroFactura", numeroFactura,
-                        "valorFactura", formatearMonto(valorFactura(numeroFactura)),
+                        "valorFactura", formatearMonto(valores.get(numeroFactura)),
                         "estadoAmigable", estadoAmigable
                 ))
                 .toList();
 
-        BigDecimal valorTotal = sumarValores(numerosFactura);
+        BigDecimal valorTotal = sumarValores(numerosFactura, valores);
 
         Map<String, Object> data = safeMap(
                 "idEndoso", endoso.getId(),
@@ -316,16 +317,18 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .flatMap(endoso -> Optional.ofNullable(endoso.getNumerosFactura()).orElse(List.of()).stream())
                 .toList();
 
+        Map<String, BigDecimal> valores = new HashMap<>();
+        grupo.forEach(endoso -> valores.putAll(valoresDelEndoso(endoso)));
         List<Map<String, Object>> facturas = grupo.stream()
                 .flatMap(endoso -> Optional.ofNullable(endoso.getNumerosFactura()).orElse(List.of()).stream()
                         .map(numeroFactura -> safeMap(
                                 "numeroFactura", numeroFactura,
-                                "valorFactura", formatearMonto(valorFactura(numeroFactura)),
+                                "valorFactura", formatearMonto(valores.get(numeroFactura)),
                                 "estadoAmigable", estadoEndosoAmigable(endoso.getEstado())
                         )))
                 .toList();
 
-        BigDecimal valorTotal = sumarValores(todasLasFacturas);
+        BigDecimal valorTotal = sumarValores(todasLasFacturas, valores);
 
         Map<String, Object> data = safeMap(
                 "cantidadFacturas", todasLasFacturas.size(),
@@ -358,24 +361,49 @@ public class NotificacionServiceImpl implements NotificacionService {
 
     // null (no "N/A" en el email) cuando ninguna factura tiene valor conocido, en
     // vez de 0 — que induciría a pensar que las facturas valen cero.
-    private BigDecimal sumarValores(List<String> numerosFactura) {
-        List<BigDecimal> valores = numerosFactura.stream()
-                .map(this::valorFactura)
+    private static BigDecimal sumarValores(List<String> numerosFactura, Map<String, BigDecimal> valores) {
+        List<BigDecimal> encontrados = numerosFactura.stream()
+                .map(valores::get)
                 .filter(Objects::nonNull)
                 .toList();
 
-        if (valores.isEmpty()) {
+        if (encontrados.isEmpty()) {
             return null;
         }
-        return valores.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        return encontrados.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private BigDecimal valorFactura(String numeroFactura) {
-        if (numeroFactura == null) {
+    /**
+     * Fase 28d (C): el valor de cada factura del endoso por su CUFE (array paralelo a los números), no por el número,
+     * que no es único entre emisores. Sin CUFE, la factura sale sin valor.
+     */
+    private Map<String, BigDecimal> valoresDelEndoso(Endoso endoso) {
+        List<String> numeros = Optional.ofNullable(endoso.getNumerosFactura()).orElse(List.of());
+        List<String> cufes = Optional.ofNullable(endoso.getCufes()).orElse(List.of());
+        Map<String, BigDecimal> valores = new HashMap<>();
+        for (int i = 0; i < numeros.size() && i < cufes.size(); i++) {
+            String numero = numeros.get(i);
+            String cufe = cufes.get(i);
+            if (numero != null && cufe != null) {
+                facturaPort.findByCufe(cufe)
+                        .filter(f -> numero.equals(f.getNumeroFactura()))
+                        .map(Factura::getValorFactura)
+                        .ifPresent(v -> valores.put(numero, v));
+            }
+        }
+        return valores;
+    }
+
+    /** Fase 28d (C): el valor de la factura de la negociación (copiado de la base al crearla). */
+    private static BigDecimal valorEnNegociacion(Negociacion negociacion, String numeroFactura) {
+        if (numeroFactura == null || negociacion.getFacturas() == null) {
             return null;
         }
-        return facturaPort.findByNumeroFactura(numeroFactura)
-                .map(Factura::getValorFactura)
+        return negociacion.getFacturas().stream()
+                .filter(f -> numeroFactura.equals(f.getNumeroFactura()))
+                .map(FacturaNegociada::getValorFactura)
+                .filter(Objects::nonNull)
+                .findFirst()
                 .orElse(null);
     }
 
@@ -507,7 +535,7 @@ public class NotificacionServiceImpl implements NotificacionService {
                 "cantidadFacturas", cantidadFacturas,
                 "motivo", motivo,
                 "numeroFactura", numeroFactura,
-                "valorFactura", formatearMonto(valorFactura(numeroFactura)),
+                "valorFactura", formatearMonto(valorEnNegociacion(negociacion, numeroFactura)),
                 "nombrePagador", nombreCompania(negociacion.getRutPagador()),
                 "nombreProveedor", nombreCompania(negociacion.getRutProveedor()),
                 "nombresFondeadores", nombresCompanias(negociacion.getRutFondeadores())

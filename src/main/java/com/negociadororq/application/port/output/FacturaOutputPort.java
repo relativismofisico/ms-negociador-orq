@@ -11,30 +11,19 @@ import com.negociadororq.domain.model.Factura;
 public interface FacturaOutputPort {
 
     /**
-     * @param numeroFactura número de la factura
+     * @param cufe CUFE (único)
      * @return la factura, si existe
      */
-    Optional<Factura> findByNumeroFactura(String numeroFactura);
+    Optional<Factura> findByCufe(String cufe);
 
     /**
-     * @param numerosFactura números de factura a buscar
-     * @return las facturas encontradas para esos números
+     * Fase 28d (C): todas las facturas con ese número (el número es el consecutivo de cada emisor, no es único). Solo
+     * para resolver con las empresas ({@code ResolutorFactura}); nunca para elegir "la primera".
+     *
+     * @param numeroFactura número
+     * @return las facturas con ese número
      */
-    List<Factura> findByNumeroFacturaIn(List<String> numerosFactura);
-
-    /**
-     * @param numerosFactura números de factura a verificar
-     * @param rutPagador     RUT del pagador
-     * @return true si alguna de esas facturas pertenece a ese pagador
-     */
-    boolean existsByNumeroFacturaInAndRutPagador(List<String> numerosFactura, String rutPagador);
-
-    /**
-     * @param numerosFactura números de factura a verificar
-     * @param rutProveedor   RUT del proveedor
-     * @return true si alguna de esas facturas pertenece a ese proveedor
-     */
-    boolean existsByNumeroFacturaInAndRutProveedor(List<String> numerosFactura, String rutProveedor);
+    List<Factura> findAllByNumeroFactura(String numeroFactura);
 
     /**
      * @return las facturas negociadas pendientes de evaluar vencimiento
@@ -46,10 +35,4 @@ public interface FacturaOutputPort {
      * @return la factura persistida
      */
     Factura save(Factura factura);
-
-    /**
-     * @param facturas facturas a persistir
-     * @return las facturas persistidas
-     */
-    List<Factura> saveAll(List<Factura> facturas);
 }

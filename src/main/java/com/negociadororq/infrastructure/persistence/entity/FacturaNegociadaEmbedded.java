@@ -42,6 +42,8 @@ public class FacturaNegociadaEmbedded {
 
     private String rutPagador;
     private String rutProveedor;
+    /** Fase 28d (C): CUFE de la factura (de la base). */
+    private String cufe;
     private List<FondeadorAsignacion> fondeadores;
 
     private List<AprobacionActorDto> aprobaciones;

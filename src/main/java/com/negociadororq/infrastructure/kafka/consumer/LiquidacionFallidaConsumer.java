@@ -33,9 +33,10 @@ public class LiquidacionFallidaConsumer {
 
         try {
 
+            // Fase 28d (C): por negociación y CUFE; sin ellos, [EVENTO-SIN-CUFE] y el evento queda fallido (DLT).
             reversionCuposService.revertirPorFactura(
-                    event.getNumeroFactura(), event.getRutOperador(),
-                    event.getMotivo()
+                    event.getNegociacionId(), event.getCufe(), event.getNumeroFactura(),
+                    event.getRutOperador(), event.getMotivo()
             );
 
             log.info(

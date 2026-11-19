@@ -37,7 +37,7 @@ class NotificacionServiceImplSpec extends Specification {
         service = new NotificacionServiceImpl(
                 outboxService, cuerpoFactory, negociacionPort, destinatarioResolver, companyPort, facturaPort,
                 clock, "topic-email", "http://localhost:4800")
-        // sin stub explícito, companyPort.findByNit/facturaPort.findByNumeroFactura
+        // sin stub explícito, companyPort.findByNit/facturaPort.findByCufe
         // devuelven null (no Optional.empty()) en un Mock() de Spock: hay que
         // estubarlos explícitamente en cada test que los alcance.
     }
@@ -227,7 +227,7 @@ class NotificacionServiceImplSpec extends Specification {
                 .build()
 
         destinatarioResolver.resolverParaEndoso(endoso) >> []
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
 
         when:
         service.notificarEndoso(endoso)
@@ -248,7 +248,7 @@ class NotificacionServiceImplSpec extends Specification {
                 .estado(com.negociadororq.domain.enums.EstadoEndoso.EN_REVISION)
                 .build()
         destinatarioResolver.resolverParaEndoso(endoso) >> []
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
 
         when:
         service.notificarEndoso(endoso)
@@ -273,7 +273,7 @@ class NotificacionServiceImplSpec extends Specification {
                 .estado(com.negociadororq.domain.enums.EstadoEndoso.EN_REVISION)
                 .build()
         destinatarioResolver.resolverParaEndoso(endoso) >> []
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
 
         when:
         service.notificarEndoso(endoso)
@@ -292,14 +292,15 @@ class NotificacionServiceImplSpec extends Specification {
                 .id("end-003")
                 .negociacionId("neg-003")
                 .numerosFactura(["FECI003"])
+                .cufes(["CUFE-3"])
                 .rutActorEndosa("PROV-001")
                 .tipoOperacion(new Operacion("FACTORING", "DESC"))
                 .estado(com.negociadororq.domain.enums.EstadoEndoso.EN_REVISION)
                 .build()
         def factura = new com.negociadororq.domain.model.Factura(
-                numeroFactura: "FECI003", valorFactura: new BigDecimal("1500000.00"))
+                numeroFactura: "FECI003", cufe: "CUFE-3", valorFactura: new BigDecimal("1500000.00"))
         destinatarioResolver.resolverParaEndoso(endoso) >> []
-        facturaPort.findByNumeroFactura("FECI003") >> Optional.of(factura)
+        facturaPort.findByCufe("CUFE-3") >> Optional.of(factura)
         companyPort.findByNit("PROV-001") >> Optional.of(new Company(nameCompany: "Proveedor SA"))
 
         when:
@@ -323,7 +324,7 @@ class NotificacionServiceImplSpec extends Specification {
                 .estado(com.negociadororq.domain.enums.EstadoEndoso.ACEPTADO)
                 .build()
         destinatarioResolver.resolverParaEndoso(endoso) >> []
-        facturaPort.findByNumeroFactura("FECI004") >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
 
         when:
         service.notificarEndoso(endoso)
@@ -355,7 +356,7 @@ class NotificacionServiceImplSpec extends Specification {
                 .estado(com.negociadororq.domain.enums.EstadoEndoso.EN_REVISION)
                 .build()
         destinatarioResolver.resolverParaEndoso(endoso) >> []
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
 
         when:
         service.notificarEndosos([endoso])
@@ -386,7 +387,7 @@ class NotificacionServiceImplSpec extends Specification {
                 .build()
 
         destinatarioResolver.resolverParaEndoso(endoso1) >> [new DestinatarioEmail("PROVEEDOR", "PROV-001", "EMPRESA")]
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
         companyPort.findByNit("PAG-001") >> Optional.empty()
 
         when:
@@ -419,7 +420,7 @@ class NotificacionServiceImplSpec extends Specification {
                 .build()
 
         destinatarioResolver.resolverParaEndoso(_) >> []
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
 
         when:
         service.notificarEndosos([endosoProv1, endosoProv2])
@@ -518,7 +519,7 @@ class NotificacionServiceImplSpec extends Specification {
         def neg = buildNegociacion()
         destinatarioResolver.resolverParaLiquidacionFallida(neg) >> []
         companyPort.findByNit(_) >> Optional.empty()
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
 
         when:
         service.notificarLiquidacionFallida(neg, "FE-1", "Error de pago")
@@ -534,7 +535,7 @@ class NotificacionServiceImplSpec extends Specification {
         def neg = buildNegociacion()
         destinatarioResolver.resolverParaLiquidacionFallida(neg) >> []
         companyPort.findByNit(_) >> Optional.empty()
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
         def capturedEvents = []
 
         when:
@@ -555,7 +556,8 @@ class NotificacionServiceImplSpec extends Specification {
         companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().nameCompany("Proveedor SAS").build())
         companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().nameCompany("Fondos Uno").build())
         companyPort.findByNit("FOND-002") >> Optional.empty()
-        facturaPort.findByNumeroFactura("FE-1") >> Optional.of(new Factura(valorFactura: new BigDecimal("2500000.5")))
+        // Fase 28d (C): el valor sale de la factura de la negociación, no de una búsqueda por número.
+        neg.facturas = [FacturaNegociada.builder().numeroFactura("FE-1").valorFactura(new BigDecimal("2500000.5")).build()]
         def eventos = []
 
         when:
@@ -586,7 +588,7 @@ class NotificacionServiceImplSpec extends Specification {
         neg.rutFondeadores = []
         destinatarioResolver.resolverParaLiquidacionFallida(neg) >> []
         companyPort.findByNit(_) >> Optional.empty()
-        facturaPort.findByNumeroFactura(_) >> Optional.empty()
+        facturaPort.findByCufe(_) >> Optional.empty()
         def eventos = []
 
         when:

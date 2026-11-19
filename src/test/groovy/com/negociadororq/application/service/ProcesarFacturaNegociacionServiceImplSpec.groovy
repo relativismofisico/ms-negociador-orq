@@ -60,6 +60,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def f = new Factura()
         f.id = "id-" + numero
         f.numeroFactura = numero
+        f.cufe = "CUFE-" + numero
         f.rutProveedor = rutProv
         f.rutPagador = rutPag
         f.estadoNegociacion = "SIN_NEGOCIAR"
@@ -83,6 +84,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def buildReqFact(String numero) {
         FacturaNegociada.builder()
                 .numeroFactura(numero)
+                .cufe("CUFE-" + numero)
                 .build()
     }
 
@@ -90,8 +92,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def factura = buildFactura(numero, rutProv, "PAG-001")
         factura.valorFactura = valor
 
-        facturaPort.findByNumeroFactura(numero) >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida(numero, null) >>
+        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == numero }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -180,8 +182,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def factura = buildFactura("FECI002", "PROV-001", "PAG-001")
         factura.estadoNegociacion = "SIN_NEGOCIAR"
 
-        facturaPort.findByNumeroFactura("FECI002") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI002", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI002") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI002" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -218,8 +220,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura lanza RuntimeException cuando factura vencida"() {
         given:
         def factura = buildFactura("FECI003", "PROV-001", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI003") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI003", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI003") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI003" }, null) >>
                 ValidacionFacturaResponseDto.builder()
                         .valida(false)
                         .mensaje("Factura no negociable")
@@ -242,8 +244,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def factura = buildFactura("FECI004", "PROV-001", "PAG-001")
         factura.estadoNegociacion = "NEGOCIADA"
 
-        facturaPort.findByNumeroFactura("FECI004") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI004", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI004") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI004" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
@@ -261,8 +263,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura FACTORING lanza RuntimeException si empresa no es proveedor"() {
         given:
         def factura = buildFactura("FECI005", "OTRO-PROV", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI005") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI005", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI005") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI005" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
 
         def request = buildRequest("FACTORING", "PROV-INCORRECTO", "OP-001")
@@ -280,8 +282,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura CONFIRMING lanza RuntimeException si empresa no es pagador"() {
         given:
         def factura = buildFactura("FECI006", "PROV-001", "OTRO-PAG")
-        facturaPort.findByNumeroFactura("FECI006") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI006", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI006") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI006" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
 
         def request = buildRequest("CONFIRMING", "PAG-INCORRECTO", "OP-001")
@@ -299,8 +301,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura lanza RuntimeException cuando cupo operador insuficiente"() {
         given:
         def factura = buildFactura("FECI007", "PROV-001", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI007") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI007", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI007") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI007" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("1.00") // insuficiente
@@ -318,8 +320,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura con un operador inexistente lanza una excepción del dominio con el mismo texto (llega al cliente)"() {
         given:
         def factura = buildFactura("FECI008", "PROV-001", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI008") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI008", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI008") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI008" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-NO-EXISTE") >> Optional.empty()
 
@@ -338,8 +340,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura lanza RuntimeException cuando empresa sin cupo"() {
         given:
         def factura = buildFactura("FECI008", "PROV-001", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI008") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI008", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI008") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI008" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -363,8 +365,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "obtenerFondeadores usa fondeadores de reqFact si los tiene"() {
         given:
         def factura = buildFactura("FECI009", "PROV-001", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI009") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI009", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI009") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI009" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -391,6 +393,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         // fondeadoresGlobales tiene FOND-001, pero reqFact tiene FOND-LOCAL
         def reqFact = FacturaNegociada.builder()
                 .numeroFactura("FECI009")
+                .cufe("CUFE-FECI009")
                 .fondeadores([FondeadorAsignacion.builder().rutFondeador("FOND-LOCAL").build()])
                 .build()
 
@@ -406,8 +409,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura FACTORING lanza RuntimeException si fondeador sin cupo"() {
         given:
         def factura = buildFactura("FECI010", "PROV-001", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI010") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI010", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI010") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI010" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -442,8 +445,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura lanza excepcion si el fondeador desactivo la asignacion (no aparece via findByFunderIdAndSupplierIdActivo)"() {
         given:
         def factura = buildFactura("FECI014", "PROV-001", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI014") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI014", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI014") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI014" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -473,8 +476,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura lanza RuntimeException si la asignacion de fondeo no esta APROBADA"() {
         given:
         def factura = buildFactura("FECI013", "PROV-001", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI013") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI013", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI013") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI013" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -507,8 +510,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura lanza RuntimeException si la asignacion aun no fue confirmada por el fondeador"() {
         given:
         def factura = buildFactura("FECI014", "PROV-001", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI014") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI014", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI014") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI014" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -547,8 +550,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def factura = buildFactura("FECI011", "PROV-001", "PAG-001")
         factura.actores = [actorExistente, actorFondViejo]
 
-        facturaPort.findByNumeroFactura("FECI011") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI011", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI011") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI011" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -588,8 +591,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "normalizarNit en comparacion factoring con puntos y guiones"() {
         given:
         def factura = buildFactura("FECI012", "900.341.104-5", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI012") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI012", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI012") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI012" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -629,8 +632,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def factura = buildFactura(numero, "PROV-001", "PAG-001")
         factura.valorFactura = valor
 
-        facturaPort.findByNumeroFactura(numero) >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida(numero, null) >>
+        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == numero }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -799,8 +802,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
     def "procesarFactura CONFIRMING no consulta el fallback indirecto (fuera de alcance para Confirming)"() {
         given:
         def factura = buildFactura("FECI025", "PROV-001", "PAG-001")
-        facturaPort.findByNumeroFactura("FECI025") >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida("FECI025", null) >>
+        facturaPort.findByCufe("CUFE-" + "FECI025") >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI025" }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -836,8 +839,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def factura = buildFactura(numero, "PROV-001", "PAG-001")
         factura.fechavencimientoFactura = fechaVencimiento
 
-        facturaPort.findByNumeroFactura(numero) >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida(numero, null) >>
+        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == numero }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")
@@ -913,8 +916,8 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def factura = buildFactura(numero, "PROV-001", "PAG-001")
         factura.fechavencimientoFactura = fechaVencimiento
 
-        facturaPort.findByNumeroFactura(numero) >> Optional.of(factura)
-        validacionFacturaService.validarFacturaVencida(numero, null) >>
+        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(factura)
+        validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == numero }, null) >>
                 ValidacionFacturaResponseDto.builder().valida(true).build()
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         cupoConsumidorService.obtenerCupoDisponible(1L) >> new BigDecimal("10000.00")

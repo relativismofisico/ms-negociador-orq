@@ -9,30 +9,31 @@ class FacturaAdapterSpec extends Specification {
     FacturaRepository repository = Mock()
     FacturaAdapter adapter = new FacturaAdapter(repository)
 
-    def "findByNumeroFactura usa findFirst...OrderByIdDesc (numeroFactura no es unico global)"() {
-        given:
-        def doc = new FacturaDocument()
-        doc.id = "id-mas-reciente"
-        doc.numeroFactura = "FE-1"
-        doc.valorNetoFactura = 1_000_000
-
-        when:
-        def result = adapter.findByNumeroFactura("FE-1")
-
-        then:
-        1 * repository.findFirstByNumeroFacturaOrderByIdDesc("FE-1") >> Optional.of(doc)
-        0 * repository.findByNumeroFactura(_)
-        result.isPresent()
-        result.get().numeroFactura == "FE-1"
-        result.get().valorNetoFactura == 1_000_000
+    static FacturaDocument doc(String id, String numero, String proveedor) {
+        def d = new FacturaDocument()
+        d.id = id
+        d.numeroFactura = numero
+        d.rutProveedor = proveedor
+        d.cufe = "CUFE-" + id
+        d
     }
 
-    def "findByNumeroFactura devuelve vacio cuando no hay factura con ese numero"() {
+    def "Fase 28d (C): findAllByNumeroFactura devuelve TODAS las facturas con ese número (no elige la más reciente)"() {
         when:
-        def result = adapter.findByNumeroFactura("NO-EXISTE")
+        def result = adapter.findAllByNumeroFactura("FE-1")
 
         then:
-        1 * repository.findFirstByNumeroFacturaOrderByIdDesc("NO-EXISTE") >> Optional.empty()
-        result.isEmpty()
+        1 * repository.findByNumeroFactura("FE-1") >> [doc("a", "FE-1", "PROV-A"), doc("b", "FE-1", "PROV-B")]
+        result*.rutProveedor == ["PROV-A", "PROV-B"]
+        result*.cufe == ["CUFE-a", "CUFE-b"]
+    }
+
+    def "Fase 28d (C): findByCufe por la clave única"() {
+        when:
+        def result = adapter.findByCufe("CUFE-a")
+
+        then:
+        1 * repository.findByCufe("CUFE-a") >> Optional.of(doc("a", "FE-1", "PROV-A"))
+        result.get().numeroFactura == "FE-1"
     }
 }

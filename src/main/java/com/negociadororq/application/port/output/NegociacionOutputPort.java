@@ -20,10 +20,4 @@ public interface NegociacionOutputPort {
      * @return la negociación persistida
      */
     Negociacion save(Negociacion negociacion);
-
-    /**
-     * @param numeroFactura número de una factura incluida en la negociación
-     * @return la negociación que contiene esa factura, si existe
-     */
-    Optional<Negociacion> findByNumeroFactura(String numeroFactura);
 }

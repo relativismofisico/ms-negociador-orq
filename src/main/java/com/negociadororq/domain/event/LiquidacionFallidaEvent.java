@@ -21,5 +21,9 @@ public class LiquidacionFallidaEvent {
     private String tipoOperacion;
     private String rutOperador;
     private LocalDateTime fecha;
+    /** Fase 28d (C): negociación de la factura (ms-liquidador-neg lo toma de liquidacion.solicitada). */
+    private String negociacionId;
+    /** Fase 28d (C): CUFE de la factura; sin él (o sin negociacionId) la reversión no se hace y el evento falla. */
+    private String cufe;
 }
 

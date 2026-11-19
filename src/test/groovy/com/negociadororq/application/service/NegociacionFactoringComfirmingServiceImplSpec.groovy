@@ -127,8 +127,21 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
                 .build()
     }
 
+    /** Fase 28d: las facturas de la solicitud, en la base con las mismas contrapartes. */
+    void facturasEnBd(List<FacturaNegociada> fns) {
+        fns.each { fn ->
+            facturaPort.findAllByNumeroFactura(fn.numeroFactura) >> listaDe(buildFactura(fn.numeroFactura, fn.rutProveedor,
+                    fn.rutPagador))
+        }
+    }
+
+    static List<Factura> listaDe(Factura f) {
+        [f]
+    }
+
     def buildFactura(String numero, String rutProv, String rutPag) {
         def f = new Factura()
+        f.cufe = "CUFE-" + numero
         f.numeroFactura = numero
         f.rutProveedor = rutProv
         f.rutPagador = rutPag
@@ -160,11 +173,11 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
-        facturaPort.findByNumeroFactura("FECI001") >> Optional.of(buildFactura("FECI001", "PROV-001", "PAG-001"))
-        facturaPort.findByNumeroFactura("FECI002") >> Optional.of(buildFactura("FECI002", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI001") >> listaDe(buildFactura("FECI001", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI002") >> listaDe(buildFactura("FECI002", "PROV-001", "PAG-001"))
 
-        def fn1Procesada = buildFn("FECI001", "PROV-001", "PAG-001")
-        def fn2Procesada = buildFn("FECI002", "PROV-001", "PAG-001")
+        def fn1Procesada = buildFn("FECI001", "PROV-001", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
+        def fn2Procesada = buildFn("FECI002", "PROV-001", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
         procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1Procesada
         procesarFacturaNegociacionService.procesarFactura(_, fn2) >> fn2Procesada
 
@@ -188,7 +201,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def fn1 = buildFn("FECI003", "PROV-001", "PAG-001")
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI003") >> Optional.of(buildFactura("FECI003", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI003") >> listaDe(buildFactura("FECI003", "PROV-001", "PAG-001"))
 
         procesarFacturaNegociacionService.procesarFactura(_, fn1) >> {
             throw new com.negociadororq.application.exception.ReglaDeNegocioException("Factura sin cupo")
@@ -210,7 +223,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def fn1 = buildFn("FECI010", "PROV-001", "PAG-001")
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI010") >> Optional.of(buildFactura("FECI010", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI010") >> listaDe(buildFactura("FECI010", "PROV-001", "PAG-001"))
 
         procesarFacturaNegociacionService.procesarFactura(_, fn1) >> {
             throw new com.negociadororq.application.exception.RecursoNoEncontradoException("Operador no existe")
@@ -231,7 +244,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def fn1 = buildFn("FECI009", "PROV-001", "PAG-001")
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI009") >> Optional.of(buildFactura("FECI009", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI009") >> listaDe(buildFactura("FECI009", "PROV-001", "PAG-001"))
 
         procesarFacturaNegociacionService.procesarFactura(_, fn1) >> {
             throw new IllegalStateException("could not execute statement; SQL [update cupo set saldo=? where id=?]")
@@ -256,10 +269,10 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def fn2 = buildFn("FECI005", "PROV-001", "PAG-001")
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI004") >> Optional.of(buildFactura("FECI004", "PROV-001", "PAG-001"))
-        facturaPort.findByNumeroFactura("FECI005") >> Optional.of(buildFactura("FECI005", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI004") >> listaDe(buildFactura("FECI004", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI005") >> listaDe(buildFactura("FECI005", "PROV-001", "PAG-001"))
 
-        def fn1Procesada = buildFn("FECI004", "PROV-001", "PAG-001")
+        def fn1Procesada = buildFn("FECI004", "PROV-001", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
         procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1Procesada
         procesarFacturaNegociacionService.procesarFactura(_, fn2) >> {
             throw new com.negociadororq.application.exception.ReglaDeNegocioException("FECI005 sin cupo")
@@ -280,12 +293,12 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
 
     def "crearNegociacion con rolEmpresa=PROVEEDOR fija rutProveedor desde rutEmpresa"() {
         given:
-        def fn = buildFn("FECI006", "PROV-001", "PAG-001")
+        def fn = buildFn("FECI006", "PROV-RAIZ", "PAG-001")
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI006") >> Optional.of(buildFactura("FECI006", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI006") >> listaDe(buildFactura("FECI006", "PROV-RAIZ", "PAG-001"))
 
-        def procesada = buildFn("FECI006", "PROV-001", "PAG-001")
+        def procesada = buildFn("FECI006", "PROV-RAIZ", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
         procesarFacturaNegociacionService.procesarFactura(_, _) >> procesada
 
         def request = buildRequest("FACTORING", "PROV-RAIZ", "OP-001", "PROVEEDOR", [fn])
@@ -304,12 +317,13 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def fn = buildFn("FECI007", "PROV-FACTURA", "PAG-001")
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI007") >> Optional.of(buildFactura("FECI007", "PROV-FACTURA", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI007") >> listaDe(buildFactura("FECI007", "PROV-FACTURA", "PAG-001"))
 
-        def procesada = buildFn("FECI007", "PROV-FACTURA", "PAG-001")
+        def procesada = buildFn("FECI007", "PROV-FACTURA", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
         procesarFacturaNegociacionService.procesarFactura(_, _) >> procesada
 
-        def request = buildRequest("FACTORING", "EMP-001", "OP-001", "EMPRESA", [fn])
+        // Fase 28d (C): en FACTORING la empresa que negocia es el proveedor de la factura.
+        def request = buildRequest("FACTORING", "PROV-FACTURA", "OP-001", "EMPRESA", [fn])
 
         when:
         def resultado = service.crearNegociacion(request)
@@ -326,9 +340,9 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def fn = buildFn("FECI008", "PROV-001", "PAG-UNICO")
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI008") >> Optional.of(buildFactura("FECI008", "PROV-001", "PAG-UNICO"))
+        facturaPort.findAllByNumeroFactura("FECI008") >> listaDe(buildFactura("FECI008", "PROV-001", "PAG-UNICO"))
 
-        def procesada = buildFn("FECI008", "PROV-001", "PAG-UNICO")
+        def procesada = buildFn("FECI008", "PROV-001", "PAG-UNICO").tap { cufe = "CUFE-" + numeroFactura }
         procesarFacturaNegociacionService.procesarFactura(_, _) >> procesada
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
@@ -349,6 +363,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
+        facturasEnBd([fn1, fn2])
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1, fn2])
 
         when:
@@ -367,6 +382,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
+        facturasEnBd([fn1, fn2])
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn1, fn2])
 
         when:
@@ -388,8 +404,8 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         fn2.valorFactura = new BigDecimal("2000.00")
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI011") >> Optional.of(buildFactura("FECI011", "PROV-001", "PAG-001"))
-        facturaPort.findByNumeroFactura("FECI012") >> Optional.of(buildFactura("FECI012", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI011") >> listaDe(buildFactura("FECI011", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI012") >> listaDe(buildFactura("FECI012", "PROV-001", "PAG-001"))
 
         procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1
         procesarFacturaNegociacionService.procesarFactura(_, fn2) >> fn2
@@ -409,7 +425,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         fn.valorFactura = null
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI013") >> Optional.of(buildFactura("FECI013", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI013") >> listaDe(buildFactura("FECI013", "PROV-001", "PAG-001"))
 
         procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
 
@@ -433,8 +449,8 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
                            FondeadorAsignacion.builder().rutFondeador("FOND-B").build()]
 
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI014") >> Optional.of(buildFactura("FECI014", "PROV-001", "PAG-001"))
-        facturaPort.findByNumeroFactura("FECI015") >> Optional.of(buildFactura("FECI015", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI014") >> listaDe(buildFactura("FECI014", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI015") >> listaDe(buildFactura("FECI015", "PROV-001", "PAG-001"))
 
         procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1
         procesarFacturaNegociacionService.procesarFactura(_, fn2) >> fn2
@@ -454,7 +470,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         given:
         def fn = buildFn("FECI016", "PROV-001", "PAG-001")
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI016") >> Optional.of(buildFactura("FECI016", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI016") >> listaDe(buildFactura("FECI016", "PROV-001", "PAG-001"))
         procesarFacturaNegociacionService.procesarFactura(_, _) >> fn
         idNegociacionAAsignar = "NEG-SAVED"
 
@@ -506,6 +522,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
         def fn = buildFn("FECI018", "PROV-001", "PAG-SIN-FACTORING")
+        facturasEnBd([fn])
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
 
         when:
@@ -524,6 +541,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
         def fn = buildFn("FECI019", "PROV-SIN-CONFIRMING", "PAG-001")
+        facturasEnBd([fn])
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn])
 
         when:
@@ -541,8 +559,8 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def fn1 = buildFn("FECI020", "PROV-001", "PAG-A")
         def fn2 = buildFn("FECI021", "PROV-001", "PAG-A")
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI020") >> Optional.of(buildFactura("FECI020", "PROV-001", "PAG-A"))
-        facturaPort.findByNumeroFactura("FECI021") >> Optional.of(buildFactura("FECI021", "PROV-001", "PAG-A"))
+        facturaPort.findAllByNumeroFactura("FECI020") >> listaDe(buildFactura("FECI020", "PROV-001", "PAG-A"))
+        facturaPort.findAllByNumeroFactura("FECI021") >> listaDe(buildFactura("FECI021", "PROV-001", "PAG-A"))
         procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1
         procesarFacturaNegociacionService.procesarFactura(_, fn2) >> fn2
 
@@ -559,7 +577,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         given:
         def fn = buildFn("FECI017", "PROV-001", "PAG-001")
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI017") >> Optional.of(buildFactura("FECI017", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI017") >> listaDe(buildFactura("FECI017", "PROV-001", "PAG-001"))
         procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
@@ -579,6 +597,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
 
         def fn = buildFn("FECI022", "PROV-001", "PAG-001")
+        facturasEnBd([fn])
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn])
 
         when:
@@ -596,7 +615,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         tesoreriaVerificada = false
         nitsSinFondeoOConfirming = ["PROV-001", "PAG-001"] as Set
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI024") >> Optional.of(buildFactura("FECI024", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI024") >> listaDe(buildFactura("FECI024", "PROV-001", "PAG-001"))
 
         def fn = buildFn("FECI024", "PROV-001", "PAG-001")
         procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
@@ -614,7 +633,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         given:
         tesoreriaVerificada = true
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
-        facturaPort.findByNumeroFactura("FECI025") >> Optional.of(buildFactura("FECI025", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI025") >> listaDe(buildFactura("FECI025", "PROV-001", "PAG-001"))
 
         def fn = buildFn("FECI025", "PROV-001", "PAG-001")
         procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
@@ -688,5 +707,122 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         "CONFIRMING" | "SIN_RECURSO"
         "CONFIRMING" | "COSTO_COMPARTIDO"
         "CONFIRMING" | "CON_GARANTIA"
+    }
+
+    // ─── Fase 28d: contraparte única con los RUT de la BASE, antes de reservar cupos ───────────────
+
+    def "Fase 28d: #tipo con RUT de contraparte #caso en la solicitud y facturas de dos contrapartes en la base => #codigo sin cupos"() {
+        given:
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        boolean confirming = tipo == "CONFIRMING"
+        facturaPort.findAllByNumeroFactura("F28D-1") >> listaDe(confirming ? buildFactura("F28D-1", "PROV-A", "PAG-001")
+                : buildFactura("F28D-1", "PROV-001", "PAG-A"))
+        facturaPort.findAllByNumeroFactura("F28D-2") >> listaDe(confirming ? buildFactura("F28D-2", "PROV-B", "PAG-001")
+                : buildFactura("F28D-2", "PROV-001", "PAG-B"))
+        def fn1 = confirming ? buildFn("F28D-1", enviado, "PAG-001") : buildFn("F28D-1", "PROV-001", enviado)
+        def fn2 = confirming ? buildFn("F28D-2", enviado, "PAG-001") : buildFn("F28D-2", "PROV-001", enviado)
+        def request = confirming ? buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn1, fn2])
+                : buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1, fn2])
+
+        when:
+        service.crearNegociacion(request)
+
+        then: "con un RUT falso la factura ya no se resuelve (C: número + RUT de la solicitud)"
+        def ex = thrown(com.negociadororq.application.exception.NegociadorException)
+        ex.codigo == codigo
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * negociacionPort.save(_)
+
+        where:
+        tipo         | caso    | enviado  | codigo
+        "CONFIRMING" | "vacío" | ""       | "MULTIPLES_CONTRAPARTES"
+        "CONFIRMING" | "nulo"  | null     | "MULTIPLES_CONTRAPARTES"
+        "CONFIRMING" | "falso" | "PROV-A" | "FACTURA_NO_ENCONTRADA"
+        "FACTORING"  | "vacío" | ""       | "MULTIPLES_CONTRAPARTES"
+        "FACTORING"  | "nulo"  | null     | "MULTIPLES_CONTRAPARTES"
+        "FACTORING"  | "falso" | "PAG-A"  | "FACTURA_NO_ENCONTRADA"
+    }
+
+    def "Fase 28d: factura sin proveedor en la base (CONFIRMING) => error, sin cupos"() {
+        given:
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findAllByNumeroFactura("F28D-3") >> listaDe(buildFactura("F28D-3", null, "PAG-001"))
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [buildFn("F28D-3", "", "PAG-001")])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        def ex = thrown(PeticionInvalidaException)
+        ex.codigo == "FACTURA_SIN_CONTRAPARTE"
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+    }
+
+    def "Fase 28d: un solo proveedor en la base pasa aunque el cliente no mande su RUT (CONFIRMING)"() {
+        given:
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findAllByNumeroFactura("F28D-4") >> listaDe(buildFactura("F28D-4", "PROV-A", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("F28D-5") >> listaDe(buildFactura("F28D-5", "PROV-A", "PAG-001"))
+        procesarFacturaNegociacionService.procesarFactura(_, _) >> { args -> args[1] }
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR",
+                [buildFn("F28D-4", "", "PAG-001"), buildFn("F28D-5", null, "PAG-001")])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        1 * negociacionPort.save({ it.rutProveedor == "PROV-A" }) >> { args -> args[0] }
+    }
+
+    def "Fase 28d: la contraparte se valida habilitada con el RUT de la base, no con el del cliente"() {
+        given: "el cliente no manda el proveedor; el de la base no tiene CONFIRMING habilitado"
+        nitsSinOperacionHabilitada = ["PROV-REAL"] as Set
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findAllByNumeroFactura("F28D-6") >> listaDe(buildFactura("F28D-6", "PROV-REAL", "PAG-001"))
+        def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [buildFn("F28D-6", "", "PAG-001")])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        thrown(com.negociadororq.application.exception.AccionNoPermitidaException)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+    }
+
+    def "Fase 28d (C): dos empresas con la factura 1: A negocia la suya (CUFE de la base) y la de B no se toca"() {
+        given:
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        def deA = buildFactura("1", "PROV-A", "PAG-001").tap { cufe = "CUFE-A" }
+        def deB = buildFactura("1", "PROV-B", "PAG-001").tap { cufe = "CUFE-B" }
+        facturaPort.findAllByNumeroFactura("1") >> [deA, deB]
+        def request = buildRequest("FACTORING", "PROV-A", "OP-001", "PROVEEDOR", [buildFn("1", null, "PAG-001")])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        1 * procesarFacturaNegociacionService.procesarFactura(_, { it.cufe == "CUFE-A" && it.rutProveedor == "PROV-A" }) >>
+                { args -> args[1] }
+        1 * facturaPatchPort.actualizarNegociacionIdPorCufe({ it.cufe() == "CUFE-A" && it.rutProveedor() == "PROV-A" }, _)
+        0 * facturaPatchPort.actualizarNegociacionIdPorCufe({ it.cufe() == "CUFE-B" }, _)
+        1 * negociacionPort.save({ it.facturas*.cufe == ["CUFE-A"] }) >> { args -> args[0] }
+    }
+
+    def "Fase 28d (C): B con los RUT de A => FACTURA_DE_OTRA_EMPRESA antes de reservar cupos"() {
+        given:
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findAllByNumeroFactura("1") >> [buildFactura("1", "PROV-A", "PAG-001").tap { cufe = "CUFE-A" },
+                                                   buildFactura("1", "PROV-B", "PAG-001").tap { cufe = "CUFE-B" }]
+        def request = buildRequest("FACTORING", "PROV-B", "OP-001", "PROVEEDOR", [buildFn("1", "PROV-A", "PAG-001")])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        def ex = thrown(com.negociadororq.application.exception.AccionNoPermitidaException)
+        ex.codigo == ResolutorFactura.FACTURA_DE_OTRA_EMPRESA
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * facturaPatchPort._
+        0 * negociacionPort.save(_)
     }
 }

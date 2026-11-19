@@ -33,11 +33,6 @@ public class NegociacionAdapter implements NegociacionOutputPort {
         return toDomain(repository.save(toDocument(negociacion)));
     }
 
-    @Override
-    public Optional<Negociacion> findByNumeroFactura(String numeroFactura) {
-        return repository.findByNumeroFactura(numeroFactura).map(this::toDomain);
-    }
-
     private Negociacion toDomain(NegociacionDocument doc) {
         return Negociacion.builder()
                 .id(doc.getId())
@@ -104,6 +99,7 @@ public class NegociacionAdapter implements NegociacionOutputPort {
                 .estadoFirma(embedded.getEstadoFirma())
                 .rutPagador(embedded.getRutPagador())
                 .rutProveedor(embedded.getRutProveedor())
+                .cufe(embedded.getCufe())
                 .fondeadores(embedded.getFondeadores())
                 .aprobaciones(embedded.getAprobaciones())
                 .estadoEndoso(embedded.getEstadoEndoso())
@@ -121,6 +117,7 @@ public class NegociacionAdapter implements NegociacionOutputPort {
                 .estadoFirma(factura.getEstadoFirma())
                 .rutPagador(factura.getRutPagador())
                 .rutProveedor(factura.getRutProveedor())
+                .cufe(factura.getCufe())
                 .fondeadores(factura.getFondeadores())
                 .aprobaciones(factura.getAprobaciones())
                 .estadoEndoso(factura.getEstadoEndoso())

@@ -46,6 +46,7 @@ import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.model.Operacion;
 import com.negociadororq.domain.model.PendingOtp;
+import com.negociadororq.domain.model.ReferenciaFactura;
 import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
@@ -360,8 +361,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 notificacionService.notificarLiquidacionFallida(negociacion, factura.getNumeroFactura(), motivoError);
                 marcarEmitido(pending, efectoFallida);
             }
-            facturaPatchPort.actualizarEstadosPorNoFactura(
-                    factura.getNumeroFactura(), EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA);
+            facturaPatchPort.actualizarEstadosPorCufe(
+                    ResolutorFactura.referencia(factura), EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA);
             factura.setEstadoFirma(EstadoFirma.RECHAZADA);
             factura.setEstadoNegociacion(EstadoNegociacion.RECHAZADA);
             actualizarEstadoEndosoGrupal(negociacion, idNegociacion, factura.getNumeroFactura());
@@ -398,11 +399,18 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         + "se escribió en un intento anterior de esta aprobación; no se repite.", idNegociacion,
                         factura.getNumeroFactura()));
             } else {
+                ReferenciaFactura ref = ResolutorFactura.referencia(factura);
                 LiquidacionSolicitadaEvent event = new LiquidacionSolicitadaEvent(
                         idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, clock.now(),
-                        Boolean.TRUE.equals(pending.getValidadoEnOrigen()), pending.getRequestId());
+                        Boolean.TRUE.equals(pending.getValidadoEnOrigen()), pending.getRequestId(),
+                        ref.cufe(), ref.rutProveedor(), ref.rutPagador());
 
-                outboxService.guardarEvento(idNegociacion, topicLiquidacionSolicitada, event);
+                // Fase 28d (C): id determinista por negociación y CUFE; una segunda escritura no hace nada.
+                if (!outboxService.guardarEventoConId(idEventoLiquidacion(idNegociacion, ref.cufe()), idNegociacion,
+                        topicLiquidacionSolicitada, event)) {
+                    log.info(String.format("[LIQUIDACION-YA-SOLICITADA] negociación %s CUFE %s: el evento ya estaba en el "
+                            + "outbox.", idNegociacion, ref.cufe()));
+                }
                 marcarEmitido(pending, efectoLiquidacion);
             }
         } else if (alguienAprobo) {
@@ -413,7 +421,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             estadoNegociacionFactura = EstadoNegociacion.PENDIENTE;
         }
 
-        facturaPatchPort.actualizarEstadosPorNoFactura(factura.getNumeroFactura(), estadoFactura, estadoNegociacionFactura);
+        facturaPatchPort.actualizarEstadosPorCufe(ResolutorFactura.referencia(factura), estadoFactura,
+                estadoNegociacionFactura);
 
         // También se actualiza la copia embebida en la negociación: calcularEstadoNegociacion()
         // (llamado justo después, para cada factura de la solicitud) lee este mismo campo para
@@ -483,13 +492,15 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
         List<String> numerosFacturaEndoso = Optional.ofNullable(endoso.getNumerosFactura()).orElse(List.of());
 
-        List<Factura> facturas = numerosFacturaEndoso.stream()
-                .map(nf -> facturaPort.findByNumeroFactura(nf).orElse(null))
-                .filter(java.util.Objects::nonNull)
-                .toList();
-
         List<FacturaNegociada> facturasNegociadas = negociacion.getFacturas().stream()
                 .filter(fn -> numerosFacturaEndoso.contains(fn.getNumeroFactura()))
+                .toList();
+
+        // Fase 28d (C): las facturas del endoso, por el CUFE de la negociación (no por número).
+        ResolutorFactura resolutor = new ResolutorFactura(facturaPort);
+        List<Factura> facturas = facturasNegociadas.stream()
+                .map(resolutor::buscarDeLaNegociacion)
+                .flatMap(Optional::stream)
                 .toList();
 
         if (facturas.isEmpty() || facturasNegociadas.isEmpty()) {
@@ -651,8 +662,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     @Transactional
     public void revertirCupos(FacturaNegociada factura, Operacion tipoOperacion, String rutEmpresa, String rutOperador) {
 
-        Factura facturaDb = facturaPort.findByNumeroFactura(factura.getNumeroFactura())
-                .orElseThrow(() -> new RecursoNoEncontradoException("Factura no encontrada para reversión"));
+        Factura facturaDb = new ResolutorFactura(facturaPort).deLaNegociacion(factura);
 
         BigDecimal valorFactura = Optional.ofNullable(facturaDb.getValorNetoFactura())
                 .orElse(facturaDb.getValorFactura());
@@ -723,5 +733,16 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             estado = EstadoEndoso.RECHAZADO;
         }
         endosoPatchPort.registrarAprobacionActor(idNegociacion, factura.getNumeroFactura(), aprobacion, estado);
+    }
+
+    /**
+     * Fase 28d (C): id del evento {@code liquidacion.solicitada} en el outbox: uno por negociación y CUFE.
+     *
+     * @param idNegociacion negociación
+     * @param cufe          CUFE de la factura
+     * @return el id
+     */
+    static String idEventoLiquidacion(String idNegociacion, String cufe) {
+        return "liquidacion.solicitada|" + idNegociacion + "|" + cufe;
     }
 }

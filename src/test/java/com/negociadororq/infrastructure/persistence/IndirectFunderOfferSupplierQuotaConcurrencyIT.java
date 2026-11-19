@@ -62,7 +62,11 @@ class IndirectFunderOfferSupplierQuotaConcurrencyIT {
 
     @Container
     @ServiceConnection
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0");
+    // Nombre integrity-e2e-tc-*: el aislamiento local solo admite contenedores con ese prefijo (sin él, el IT no se
+    // puede correr en local junto al resto de la suite).
+    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
+            .withCreateContainerCmdModifier(c -> c.withName("integrity-e2e-tc-mysql-"
+                    + java.util.UUID.randomUUID().toString().substring(0, 8)));
 
     @Autowired
     IndirectFunderOfferSupplierQuotaAdapter adapter;
