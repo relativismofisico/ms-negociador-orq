@@ -149,6 +149,11 @@ jobs:
           echo "::add-mask::$LIQUIDADOR_SERVICE_PASSWORD_HASH"
           echo "LIQUIDADOR_SERVICE_USERNAME=ms-liquidador-neg" >> "$GITHUB_ENV"
           echo "LIQUIDADOR_SERVICE_PASSWORD_HASH=$LIQUIDADOR_SERVICE_PASSWORD_HASH" >> "$GITHUB_ENV"
+          # Fase 28d (A1): secreto del JWT de servicio con que confirmar-otp llama a security. En este job no hay
+          # security: SECURITY_UTIL_BASE_URL apunta a un puerto cerrado y confirmar-otp con un pendiente da 503.
+          ACT_AS_OPERARIO_SERVICE_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$ACT_AS_OPERARIO_SERVICE_SECRET"
+          echo "ACT_AS_OPERARIO_SERVICE_SECRET=$ACT_AS_OPERARIO_SERVICE_SECRET" >> "$GITHUB_ENV"
 
       - name: Levantar el servicio en background
         env:
@@ -167,6 +172,7 @@ jobs:
           SPRING_KAFKA_LISTENER_AUTO_STARTUP: 'false'
           RATE_LIMIT_IP_ENABLED: 'false'
           LOGGING_LEVEL_ORG_HIBERNATE_SQL: WARN
+          SECURITY_UTIL_BASE_URL: http://127.0.0.1:1
         run: |
           nohup ./gradlew bootRun --console=plain > bootrun.log 2>&1 &
           echo $! > bootrun.pid

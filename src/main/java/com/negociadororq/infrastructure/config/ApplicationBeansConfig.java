@@ -38,6 +38,8 @@ import com.negociadororq.application.port.output.ValidacionOtpOutputPort;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoServiceImpl;
 import com.negociadororq.application.service.AprobacionInternaService;
 import com.negociadororq.application.service.AuditoriaNegociacionService;
+import com.negociadororq.application.service.ConfirmacionOtpService;
+import com.negociadororq.application.service.ConfirmacionOtpServiceImpl;
 import com.negociadororq.application.service.CupoConsumidorService;
 import com.negociadororq.application.service.CupoPropioFondeoService;
 import com.negociadororq.application.service.CupoPropioFondeoServiceImpl;
@@ -373,14 +375,13 @@ public class ApplicationBeansConfig {
             final DocumentoEndosoService documentoEndosoService,
             final ClockPort clock,
             @Value("${topics.otp-request}") final String topicRequestOtp,
-            @Value("${topics.otp-validate}") final String topicValidateOtp,
             @Value("${topics.liquidacion}") final String topicLiquidacionSolicitada,
             final AuditoriaNegociacionService auditoriaNegociacionService) {
         return new AprobacionEndosoDescuentoServiceImpl(
                 negociacionPort, facturaPatchPort, endosoPatchPort, outboxService, cupoReversionService,
                 companyPort, fondeadorQuotaPort, facturaPort, userPort, pendingOtpPort, firmaEndosoService,
                 notificacionService, endosoPort, documentoEndosoService, clock,
-                topicRequestOtp, topicValidateOtp, topicLiquidacionSolicitada, auditoriaNegociacionService);
+                topicRequestOtp, topicLiquidacionSolicitada, auditoriaNegociacionService);
     }
 
     // Igual que con OperadorServiceImpl más arriba: sin @Bean explícito para
@@ -416,5 +417,20 @@ public class ApplicationBeansConfig {
     public ValidadorOtpPendiente validadorOtpPendiente(final ValidacionOtpOutputPort validacionOtpOutputPort,
             final PendingOtpOutputPort pendingOtpOutputPort) {
         return new ValidadorOtpPendiente(validacionOtpOutputPort, pendingOtpOutputPort);
+    }
+
+    /**
+     * Fase 28d (A1): {@code confirmar-otp} valida el código por HTTP contra security y sigue la firma con la misma
+     * lógica que {@code otp.validate.response}.
+     *
+     * @param pendingOtpOutputPort  pendientes OTP
+     * @param validadorOtpPendiente validación por HTTP
+     * @param firmaOtpService       firma con la respuesta de security
+     * @return el servicio de confirmación
+     */
+    @Bean
+    public ConfirmacionOtpService confirmacionOtpService(final PendingOtpOutputPort pendingOtpOutputPort,
+            final ValidadorOtpPendiente validadorOtpPendiente, final FirmaOtpService firmaOtpService) {
+        return new ConfirmacionOtpServiceImpl(pendingOtpOutputPort, validadorOtpPendiente, firmaOtpService);
     }
 }

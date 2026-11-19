@@ -46,7 +46,7 @@ class FirmaUnicaPorEmpresaSpec extends Specification {
             Mock(CupoReversionService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort), Mock(FacturaOutputPort),
             Mock(UserOutputPort), pendingOtpPort, firmaEndosoService, Mock(NotificacionService),
             Mock(EndosoOutputPort), Mock(DocumentoEndosoService), clock,
-            "topic-otp-request", "topic-otp-validate", "topic-liquidacion", Mock(AuditoriaNegociacionService))
+            "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService))
 
     Negociacion negociacion(String tipo, String rutQueYaFirmo, RolActor rol) {
         def aprobaciones = rutQueYaFirmo == null ? [] : [new AprobacionActorDto(rutActor: rutQueYaFirmo, rolActor: rol,

@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
 import com.negociadororq.application.dto.AprobacionFacturaRequestDto;
 import com.negociadororq.application.dto.AprobacionRequestDto;
 import com.negociadororq.application.dto.AprobacionResponseDto;
-import com.negociadororq.application.dto.ConfirmacionOtpRequestDto;
 import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
@@ -33,7 +32,6 @@ import com.negociadororq.domain.enums.EstadoNegociacion;
 import com.negociadororq.domain.enums.RolActor;
 import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
 import com.negociadororq.domain.event.OtpRequestEvent;
-import com.negociadororq.domain.event.OtpValidateRequestEvent;
 import com.negociadororq.domain.model.AprobacionActorDto;
 import com.negociadororq.domain.model.AprobacionFacturaRequest;
 import com.negociadororq.domain.model.AprobacionRequest;
@@ -75,7 +73,6 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final DocumentoEndosoService documentoEndosoService;
     private final ClockPort clock;
     private final String topicRequestOtp;
-    private final String topicValidateOtp;
     private final String topicLiquidacionSolicitada;
     private final AuditoriaNegociacionService auditoria;
 
@@ -176,33 +173,6 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 rol,
                 facturas,
                 dto.getObservacion()
-        );
-    }
-
-    @Override
-    public void confirmarOtp(ConfirmacionOtpRequestDto request) {
-        // Fase 28c: precondición. Sin una solicitud que espere el código (o de otra empresa) no se manda a validar:
-        // el código no viaja si no hay nada que firmar.
-        PendingOtp pending = pendingOtpPort.findByClave(request.getIdNegociacion(), request.getRutEmpresa(),
-                        request.getRutOperador())
-                .filter(p -> EstadoFirmaOtp.esperandoCodigo(p.getEstado()))
-                .orElseThrow(() -> new ConflictoException(
-                        "No hay una solicitud de OTP pendiente para la negociación " + request.getIdNegociacion(),
-                        "OTP_SIN_SOLICITUD_PENDIENTE"));
-        if (pending.getRutEmpresa() != null && !pending.getRutEmpresa().equals(request.getRutEmpresa())) {
-            throw new ConflictoException("La solicitud de OTP pendiente es de otra empresa",
-                    "OTP_SIN_SOLICITUD_PENDIENTE");
-        }
-        outboxService.guardarEvento(
-                request.getIdNegociacion(),
-                topicValidateOtp,
-                OtpValidateRequestEvent.builder()
-                        .idNegociacion(request.getIdNegociacion())
-                        .rutEmpresa(request.getRutEmpresa())
-                        .rutOperador(request.getRutOperador())
-                        .otp(request.getOtp())
-                        .ipAprobacion(request.getIpAprobacion())
-                        .build()
         );
     }
 

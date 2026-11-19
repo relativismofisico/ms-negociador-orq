@@ -96,6 +96,14 @@ public class FirmaOtpServiceImpl implements FirmaOtpService {
             rechazado(event, pending);
             return;
         }
+        // Fase 28d (A1): la misma validación llega por HTTP y, después, por otp.validate.response (security la sigue
+        // publicando en la transición), o el evento se reentrega. Con la solicitud ya terminada (FIRMADO, FALLO_FIRMA o
+        // ROL_NO_PERMITIDO) no se vuelve a firmar: un fallo se repetiría con otra alerta y otro aviso a la empresa.
+        if (!EstadoFirmaOtp.activa(pending.getEstado())) {
+            log.info(String.format("[OTP-VALIDACION-REPETIDA] negociación %s otpId %s: la solicitud ya está en %s, se ignora.",
+                    event.getIdNegociacion(), event.getOtpId(), pending.getEstado()));
+            return;
+        }
         if (EstadoFirmaOtp.OTP_VALIDADO.name().equals(pending.getEstado())
                 && !Objects.equals(pending.getOtpId(), event.getOtpId())) {
             log.warning(String.format("[OTP-OTRA-SOLICITUD] negociación %s: ya hay una firma en curso con otro OTP, se ignora.",

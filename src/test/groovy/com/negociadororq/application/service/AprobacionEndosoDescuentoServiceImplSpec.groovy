@@ -2,7 +2,6 @@ package com.negociadororq.application.service
 
 import com.negociadororq.application.dto.AprobacionFacturaRequestDto
 import com.negociadororq.application.dto.AprobacionRequestDto
-import com.negociadororq.application.dto.ConfirmacionOtpRequestDto
 import com.negociadororq.application.exception.ConflictoException
 import com.negociadororq.application.exception.RecursoNoEncontradoException
 import com.negociadororq.application.exception.ReglaDeNegocioException
@@ -64,7 +63,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
             cupoReversionService, companyPort, fondeadorQuotaPort, facturaPort,
             userPort, pendingOtpPort, firmaEndosoService, notificacionService, endosoPort,
             documentoEndosoService, clock,
-            "topic-otp-request", "topic-otp-validate", "topic-liquidacion", auditoriaNegociacion)
+            "topic-otp-request", "topic-liquidacion", auditoriaNegociacion)
 
     def setup() {
         // Fase 28d: el reclamo de la firma de la empresa en el endoso pasa (un solo actor por empresa en estos casos)
@@ -115,25 +114,6 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         then:
         1 * pendingOtpPort.registrarSolicitud({ it.request.facturas.isEmpty() }) >> { args -> new com.negociadororq.application.port.output.ResultadoSolicitudOtp(com.negociadororq.application.port.output.ResultadoSolicitudOtp.Tipo.NUEVA, args[0], null) }
         1 * outboxService.guardarEvento(_, _, _)
-    }
-
-    // ─── confirmarOtp ─────────────────────────────────────────────────────────
-
-    def "confirmarOtp emite evento de validacion"() {
-        given:
-        def request = new ConfirmacionOtpRequestDto(
-                "neg-001", "EMP-001", "OP-001", "123456", "192.168.1.1", null
-        )
-        pendingOtpPort.findByClave("neg-001", _, _) >> Optional.of(
-                PendingOtp.builder().idNegociacion("neg-001").rutEmpresa("EMP-001").build())
-
-        when:
-        service.confirmarOtp(request)
-
-        then:
-        1 * outboxService.guardarEvento("neg-001", "topic-otp-validate", {
-            it.otp == "123456" && it.ipAprobacion == "192.168.1.1"
-        })
     }
 
     // ─── aprobarInterno ─────────────────────────────────────────────────────
@@ -632,28 +612,6 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
     }
 
     // ─── Fase 28c ─────────────────────────────────────────────────────────────
-
-    def "Fase 28c: confirmarOtp sin solicitud pendiente (o ya validada) no manda el código a validar"() {
-        given:
-        def request = new ConfirmacionOtpRequestDto("neg-001", "EMP-001", "OP-001", "123456", "192.168.1.1", null)
-        pendingOtpPort.findByClave("neg-001", _, _) >> pendiente
-
-        when:
-        service.confirmarOtp(request)
-
-        then:
-        def ex = thrown(ConflictoException)
-        ex.codigo == "OTP_SIN_SOLICITUD_PENDIENTE"
-        0 * outboxService.guardarEvento(*_)
-        0 * outboxService.guardarEventoConId(*_)
-
-        where:
-        pendiente << [Optional.empty(),
-                      Optional.of(PendingOtp.builder().idNegociacion("neg-001").rutEmpresa("EMP-001")
-                              .estado("OTP_VALIDADO").build()),
-                      Optional.of(PendingOtp.builder().idNegociacion("neg-001").rutEmpresa("OTRA-EMP")
-                              .estado("PENDIENTE_OTP").build())]
-    }
 
     def "Fase 28c: solicitarOtp deja la solicitud en PENDIENTE_OTP"() {
         given:

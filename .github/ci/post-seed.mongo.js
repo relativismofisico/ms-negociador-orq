@@ -68,6 +68,16 @@ db.negociacion.insertOne({
 // endoso, la OTP y la liquidación no la identifican ([FACTURA-SIN-CUFE]).
 db.negociacion.updateOne({ _id: NEG, "facturas.numeroFactura": NUM }, { $set: { "facturas.$.cufe": CUFE } });
 
+// Fase 28d (A1): pendiente OTP dedicado para el Karate de confirmar-otp (validación por HTTP en security). Solo lo usa
+// ese escenario. Con security inalcanzable (CI) confirmar-otp da 503 y el pendiente no cambia; con security real (e2e),
+// security no tiene OTP para esta negociación y responde EXPIRADO: 202 y el pendiente se descarta. Se reinicia en cada
+// siembra.
+db.pending_otp.deleteMany({ idNegociacion: "NEG-A1-HTTP" });
+db.pending_otp.insertOne({
+  idNegociacion: "NEG-A1-HTTP", rutEmpresa: "KARATE-A1-EMP", rutOperador: "op-karate-a1", rolActor: "PAGADOR",
+  estado: "PENDIENTE_OTP", respuestasOtp: 0, fechaActualizacion: new Date()
+});
+
 print("seed ms-negociador-orq: negociacion=" + db.negociacion.countDocuments({ _id: NEG })
   + " factura=" + db.Facturas.countDocuments({ _id: NUM })
   + " endosos(previos borrados)=" + db.endosos.countDocuments({ negociacionId: NEG }));

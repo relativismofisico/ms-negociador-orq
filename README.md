@@ -692,12 +692,14 @@ Validando OTP...
 
 | Código HTTP | Descripción |
 |---|---|
-| 202 | OTP recibido, validación en procesamiento asíncrono |
+| 202 | OTP validado por security (Fase 28d, A1: síncrono, por HTTP) y la firma siguió: correcto → firma; incorrecto con intentos → el pendiente sigue esperando el código |
 | 400 | Cuerpo malformado |
 | 401 | Token JWT inválido |
 | 403 | Rol no autorizado |
 | 404 | Negociación no encontrada |
+| 409 | `OTP_SIN_SOLICITUD_PENDIENTE`: no hay un pendiente del actor que espere el código (o ya se firmó) |
 | 422 | OTP inválido o expirado |
+| 503 | `SERVICIO_DEPENDIENTE_NO_DISPONIBLE`: security caído, lento o 5xx; nada cambió y se puede reintentar |
 | 500 | Error interno |
 
 ---
@@ -1606,6 +1608,12 @@ db.outbox_event.updateOne(
 db.outbox_event.deleteOne({ _id: ObjectId("<id>"), msPropietario: "ms-negociador-orq", fallido: true })
 ```
 
+**Política de fallidos (Fase 28d, 2.4):** los fallidos **nunca se borran solos**. Se conservan para revisión manual y,
+mientras exista alguno, la limpieza de cada 10 minutos deja el log ERROR `[OUTBOX-FALLIDO] … N evento(s) fallido(s)`
+(filtro de alerta). Solo se descartan con el `deleteOne` de arriba, como decisión explícita. A un `otp.validate`
+fallido se le retira el código del payload (`otp: null`, `otpRetirado: true`, log `[OUTBOX-OTP-RETIRADO]`); el resto
+del evento se conserva.
+
 
 ## Firma por OTP: estados, reintentos e idempotencia (Fase 28c)
 
@@ -1712,6 +1720,29 @@ la identificación de la factura por CUFE (punto C).
   - Propiedades `otp.validacion.security-base-url` (`SECURITY_UTIL_BASE_URL`), `otp.validacion.timeout` (3 s) y
     `security.act-as-operario-service-secret` (`ACT_AS_OPERARIO_SERVICE_SECRET`, sin valor por defecto: se exige al
     usarlo).
+
+## Opción A, A1: OTP por HTTP en la firma y el código fuera del outbox (Fase 28d)
+
+- **`POST /negociaciones/confirmar-otp`** valida el código por HTTP (`ConfirmacionOtpServiceImpl`): llama a
+  `POST /auth/internal/otp/validacion` de ms-security-util (#88) con la clave `idNegociacion|rutEmpresa|rutOperador|n`
+  (ver "Opción A: base") y entrega la respuesta a la misma lógica de firma que `otp.validate.response`
+  (`FirmaOtpService`): incorrecto con intentos → sigue esperando; otro rechazo → se descarta; correcto → firma.
+  - Ya **no publica `otp.validate`**: el código no pasa por el outbox ni por Kafka.
+  - Security caído, lento o 5xx: **503** sin cambiar nada (ni el estado ni `n`); el actor reintenta con la misma clave.
+  - El código ni un hash suyo salen en los logs.
+  - **Transición:** el consumidor de `otp.validate.response` sigue activo para las validaciones pedidas por Kafka antes
+    del despliegue. Las dos vías terminan en `FirmaOtpService`, idempotente por pendiente y `otpId`.
+  - **Orden de despliegue:** security (#88) primero, después negociador. Variables sin valor por defecto:
+    `SECURITY_UTIL_BASE_URL` y `ACT_AS_OPERARIO_SERVICE_SECRET` (el mismo valor en todos los servicios del ambiente).
+- **2.4, el código tecleado en el outbox viejo** (`outbox_event`): hasta la A1, un `otp.validate` enviado quedaba con el
+  código en claro 30-31 días (retención diaria de 30 días) y un fallido, para siempre. Ahora, solo para ese tipo:
+  - los enviados se borran en una limpieza propia (`OutboxScheduler.limpiarValidacionesOtp`, ShedLock) cada 10 minutos
+    (`outbox.limpieza.otp-validacion.cron`, `OUTBOX_LIMPIEZA_OTP_VALIDACION_CRON`), con retención 0
+    (`outbox.limpieza.otp-validacion.retencion`, `OUTBOX_LIMPIEZA_OTP_VALIDACION_RETENCION`, ISO-8601);
+  - los fallidos se conservan (política de fallidos del runbook) y se les retira el código;
+  - los pendientes de antes del despliegue se publican como siempre y se borran al enviarse.
+  - Los demás tipos del outbox siguen con la retención de 30 días (`outbox.limpieza.retencion-dias`).
+  - No toca ms-commons-util: este outbox es propio del negociador.
 
 ## Identificación de la factura por CUFE (Fase 28d, punto C, fase 1)
 

@@ -32,7 +32,8 @@ import org.springframework.web.client.RestClientException;
  *
  * <ul>
  *   <li>Security caído, timeout o 5xx: {@link ServicioDependienteNoDisponibleException} (503); quien llama no cambia el
- *       pendiente y el reintento usa la misma clave de idempotencia.</li>
+ *       pendiente y el reintento usa la misma clave de idempotencia. Sin {@code SECURITY_UTIL_BASE_URL}, también 503
+ *       (con log ERROR de configuración).</li>
  *   <li>4xx (configuración: secreto, subject no autorizado, cuerpo inválido): error con el código HTTP en el log, sin
  *       el cuerpo.</li>
  *   <li>El código no se escribe en ningún log; la URL base tampoco.</li>
@@ -77,7 +78,11 @@ public class ValidacionOtpHttpAdapter implements ValidacionOtpOutputPort {
     @Override
     public ValidacionOtp.Resultado validar(final ValidacionOtp.Solicitud solicitud) {
         if (baseUrl == null || baseUrl.isBlank()) {
-            throw new IllegalStateException("[OTP-HTTP] falta otp.validacion.security-base-url (SECURITY_UTIL_BASE_URL)");
+            // Fase 28d (A1): configuración incompleta. Para el actor es lo mismo que security caído (503, nada cambia);
+            // el ERROR deja la causa a operaciones.
+            log.error("[OTP-HTTP] falta otp.validacion.security-base-url (SECURITY_UTIL_BASE_URL): no se puede validar el "
+                    + "OTP de la negociación {}", solicitud.idNegociacion());
+            throw new ServicioDependienteNoDisponibleException(NO_DISPONIBLE);
         }
         final Map<String, Object> cuerpo = new LinkedHashMap<>();
         cuerpo.put("idNegociacion", solicitud.idNegociacion());

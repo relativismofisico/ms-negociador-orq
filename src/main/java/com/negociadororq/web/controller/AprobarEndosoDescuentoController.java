@@ -4,6 +4,7 @@ import com.factoring.commons.util.IpUtils;
 import com.negociadororq.application.dto.AprobacionRequestDto;
 import com.negociadororq.application.dto.ConfirmacionOtpRequestDto;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoService;
+import com.negociadororq.application.service.ConfirmacionOtpService;
 import com.negociadororq.web.exception.ErrorResponse;
 import com.negociadororq.web.security.CompanyOwnershipGuard;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,6 +34,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class AprobarEndosoDescuentoController {
 
     private final AprobacionEndosoDescuentoService service;
+
+    /** Fase 28d (A1): confirmación por HTTP contra security. */
+    private final ConfirmacionOtpService confirmacionOtp;
 
     private final CompanyOwnershipGuard companyOwnership;
 
@@ -111,7 +115,7 @@ public class AprobarEndosoDescuentoController {
         String ip = IpUtils.obtenerIp(httpRequest);
         request.setIpAprobacion(ip);
         companyOwnership.exigirActorEsLlamador(request.getRutEmpresa(), request.getRutOperador());
-        service.confirmarOtp(request);
+        confirmacionOtp.confirmarOtp(request);
         return ResponseEntity.accepted().body("Validando OTP...");
     }
 }

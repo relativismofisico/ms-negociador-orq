@@ -103,6 +103,25 @@ class FirmaOtpServiceImplSpec extends Specification {
         0 * pendientes.save(_)
     }
 
+    def "Fase 28d (A1): la misma validación repetida (HTTP y luego otp.validate.response) con la solicitud en #estado se ignora: sin firmar, sin alerta ni aviso"() {
+        given:
+        def p = pendiente(estado)
+        p.otpId = "77"
+        pendientes.findByClave("NEG-1", _, _) >> Optional.of(p)
+
+        when:
+        servicio.procesarValidacion(valido())
+
+        then:
+        0 * aprobacion.aprobarInterno(_)
+        0 * pendientes.save(_)
+        0 * alerta._
+        0 * notificaciones._
+
+        where:
+        estado << ["FIRMADO", "FALLO_FIRMA", "ROL_NO_PERMITIDO"]
+    }
+
     def "una validación de otra empresa o con otro otpId mientras hay una firma en curso se ignora"() {
         given:
         pendientes.findByClave("NEG-1", _, _) >> Optional.of(p)
