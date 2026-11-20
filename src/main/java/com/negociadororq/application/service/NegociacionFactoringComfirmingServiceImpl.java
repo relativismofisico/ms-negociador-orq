@@ -14,17 +14,22 @@ import java.util.stream.Collectors;
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.NegociacionResponseDto;
 import com.negociadororq.application.exception.AccionNoPermitidaException;
+import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.NegociadorException;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
+import com.negociadororq.application.exception.ServicioDependienteNoDisponibleException;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOperationOutputPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.CompanySectionVerificationOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.FacturaPatchOutputPort;
+import com.negociadororq.application.port.output.MarcaNegociacionOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
+import com.negociadororq.application.port.output.OperacionPendienteOutputPort;
+import com.negociadororq.application.port.output.TransaccionMongoOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.domain.enums.EstadoNegociacion;
 import com.negociadororq.domain.model.Company;
@@ -32,6 +37,8 @@ import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
 import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Negociacion;
+import com.negociadororq.domain.model.OperacionPendiente;
+import com.negociadororq.domain.model.TipoOperacionPendiente;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +71,17 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final FacturaPatchOutputPort facturaPatchPort;
     private final ClockPort clock;
     private final AuditoriaNegociacionService auditoria;
+    /** Fase 28d (A2): transacción Mongo de la creación (marcador, negociación, facturas y correo). */
+    private final TransaccionMongoOutputPort transaccionMongo;
+    /** Fase 28d (A2): marcador único por negociación (CREADA o CANCELADA). */
+    private final MarcaNegociacionOutputPort marca;
+    /** Fase 28d (A2): operaciones CREAR_NEGOCIACION (CUPOS_DESCONTADOS → COMPLETADA). */
+    private final OperacionPendienteOutputPort operaciones;
+    /** Fase 28d (A2): reversión exacta de lo descontado si la creación se aborta. */
+    private final ReversionExactaService reversionExacta;
+
+    /** Fase 28d (A2): código del 409 de una creación que el reconciliador ya canceló. */
+    static final String NEGOCIACION_CANCELADA = "NEGOCIACION_CANCELADA";
 
     /**
      * Crea una negociación procesando factura a factura.
@@ -76,7 +94,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
      * </ul>
      */
     @Override
-    @Transactional
     public NegociacionResponseDto crearNegociacion(NegociacionRequestDto request) {
 
 
@@ -133,14 +150,24 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                         idNegociacion);
                 facturasAceptadas.add(procesada);
 
-            } catch (Exception e) {
-                log.log(java.util.logging.Level.SEVERE, String.format("Error procesando factura %s", facturaReq.getNumeroFactura()), e);
-
-                // El motivo viaja en la respuesta (errores) y queda guardado en la negociación: solo el
-                // mensaje de una excepción del dominio; el de cualquier otra (BD, red, librerías) va al log.
+            } catch (NegociadorException e) {
+                if (e instanceof ServicioDependienteNoDisponibleException) {
+                    abortar(idNegociacion, facturasAceptadas, e);
+                    throw e;
+                }
+                // Rechazo de negocio (sin cupo, vigencia, rol...): como siempre, esa factura queda fuera con su motivo y
+                // las demás se negocian. Su transacción MySQL se revirtió: no descontó nada.
+                log.info(String.format("Factura %s no negociada: %s", facturaReq.getNumeroFactura(), e.getMessage()));
                 String motivo = motivoRechazo(e);
                 errores.add(motivo);
                 facturasRechazadas.add(facturaReq.getNumeroFactura() + " -> " + motivo);
+            } catch (RuntimeException e) {
+                // Fase 28d (A2, decisión de John): un fallo técnico (BD, caída, error que no es de negocio) aborta TODA la
+                // creación y devuelve exacto lo ya descontado en las facturas anteriores (plantilla A una vez).
+                log.log(java.util.logging.Level.SEVERE, String.format("Error técnico procesando la factura %s: se aborta "
+                        + "la creación de la negociación %s", facturaReq.getNumeroFactura(), idNegociacion), e);
+                abortar(idNegociacion, facturasAceptadas, e);
+                throw e;
             }
         }
 
@@ -200,15 +227,15 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         negociacion.setErrores(allErrores);
         negociacion.setFechaCreacion(clock.now());
         negociacion.setFechaUltimaActualizacion(clock.now());
-        negociacion = negociacionPort.save(negociacion);
+        negociacion = guardarEnMongo(request, negociacion, facturasAceptadas);
 
-        // El id de la negociación solo existe tras guardarla; se deja registrado en cada
-        // factura aceptada para poder sub-agrupar facturas liquidadas por negociación.
-        String idNegociacionGuardada = negociacion.getId();
-        facturasAceptadas.forEach(fn ->
-                facturaPatchPort.actualizarNegociacionIdPorCufe(ResolutorFactura.referencia(fn), idNegociacionGuardada));
-
-        notificacionService.notificarCreacionNegociacion(negociacion);
+        // Fase 28d (A2): el paso Mongo terminó; las operaciones de cada factura quedan COMPLETADA. Si este CAS no llega
+        // (caída), el reconciliador ve el marcador CREADA y completa.
+        for (FacturaNegociada fn : facturasAceptadas) {
+            operaciones.transicionar(TipoOperacionPendiente.CREAR_NEGOCIACION,
+                    OperacionPendiente.clave(idNegociacion, fn.getCufe()), ReversionExactaService.CUPOS_DESCONTADOS,
+                    ReversionExactaService.COMPLETADA);
+        }
         auditoria.negociacionCreada(negociacion, request, facturasRechazadas.size());
 
         // preparar respuesta
@@ -385,6 +412,65 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
      * Motivo de rechazo de una factura apto para el cliente: el mensaje de las excepciones del dominio
      * ({@link NegociadorException}) está escrito para él; cualquier otra recibe un mensaje fijo.
      */
+    /**
+     * Fase 28d (A2): UNA transacción Mongo con el marcador CREADA (índice único por {@code _id}), la negociación con el id
+     * generado antes de los cupos, las facturas NEGOCIADA con su {@code negociacionId} y el correo de creación (outbox
+     * Mongo, id determinista). Si el reconciliador ya puso CANCELADA (la creación tardó más que la gracia), el marcador
+     * choca, la transacción se aborta y el cliente recibe un 409 claro: sus cupos se devuelven (o ya se devolvieron).
+     * Un fallo técnico de Mongo deja la creación al reconciliador (CUPOS_DESCONTADOS), que completa o revierte exacto.
+     */
+    private Negociacion guardarEnMongo(NegociacionRequestDto request, Negociacion negociacion,
+            List<FacturaNegociada> facturasAceptadas) {
+        String id = negociacion.getId();
+        try {
+            return transaccionMongo.ejecutar(() -> {
+                if (!marca.crear(id, MarcaNegociacionOutputPort.Tipo.CREADA)) {
+                    throw new ConflictoException("La negociación tardó demasiado en completarse y se canceló; los cupos "
+                            + "reservados se restablecen. Vuelve a intentarlo.", NEGOCIACION_CANCELADA);
+                }
+                Negociacion guardada = negociacionPort.save(negociacion);
+                for (FacturaNegociada fn : facturasAceptadas) {
+                    procesarFacturaNegociacionService.marcarComoNegociada(request, fn);
+                    facturaPatchPort.actualizarNegociacionIdPorCufe(ResolutorFactura.referencia(fn), id);
+                }
+                notificacionService.notificarCreacionNegociacion(guardada);
+                return guardada;
+            });
+        } catch (ConflictoException e) {
+            log.warning(String.format("[NEGOCIACION-CANCELADA] %s: la creación llegó después de la cancelación del "
+                    + "reconciliador; no se crea", id));
+            throw e;
+        }
+    }
+
+    /**
+     * Fase 28d (A2): aborta la creación por un fallo técnico. Pone primero el marcador CANCELADA (si la negociación ya
+     * existiera en Mongo, no revierte: el reconciliador completa) y devuelve exacto lo descontado en cada factura ya
+     * procesada, con la plantilla A. Si la reversión falla aquí, las operaciones siguen en CUPOS_DESCONTADOS y las
+     * termina el reconciliador.
+     */
+    private void abortar(String idNegociacion, List<FacturaNegociada> procesadas, RuntimeException causa) {
+        if (procesadas.isEmpty()) {
+            return;
+        }
+        boolean cancelada = marca.crear(idNegociacion, MarcaNegociacionOutputPort.Tipo.CANCELADA)
+                || marca.buscar(idNegociacion).filter(t -> t == MarcaNegociacionOutputPort.Tipo.CANCELADA).isPresent();
+        if (!cancelada) {
+            log.warning(String.format("[NEGOCIACION-ABORTADA] %s: ya está en Mongo; la completa el reconciliador",
+                    idNegociacion));
+            return;
+        }
+        for (FacturaNegociada fn : procesadas) {
+            try {
+                reversionExacta.revertir(TipoOperacionPendiente.CREAR_NEGOCIACION, idNegociacion, fn.getCufe(),
+                        "creación abortada por un error técnico (" + causa.getClass().getSimpleName() + ")");
+            } catch (RuntimeException e) {
+                log.log(java.util.logging.Level.SEVERE, String.format("[NEGOCIACION-ABORTADA] %s factura %s: la "
+                        + "reversión inmediata falló; la termina el reconciliador", idNegociacion, fn.getNumeroFactura()), e);
+            }
+        }
+    }
+
     private static String motivoRechazo(Exception e) {
         if (e instanceof NegociadorException) {
             return e.getMessage();

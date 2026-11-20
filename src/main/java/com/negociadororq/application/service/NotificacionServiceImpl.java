@@ -82,7 +82,11 @@ public class NotificacionServiceImpl implements NotificacionService {
                 "facturas", detalleFacturas(negociacion)
         );
 
+        // Fase 28d (A2): id determinista: la creación escribe este correo en su transacción Mongo; si el paso se repite
+        // (reconciliador), no se registra otro.
+        String idEvento = "negociacion-creada:" + negociacion.getId();
         NotificacionEmailEvent event = NotificacionEmailEvent.builder()
+                .idEvento(idEvento)
                 .idNegociacion(negociacion.getId())
                 .destinatarios(destinatarios)
                 .asunto("NEGOCIACION")
@@ -91,7 +95,7 @@ public class NotificacionServiceImpl implements NotificacionService {
                 .fecha(clock.now())
                 .build();
 
-        outboxService.guardarEvento(negociacion.getId(), topicNotificacionEmail, event);
+        outboxService.guardarEventoConId(idEvento, negociacion.getId(), topicNotificacionEmail, event);
     }
 
     // ------------------------------------------------------------

@@ -32,8 +32,58 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuditoriaNegociacionService {
 
+    /** Fase 28d (A2): acción de auditoría del descuento de cupos de una factura al crear la negociación. */
+    public static final String CUPOS_DESCONTADOS = "CUPOS_DESCONTADOS";
+    /** Fase 28d (A2): acción de auditoría de la devolución exacta de esos cupos. */
+    public static final String CUPOS_REVERTIDOS = "CUPOS_REVERTIDOS";
+
     private final AuditoriaOutputPort auditoria;
     private final ContextoAuditoriaOutputPort contexto;
+
+    /**
+     * Fase 28d (A2): {@code CUPOS_DESCONTADOS}. Se registra dentro de la transacción MySQL del descuento (outbox JDBC):
+     * queda atómico con él. Sin montos por cupo ni ids internos.
+     *
+     * @param negociacionId negociación
+     * @param cufe          factura (la entidad auditada es {@code FACTURA:<cufe>})
+     * @param numeroFactura número de la factura
+     * @param cupos         cuántos cupos se tocaron
+     */
+    public void cuposDescontados(final String negociacionId, final String cufe, final String numeroFactura,
+            final int cupos) {
+        auditoria.registrar(AuditoriaAccionEvent.builder()
+                .accion(CUPOS_DESCONTADOS)
+                .entidad(EntidadTipo.FACTURA, cufe)
+                .actor(contexto.actorActual())
+                .canal(Canal.WEB)
+                .ip(contexto.ipActual())
+                .detalle("idNegociacion", negociacionId)
+                .detalle("numeroFactura", numeroFactura)
+                .detalle("cupos", cupos)
+                .build());
+    }
+
+    /**
+     * Fase 28d (A2): {@code CUPOS_REVERTIDOS}. Se registra dentro de la transacción MySQL de la reversión exacta: queda
+     * atómico con ella.
+     *
+     * @param negociacionId negociación
+     * @param cufe          factura
+     * @param camino        quién revirtió (liquidación fallida, rechazo, endoso, vencimiento, creación cancelada)
+     * @param cupos         cuántos cupos se devolvieron
+     */
+    public void cuposRevertidos(final String negociacionId, final String cufe, final String camino, final int cupos) {
+        auditoria.registrar(AuditoriaAccionEvent.builder()
+                .accion(CUPOS_REVERTIDOS)
+                .entidad(EntidadTipo.FACTURA, cufe)
+                .actor(contexto.actorActual())
+                .canal(Canal.WEB)
+                .ip(contexto.ipActual())
+                .detalle("idNegociacion", negociacionId)
+                .detalle("camino", camino)
+                .detalle("cupos", cupos)
+                .build());
+    }
 
     /**
      * Guarda en la solicitud de OTP quién la hizo y en qué request, para auditar la aprobación cuando llegue el

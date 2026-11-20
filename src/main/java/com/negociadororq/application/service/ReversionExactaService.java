@@ -20,7 +20,10 @@ import org.springframework.transaction.support.TransactionOperations;
  *       una devolución falla, nada queda confirmado (ni el CAS).</li>
  *   <li>CAS perdido: otro camino (o una entrega concurrente) ya revirtió; no se devuelve nada otra vez.</li>
  *   <li>Sin registro de lo descontado (negociaciones anteriores al cambio) o con otro formato: no se adivina. Queda una
- *       operación del camino en {@code REVISION_MANUAL} con {@code [OPERACION-PENDIENTE-ATASCADA]} y el contador.</li>
+ *       operación del camino en {@code REVISION_MANUAL} con {@code [OPERACION-PENDIENTE-ATASCADA]} y el contador, y la
+ *       plantilla B (2.8) en la misma transacción.</li>
+ *   <li>En la transacción de la devolución van también la auditoría {@code CUPOS_REVERTIDOS} y la plantilla A
+ *       (outbox JDBC, id determinista): o se confirman con la devolución o no se confirma nada.</li>
  * </ul>
  */
 public class ReversionExactaService {
@@ -49,19 +52,26 @@ public class ReversionExactaService {
     private final CupoReversionService cupos;
     private final IndirectFunderOfferSupplierQuotaOutputPort indirecto;
     private final TransactionOperations transaccion;
+    private final AuditoriaNegociacionService auditoria;
+    private final CorreosReversionService correos;
 
     /**
      * @param operaciones {@code operacion_pendiente}
      * @param cupos       devoluciones de operador, empresa y fondeadores
      * @param indirecto   devolución de la oferta indirecta de FACTORING
      * @param transaccion transacción MySQL
+     * @param auditoria   auditoría CUPOS_REVERTIDOS (outbox JDBC, en la transacción)
+     * @param correos     plantillas A y B (outbox JDBC, en la transacción)
      */
     public ReversionExactaService(final OperacionPendienteOutputPort operaciones, final CupoReversionService cupos,
-            final IndirectFunderOfferSupplierQuotaOutputPort indirecto, final TransactionOperations transaccion) {
+            final IndirectFunderOfferSupplierQuotaOutputPort indirecto, final TransactionOperations transaccion,
+            final AuditoriaNegociacionService auditoria, final CorreosReversionService correos) {
         this.operaciones = operaciones;
         this.cupos = cupos;
         this.indirecto = indirecto;
         this.transaccion = transaccion;
+        this.auditoria = auditoria;
+        this.correos = correos;
     }
 
     /**
@@ -77,7 +87,7 @@ public class ReversionExactaService {
         final Optional<OperacionPendiente> registro =
                 operaciones.buscar(TipoOperacionPendiente.CREAR_NEGOCIACION, clave);
         if (registro.isEmpty() || registro.get().datos() == null) {
-            atascada(camino, clave, motivo, "sin registro de lo descontado");
+            atascada(camino, negociacionId, cufe, null, motivo, "sin registro de lo descontado");
             return Resultado.SIN_REGISTRO;
         }
         if (REVERTIDA.equals(registro.get().estado())) {
@@ -87,7 +97,7 @@ public class ReversionExactaService {
         try {
             descuento = DescuentoCupos.deJson(registro.get().datos());
         } catch (IllegalArgumentException e) {
-            atascada(camino, clave, motivo, e.getMessage());
+            atascada(camino, negociacionId, cufe, null, motivo, e.getMessage());
             return Resultado.SIN_REGISTRO;
         }
         final Boolean revertida = transaccion.execute(estado -> {
@@ -97,6 +107,8 @@ public class ReversionExactaService {
                 return false;
             }
             descuento.descuentos().forEach(this::devolver);
+            auditoria.cuposRevertidos(negociacionId, cufe, camino.name(), descuento.descuentos().size());
+            correos.revertida(negociacionId, cufe, descuento.contexto());
             return true;
         });
         if (Boolean.TRUE.equals(revertida)) {
@@ -124,10 +136,29 @@ public class ReversionExactaService {
         }
     }
 
-    private void atascada(final TipoOperacionPendiente camino, final String clave, final String motivo,
-            final String causa) {
-        if (operaciones.registrar(camino, clave, ReconciliadorOperacionesService.REVISION_MANUAL,
-                "{\"motivo\":\"" + texto(motivo) + "\",\"causa\":\"" + texto(causa) + "\"}")) {
+    /**
+     * La reversión no puede terminar: la operación del camino pasa a REVISION_MANUAL y, en la misma transacción, la
+     * plantilla B (2.8). Una sola vez por camino y factura (alta idempotente y correo con id determinista).
+     *
+     * @param camino        quién intentó revertir
+     * @param negociacionId negociación
+     * @param cufe          factura
+     * @param contexto      contexto del registro, o null
+     * @param motivo        motivo de la reversión
+     * @param causa         por qué no pudo terminar
+     */
+    public void atascada(final TipoOperacionPendiente camino, final String negociacionId, final String cufe,
+            final DescuentoCupos.Contexto contexto, final String motivo, final String causa) {
+        final String clave = OperacionPendiente.clave(negociacionId, cufe);
+        final Boolean nueva = transaccion.execute(estado -> {
+            if (!operaciones.registrar(camino, clave, ReconciliadorOperacionesService.REVISION_MANUAL,
+                    "{\"motivo\":\"" + texto(motivo) + "\",\"causa\":\"" + texto(causa) + "\"}")) {
+                return false;
+            }
+            correos.enRevision(negociacionId, cufe, contexto);
+            return true;
+        });
+        if (Boolean.TRUE.equals(nueva)) {
             ReconciliadorOperacionesService.contarAtascada();
             LOG.severe(() -> "[OPERACION-PENDIENTE-ATASCADA] " + camino + " " + clave + " pasa a "
                     + ReconciliadorOperacionesService.REVISION_MANUAL + ": " + causa
