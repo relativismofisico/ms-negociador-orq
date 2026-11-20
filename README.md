@@ -1765,3 +1765,64 @@ no lee ni escribe `Facturas` por el número solo.
 - Se quitó `findFirstByNumeroFacturaOrderByIdDesc` (devolvía "la más reciente") y el `FacturaService` sin uso.
 - Sin migración: no hay datos reales. Fase 2 (consultas, auditoría, CSV de conciliación y front) aparte.
 
+
+## Opción A, A2: crear negociación mixta y auditoría por el outbox JDBC (Fase 28d)
+
+### Flujo de creación
+1. El id de la negociación se genera **antes** de tocar cupos (`NegociacionOutputPort.nuevoId()`).
+2. **Por factura, una transacción MySQL**: descuento de cupos, fila `operacion_pendiente` (`CREAR_NEGOCIACION`,
+   clave `negociacion|cufe`, estado `CUPOS_DESCONTADOS`) con lo descontado exacto y su contexto, y la auditoría
+   `CUPOS_DESCONTADOS` en `outbox_negociador`.
+3. **Una transacción Mongo** (MongoTransactionManager propio, no es bean: `@Transactional` sigue siendo solo JPA):
+   marcador `negociacion_marca` `{_id: <id>, tipo: CREADA}` (único), la negociación, las facturas `NEGOCIADA` y el correo
+   de creación con id determinista `negociacion-creada:<id>` (outbox Mongo propio).
+4. CAS `CUPOS_DESCONTADOS → COMPLETADA` por factura y auditoría `NEGOCIACION_CREADA`.
+
+**Rechazo de negocio** (sin cupo, vigencia, rol, factura no negociable…): esa factura queda fuera con su motivo y las
+demás se negocian, como siempre; su transacción MySQL se revirtió y no descontó nada. **Fallo técnico** (BD, caída,
+error que no es de negocio, decisión de John): aborta toda la creación, pone el marcador `CANCELADA` y revierte exacto lo
+ya descontado en las facturas anteriores (plantilla A una vez por factura). La excepción sube (500/503 como antes).
+
+### Reconciliador (`ReanudadorCrearNegociacion`)
+Una operación `CUPOS_DESCONTADOS` sin cambios pasada la gracia (`OPERACIONES_RECONCILIADOR_GRACIA`, por defecto 2 min):
+- inserta primero el marcador `CANCELADA`; si entra, la creación no llegó a Mongo: **revierte exacto** con la plantilla A;
+- si choca con `CANCELADA` (otra factura de la misma negociación ya la canceló): revierte también;
+- si choca con `CREADA`: la negociación existe; **completa** (repara `negociacionId` de la factura y CAS a `COMPLETADA`).
+
+Una petición lenta que llega a Mongo después de la cancelación encuentra el marcador `CANCELADA`: la transacción Mongo se
+deshace entera y responde **409 `NEGOCIACION_CANCELADA`** ("La negociación tardó demasiado en completarse y se canceló;
+los cupos reservados se restablecen. Vuelve a intentarlo."), nunca un 500.
+
+### Auditoría por el outbox JDBC de commons (cambio de comportamiento deliberado)
+**Toda** la auditoría del negociador sale por el outbox JDBC de ms-commons-util 0.6.2 (tabla `outbox_negociador`, V4 en
+Flyway y `db/manual/V4__outbox_negociador.sql`). Mismo topic, mismo formato de evento y mismas métricas que antes; el relay
+confirma con ack, reintenta con backoff y deja `FALLIDO` lo que agota los intentos.
+
+| Auditoría | ¿Atómica con el cambio? |
+|---|---|
+| `CUPOS_DESCONTADOS` (creación) | **Sí**: en la transacción MySQL del descuento |
+| `CUPOS_REVERTIDOS` (todas las reversiones) | **Sí**: en la transacción MySQL de la reversión |
+| `NEGOCIACION_CREADA` | No: después de la transacción Mongo (si el proceso muere entre ambas, falta el registro; la negociación y los cupos son correctos) |
+| `ENDOSO_REGISTRADO`, `ENDOSO_FIRMADO`, `NEGOCIACION_FACTURA_APROBADA`/`_RECHAZADA`, `NEGOCIACION_ESTADO_CAMBIADO` (y el cierre de la solicitud) | No: flujos solo Mongo; la fila del outbox MySQL se escribe después del cambio en Mongo |
+
+Los correos de las plantillas **A** (`OPERACION_REVERTIDA`) y **B** (`OPERACION_EN_REVISION`) van por el mismo outbox,
+en la misma transacción MySQL de la reversión o del paso a `REVISION_MANUAL`, con id `SHA-256(negociacion|cufe|A/B)`:
+un reintento no los duplica. Destinatarios: la empresa que inició (FACTORING → proveedor, CONFIRMING → pagador) y su
+contraparte. Sin CUFE ni datos internos en el correo.
+
+### Configuración, retención y eventos fallidos
+| Variable | Por defecto | Uso |
+|---|---|---|
+| `AUDITORIA_OUTBOX_ENABLED` | `true` | apagado vuelve al outbox Mongo viejo para la auditoría; los correos A/B **exigen** el outbox |
+| `AUDITORIA_OUTBOX_JDBC_TABLA` | `outbox_negociador` | tabla del outbox |
+| `AUDITORIA_OUTBOX_RETENCION` | `P30D` | se borran solo los `ENVIADO` más viejos que esto (limpieza cada hora) |
+| `AUDITORIA_OUTBOX_TIMEOUT_ACK` | `PT30S` | espera del ack de Kafka |
+
+Los `FALLIDO` **nunca** se borran solos: quedan con su `ultimo_error`, el gauge de fallidos los cuenta y alerta. Se
+reencolan a mano (`UPDATE outbox_negociador SET estado='PENDIENTE', intentos=0, proximo_intento=NOW(3) WHERE id=…`)
+cuando la causa está resuelta; ver "Runbook: eventos fallidos del outbox".
+
+### Despliegue
+1. `db/manual/V4__outbox_negociador.sql` antes de arrancar (en entornos con Flyway apagado).
+2. `db/manual` de Mongo: índice único implícito por `_id` en `negociacion_marca` (no requiere script).
+3. ms-commons-util 0.6.2 publicada antes.
