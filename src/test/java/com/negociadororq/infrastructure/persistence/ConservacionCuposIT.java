@@ -254,9 +254,10 @@ class ConservacionCuposIT {
         revertir(camino, e);
         assertIguales(inicial, cupos());
         assertThat(estado(e)).isEqualTo(ReversionExactaService.REVERTIDA);
-        // Fase 28d (A4): la plantilla A va en todos los caminos salvo la fallida, que avisa con su propio correo.
+        // Fase 28d (decisión de John): la plantilla A solo si ningún otro correo informa la reversión (no en el rechazo
+        // ni en la fallida, que tienen el suyo).
         long esperadoA = 1;
-        if (camino == Camino.LIQUIDACION_FALLIDA) {
+        if (camino == Camino.RECHAZO || camino == Camino.LIQUIDACION_FALLIDA) {
             esperadoA = 0;
         }
         assertThat(correosA(e)).isEqualTo(esperadoA);
@@ -275,31 +276,18 @@ class ConservacionCuposIT {
         CountDownLatch listos = new CountDownLatch(2);
         CountDownLatch largada = new CountDownLatch(1);
         List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
-        java.util.concurrent.atomic.AtomicReference<ReversionExactaService.Resultado> porFallida =
-                new java.util.concurrent.atomic.AtomicReference<>();
-        java.util.concurrent.atomic.AtomicReference<ReversionExactaService.Resultado> porRechazo =
-                new java.util.concurrent.atomic.AtomicReference<>();
-        Thread t1 = hilo(() -> porFallida.set(exacta.revertir(
-                com.negociadororq.domain.model.TipoOperacionPendiente.LIQUIDACION_FALLIDA, e.negociacionId, e.cufe,
-                "fallida")), listos, largada, fallos);
-        Thread t2 = hilo(() -> porRechazo.set(exacta.revertir(
-                com.negociadororq.domain.model.TipoOperacionPendiente.RECHAZO, e.negociacionId, e.cufe, "rechazo")),
-                listos, largada, fallos);
+        Thread t1 = hilo(() -> exacta.revertir(com.negociadororq.domain.model.TipoOperacionPendiente.LIQUIDACION_FALLIDA,
+                e.negociacionId, e.cufe, "fallida"), listos, largada, fallos);
+        Thread t2 = hilo(() -> exacta.revertir(com.negociadororq.domain.model.TipoOperacionPendiente.RECHAZO,
+                e.negociacionId, e.cufe, "rechazo"), listos, largada, fallos);
         listos.await();
         largada.countDown();
         t1.join();
         t2.join();
         assertThat(fallos).isEmpty();
         assertIguales(inicial, cupos());
-        // Exactamente uno devuelve; la plantilla A solo si ganó el rechazo (Fase 28d A4: la fallida tiene su correo).
-        assertThat(java.util.List.of(porFallida.get(), porRechazo.get()))
-                .containsExactlyInAnyOrder(ReversionExactaService.Resultado.REVERTIDA,
-                        ReversionExactaService.Resultado.YA_REVERTIDA);
-        long esperadoA = 0;
-        if (porRechazo.get() == ReversionExactaService.Resultado.REVERTIDA) {
-            esperadoA = 1;
-        }
-        assertThat(correosA(e)).isEqualTo(esperadoA);
+        // los dos caminos de la carrera (fallida y rechazo) tienen su propio correo: ninguno lleva la plantilla A
+        assertThat(correosA(e)).isZero();
     }
 
     @Test
@@ -331,7 +319,7 @@ class ConservacionCuposIT {
         exacta.revertir(com.negociadororq.domain.model.TipoOperacionPendiente.RECHAZO, e.negociacionId, e.cufe,
                 "rechazo");
         assertIguales(inicial, cupos());
-        assertThat(correosA(e)).isEqualTo(1);
+        assertThat(correosA(e)).as("el rechazo avisa con su propio correo, sin plantilla A").isZero();
     }
 
     // ─── apoyo ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -393,7 +381,7 @@ class ConservacionCuposIT {
                     notificacionService, exacta).revertirPorFactura(e.negociacionId, e.cufe, e.numero, "op-1", "fallo");
             case RECHAZO -> new AprobacionEndosoDescuentoServiceImpl(negociacionPort, facturaPatchPort, null, null,
                     exacta, companyPort, fondeadorQuotaPort, facturaPort, userPort, null, null, notificacionService, null,
-                    null, clock, "otp.requested", "liquidacion", null, null)
+                    null, clock, "otp.requested", "liquidacion", null)
                     .revertirCupos(e.negociacionId, e.negociada, "rechazo");
             case ENDOSO_RECHAZADO -> {
                 // La factura ya no está en la base: el endoso la rechaza y revierte sus cupos.

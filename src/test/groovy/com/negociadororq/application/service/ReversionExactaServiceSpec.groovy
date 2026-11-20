@@ -43,7 +43,7 @@ class ReversionExactaServiceSpec extends Specification {
         operaciones.buscar(TipoOperacionPendiente.CREAR_NEGOCIACION, "neg-1|CUFE-1") >> Optional.of(registro("COMPLETADA", datos(d)))
 
         when:
-        def r = servicio.revertir(TipoOperacionPendiente.RECHAZO, "neg-1", "CUFE-1", "rechazo")
+        def r = servicio.revertir(TipoOperacionPendiente.ENDOSO_RECHAZADO, "neg-1", "CUFE-1", "vigencia")
 
         then:
         r == ReversionExactaService.Resultado.REVERTIDA
@@ -53,27 +53,30 @@ class ReversionExactaServiceSpec extends Specification {
         1 * cupos.revertirCupoFondeadorFactoring(3L, 4L, 10.01G)
         1 * cupos.revertirCupoFondeadorConfirming(3L, 5L, 10.01G)
         1 * indirecto.devolverCupo(77L, 4L, 10.01G) >> 1
-        1 * auditoria.cuposRevertidos("neg-1", "CUFE-1", "RECHAZO", 5)
+        1 * auditoria.cuposRevertidos("neg-1", "CUFE-1", "ENDOSO_RECHAZADO", 5)
         1 * correos.revertida("neg-1", "CUFE-1", CTX)
     }
 
-    def "Fase 28d (A4): el camino de la fallida devuelve exacto pero sin plantilla A (ya tiene su correo)"() {
+    def "Fase 28d (decisión de John): #camino devuelve exacto pero sin plantilla A (ya tiene su propio correo)"() {
         given:
         operaciones.buscar(*_) >> Optional.of(registro("COMPLETADA",
                 datos([new DescuentoCupos.Descuento(DescuentoCupos.Tipo.OPERADOR, 1L, null, 1G)])))
         operaciones.transicionar(_, _, "COMPLETADA", "REVERTIDA") >> true
 
         when:
-        def r = servicio.revertir(TipoOperacionPendiente.LIQUIDACION_FALLIDA, "neg-1", "CUFE-1", "fallida")
+        def r = servicio.revertir(camino, "neg-1", "CUFE-1", "motivo")
 
         then:
         r == ReversionExactaService.Resultado.REVERTIDA
         1 * cupos.revertirCupoUsuario(1L, 1G)
-        1 * auditoria.cuposRevertidos("neg-1", "CUFE-1", "LIQUIDACION_FALLIDA", 1)
+        1 * auditoria.cuposRevertidos("neg-1", "CUFE-1", camino.name(), 1)
         0 * correos.revertida(*_)
+
+        where:
+        camino << [TipoOperacionPendiente.RECHAZO, TipoOperacionPendiente.LIQUIDACION_FALLIDA]
     }
 
-    def "Fase 28d (A4): la liquidación cancelada sí lleva la plantilla A"() {
+    def "Fase 28d (A4): la liquidación cancelada sí lleva la plantilla A (no tiene otro correo)"() {
         given:
         operaciones.buscar(*_) >> Optional.of(registro("COMPLETADA",
                 datos([new DescuentoCupos.Descuento(DescuentoCupos.Tipo.OPERADOR, 1L, null, 1G)])))
