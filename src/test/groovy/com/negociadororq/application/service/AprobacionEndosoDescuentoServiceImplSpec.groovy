@@ -1,5 +1,6 @@
 package com.negociadororq.application.service
 
+import com.negociadororq.domain.model.TipoOperacionPendiente
 import com.negociadororq.application.dto.AprobacionFacturaRequestDto
 import com.negociadororq.application.dto.AprobacionRequestDto
 import com.negociadororq.application.exception.ConflictoException
@@ -42,7 +43,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
     FacturaPatchOutputPort facturaPatchPort = Mock()
     EndosoPatchOutputPort endosoPatchPort = Mock()
     OutboxService outboxService = Mock()
-    CupoReversionService cupoReversionService = Mock()
+    ReversionExactaService reversionExacta = Mock()
     CompanyOutputPort companyPort = Mock()
     FondeadorQuotaOutputPort fondeadorQuotaPort = Mock()
     FacturaOutputPort facturaPort = Mock()
@@ -60,7 +61,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
 
     AprobacionEndosoDescuentoServiceImpl service = new AprobacionEndosoDescuentoServiceImpl(
             negociacionPort, facturaPatchPort, endosoPatchPort, outboxService,
-            cupoReversionService, companyPort, fondeadorQuotaPort, facturaPort,
+            reversionExacta, companyPort, fondeadorQuotaPort, facturaPort,
             userPort, pendingOtpPort, firmaEndosoService, notificacionService, endosoPort,
             documentoEndosoService, clock,
             "topic-otp-request", "topic-liquidacion", auditoriaNegociacion)
@@ -303,7 +304,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         then:
         1 * facturaPatchPort.actualizarEstadosPorCufe({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.RECHAZADO)
-        1 * cupoReversionService.revertirCupoUsuario(1L, _)
+        1 * reversionExacta.revertir(TipoOperacionPendiente.RECHAZO, _, _, _)
         resultado.estado == EstadoNegociacion.RECHAZADA.name()
     }
 
@@ -521,11 +522,10 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         def op = new Operacion("FACTORING", "DESC")
 
         when:
-        service.revertirCupos(fn, op, "EMP", "OP")
+        service.revertirCupos("neg-1", fn, "rechazo")
 
         then:
-        1 * cupoReversionService.revertirCupoFondeadorFactoring(30L, 40L, _)
-        0 * cupoReversionService.revertirCupoFondeadorConfirming(_, _, _)
+        1 * reversionExacta.revertir(TipoOperacionPendiente.RECHAZO, _, _, _)
     }
 
     def "revertirCupos con CONFIRMING revierte cupo fondeador confirming"() {
@@ -550,11 +550,10 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         def op = new Operacion("CONFIRMING", "PAGO")
 
         when:
-        service.revertirCupos(fn, op, "EMP-CF", "OP-CF")
+        service.revertirCupos("neg-1", fn, "rechazo")
 
         then:
-        1 * cupoReversionService.revertirCupoFondeadorConfirming(31L, 41L, _)
-        0 * cupoReversionService.revertirCupoFondeadorFactoring(_, _, _)
+        1 * reversionExacta.revertir(TipoOperacionPendiente.RECHAZO, _, _, _)
     }
 
     def "revertirCupos con valorNetoFactura no nulo usa ese valor"() {
@@ -578,10 +577,10 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         def op = new Operacion("FACTORING", "DESC")
 
         when:
-        service.revertirCupos(fn, op, "EMP", "OP")
+        service.revertirCupos("neg-1", fn, "rechazo")
 
         then:
-        1 * cupoReversionService.revertirCupoUsuario(1L, new BigDecimal("850.00"))
+        1 * reversionExacta.revertir(TipoOperacionPendiente.RECHAZO, _, _, _)
     }
 
     def "revertirCupos cuando valorFactura y valorNeto son null usa ZERO"() {
@@ -605,10 +604,10 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         def op = new Operacion("FACTORING", "DESC")
 
         when:
-        service.revertirCupos(fn, op, "EMP", "OP")
+        service.revertirCupos("neg-1", fn, "rechazo")
 
         then:
-        1 * cupoReversionService.revertirCupoUsuario(1L, BigDecimal.ZERO)
+        1 * reversionExacta.revertir(TipoOperacionPendiente.RECHAZO, _, _, _)
     }
 
     // ─── Fase 28c ─────────────────────────────────────────────────────────────

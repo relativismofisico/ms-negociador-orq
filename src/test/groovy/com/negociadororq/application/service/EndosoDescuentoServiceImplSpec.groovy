@@ -1,5 +1,6 @@
 package com.negociadororq.application.service
 
+import com.negociadororq.domain.model.TipoOperacionPendiente
 import com.negociadororq.application.dto.EndosoRequestDto
 import com.negociadororq.application.exception.PeticionInvalidaException
 import com.negociadororq.application.exception.RecursoNoEncontradoException
@@ -38,7 +39,7 @@ class EndosoDescuentoServiceImplSpec extends Specification {
     CompanyOutputPort companyPort = Mock()
     FondeadorQuotaOutputPort fondeadorQuotaPort = Mock()
     UserOutputPort userPort = Mock()
-    CupoReversionService cupoReversionService = Mock()
+    ReversionExactaService reversionExacta = Mock()
     ClockPort clock = Mock() {
         now() >> LocalDateTime.now()
     }
@@ -48,7 +49,7 @@ class EndosoDescuentoServiceImplSpec extends Specification {
     EndosoDescuentoServiceImpl service = new EndosoDescuentoServiceImpl(
             negociacionPort, endosoPort, facturaPort, notificacionService,
             facturaPatchPort, documentoEndosoService, negociacionPatchPort,
-            companyPort, fondeadorQuotaPort, userPort, cupoReversionService, clock, auditoriaNegociacion)
+            companyPort, fondeadorQuotaPort, userPort, reversionExacta, clock, auditoriaNegociacion)
 
     // idPorNit vacío por defecto -> companyPort.findByNit devuelve Optional.empty()
     // -> permiteEndosoGrupal siempre da false (comportamiento previo: un Endoso por
@@ -495,9 +496,7 @@ class EndosoDescuentoServiceImplSpec extends Specification {
         resultado.estadoEndoso == "RECHAZADO"
         resultado.facturasRechazadas.any { it.contains("vigencia del descuento") }
         0 * endosoPort.save(_)
-        1 * cupoReversionService.revertirCupoUsuario(9L, new BigDecimal("5000.00"))
-        1 * cupoReversionService.revertirCupoEmpresa(2L, new BigDecimal("5000.00"))
-        1 * cupoReversionService.revertirCupoFondeadorFactoring(1L, 2L, new BigDecimal("5000.00"))
+        1 * reversionExacta.revertir(TipoOperacionPendiente.ENDOSO_RECHAZADO, _, _, _)
         1 * facturaPort.save({ it.estadoNegociacion == "SIN_NEGOCIAR" })
     }
 
@@ -530,7 +529,7 @@ class EndosoDescuentoServiceImplSpec extends Specification {
         then:
         resultado.estadoEndoso == "PENDIENTE"
         resultado.facturasEndosadas.contains("FECI041")
-        0 * cupoReversionService.revertirCupoUsuario(_, _)
+        0 * reversionExacta.revertir(*_)
     }
 
     def "factura que no existe en BD reversa cupos usando el valor de FacturaNegociada"() {
@@ -557,9 +556,7 @@ class EndosoDescuentoServiceImplSpec extends Specification {
 
         then:
         resultado.estadoEndoso == "RECHAZADO"
-        1 * cupoReversionService.revertirCupoUsuario(9L, new BigDecimal("3000.00"))
-        1 * cupoReversionService.revertirCupoEmpresa(2L, new BigDecimal("3000.00"))
-        1 * cupoReversionService.revertirCupoFondeadorFactoring(1L, 2L, new BigDecimal("3000.00"))
+        1 * reversionExacta.revertir(TipoOperacionPendiente.ENDOSO_RECHAZADO, _, _, _)
         0 * facturaPort.save(_)
     }
 

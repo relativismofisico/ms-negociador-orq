@@ -33,6 +33,11 @@ public class NegociacionAdapter implements NegociacionOutputPort {
         return toDomain(repository.save(toDocument(negociacion)));
     }
 
+    @Override
+    public String nuevoId() {
+        return new org.bson.types.ObjectId().toHexString();
+    }
+
     private Negociacion toDomain(NegociacionDocument doc) {
         return Negociacion.builder()
                 .id(doc.getId())

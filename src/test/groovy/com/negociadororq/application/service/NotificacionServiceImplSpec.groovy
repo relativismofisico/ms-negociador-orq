@@ -66,7 +66,7 @@ class NotificacionServiceImplSpec extends Specification {
         service.notificarCreacionNegociacion(neg)
 
         then:
-        1 * outboxService.guardarEvento("neg-001", "topic-email", { it.tipoNotificacion == "NEGOCIACION_CREADA" })
+        1 * outboxService.guardarEventoConId("negociacion-creada:neg-001", "neg-001", "topic-email", { it.tipoNotificacion == "NEGOCIACION_CREADA" })
     }
 
     def "notificarCreacionNegociacion con facturas null usa lista vacia"() {
@@ -85,7 +85,7 @@ class NotificacionServiceImplSpec extends Specification {
         service.notificarCreacionNegociacion(neg)
 
         then:
-        1 * outboxService.guardarEvento("neg-002", "topic-email", {
+        1 * outboxService.guardarEventoConId("negociacion-creada:neg-002", "neg-002", "topic-email", {
             it.data.facturas == [] && it.data.nombresFondeadores == "N/A"
         })
     }
@@ -103,7 +103,7 @@ class NotificacionServiceImplSpec extends Specification {
         service.notificarCreacionNegociacion(neg)
 
         then:
-        1 * outboxService.guardarEvento("neg-003", "topic-email", { it.data.tipoOperacion == null })
+        1 * outboxService.guardarEventoConId("negociacion-creada:neg-003", "neg-003", "topic-email", { it.data.tipoOperacion == null })
     }
 
     def "notificarCreacionNegociacion resuelve nombres de pagador y proveedor via companyPort"() {
@@ -117,7 +117,7 @@ class NotificacionServiceImplSpec extends Specification {
         service.notificarCreacionNegociacion(neg)
 
         then:
-        1 * outboxService.guardarEvento("neg-001", "topic-email", {
+        1 * outboxService.guardarEventoConId("negociacion-creada:neg-001", "neg-001", "topic-email", {
             it.data.nombrePagador == "Pagador SA" && it.data.nombreProveedor == "Proveedor SA"
         })
     }
@@ -132,7 +132,7 @@ class NotificacionServiceImplSpec extends Specification {
         service.notificarCreacionNegociacion(neg)
 
         then:
-        1 * outboxService.guardarEvento("neg-001", "topic-email", {
+        1 * outboxService.guardarEventoConId("negociacion-creada:neg-001", "neg-001", "topic-email", {
             it.data.nombrePagador == "PAG-001" && it.data.nombreProveedor == "PROV-001"
         })
     }
@@ -151,7 +151,7 @@ class NotificacionServiceImplSpec extends Specification {
         service.notificarCreacionNegociacion(neg)
 
         then:
-        1 * outboxService.guardarEvento("neg-004", "topic-email", {
+        1 * outboxService.guardarEventoConId("negociacion-creada:neg-004", "neg-004", "topic-email", {
             it.data.totalNegociado == "155.639.960,39"
         })
     }
@@ -177,7 +177,7 @@ class NotificacionServiceImplSpec extends Specification {
         service.notificarCreacionNegociacion(neg)
 
         then:
-        1 * outboxService.guardarEvento("neg-005", "topic-email", {
+        1 * outboxService.guardarEventoConId("negociacion-creada:neg-005", "neg-005", "topic-email", {
             it.data.facturas.size() == 1 &&
                     it.data.facturas[0].numeroFactura == "F1" &&
                     it.data.facturas[0].valorFactura == "1.000.000,00" &&
@@ -204,7 +204,7 @@ class NotificacionServiceImplSpec extends Specification {
         service.notificarCreacionNegociacion(neg)
 
         then:
-        1 * outboxService.guardarEvento("neg-006", "topic-email", {
+        1 * outboxService.guardarEventoConId("negociacion-creada:neg-006", "neg-006", "topic-email", {
             it.data.nombresFondeadores == "Fondeador A, Fondeador B" &&
                     it.data.claseOperacion == "B"
         })
@@ -616,6 +616,6 @@ class NotificacionServiceImplSpec extends Specification {
         service.notificarCreacionNegociacion(neg)
 
         then:
-        1 * outboxService.guardarEvento(_, _, _)
+        1 * outboxService.guardarEventoConId(_, _, _, _)
     }
 }

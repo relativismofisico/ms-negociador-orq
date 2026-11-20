@@ -43,7 +43,7 @@ class FirmaUnicaPorEmpresaSpec extends Specification {
 
     AprobacionEndosoDescuentoServiceImpl service = new AprobacionEndosoDescuentoServiceImpl(
             negociacionPort, Mock(FacturaPatchOutputPort), endosoPatchPort, outboxService,
-            Mock(CupoReversionService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort), Mock(FacturaOutputPort),
+            Mock(ReversionExactaService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort), Mock(FacturaOutputPort),
             Mock(UserOutputPort), pendingOtpPort, firmaEndosoService, Mock(NotificacionService),
             Mock(EndosoOutputPort), Mock(DocumentoEndosoService), clock,
             "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService))

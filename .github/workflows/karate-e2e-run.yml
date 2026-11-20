@@ -135,6 +135,16 @@ jobs:
         run: |
           mysql -h127.0.0.1 -P3306 -uroot -pe2e-root --default-character-set=utf8mb4 dbcompany < src/main/resources/db/migration/V2__reversion_cupos_factura.sql
 
+      # Fase 28d (A2): crear negociación registra lo descontado en operacion_pendiente (V3, sin entidad JPA).
+      - name: Aplicar V3 (operacion_pendiente; Flyway está apagado en el runner)
+        run: |
+          mysql -h127.0.0.1 -P3306 -uroot -pe2e-root --default-character-set=utf8mb4 dbcompany < src/main/resources/db/migration/V3__operacion_pendiente.sql
+
+      # Fase 28d (A2): toda la auditoría y los correos de la reversión salen por el outbox JDBC de commons (V4).
+      - name: Aplicar V4 (outbox_negociador; Flyway está apagado en el runner)
+        run: |
+          mysql -h127.0.0.1 -P3306 -uroot -pe2e-root --default-character-set=utf8mb4 dbcompany < src/main/resources/db/migration/V4__outbox_negociador.sql
+
       # Secretos aleatorios por corrida, enmascarados en el log y compartidos por la app y
       # Karate vía GITHUB_ENV. Ningún yml trae su valor; sin ellos la app no arranca.
       - name: Generar secretos JWT por corrida

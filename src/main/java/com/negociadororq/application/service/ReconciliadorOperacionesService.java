@@ -70,6 +70,14 @@ public class ReconciliadorOperacionesService {
     }
 
     /**
+     * Fase 28d (A2): una operación que pasó a {@link #REVISION_MANUAL} fuera del reconciliador (p. ej. una reversión sin
+     * registro de lo descontado) suma al mismo contador.
+     */
+    public static void contarAtascada() {
+        ATASCADAS.incrementAndGet();
+    }
+
+    /**
      * @return cuántas operaciones reanudó con éxito en esta vuelta
      */
     public int reconciliar() {

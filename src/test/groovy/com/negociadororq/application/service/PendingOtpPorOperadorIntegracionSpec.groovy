@@ -310,7 +310,7 @@ class PendingOtpPorOperadorIntegracionSpec extends Specification {
             boolean reclamarFirmaEmpresa(String i, String n, String r, String o) { endosoPatch.reclamarFirmaEmpresa(i, n, r, o) }
         }
         def aprobacion = new AprobacionEndosoDescuentoServiceImpl(negociacionPort, Mock(FacturaPatchOutputPort), endosoPatchConMemoria,
-                Mock(OutboxService), Mock(CupoReversionService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort),
+                Mock(OutboxService), Mock(ReversionExactaService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort),
                 facturaPort, userPort, pendientes, firmaEndoso, Mock(NotificacionService), endosoPort, documento, clock,
                 "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService))
         endoso = Endoso.builder().id("end-29").negociacionId(NEG).numerosFactura([FAC]).aprobaciones([]).firmasOtp([]).build()

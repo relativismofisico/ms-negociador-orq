@@ -86,7 +86,7 @@ class ConfirmingFirmaPdfRealSpec extends Specification {
     AprobacionEndosoDescuentoServiceImpl service = new AprobacionEndosoDescuentoServiceImpl(
             negociacionPort, Mock(FacturaPatchOutputPort), Stub(EndosoPatchOutputPort) { reclamarFirmaEmpresa(*_) >> true },
             Mock(OutboxService),
-            Mock(CupoReversionService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort), facturaPort,
+            Mock(ReversionExactaService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort), facturaPort,
             userPort, Mock(PendingOtpOutputPort), firma, Mock(NotificacionService), endosoPort,
             documento, clock,
             "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService))

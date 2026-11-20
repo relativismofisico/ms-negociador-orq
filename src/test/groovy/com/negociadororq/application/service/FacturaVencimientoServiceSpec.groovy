@@ -1,5 +1,6 @@
 package com.negociadororq.application.service
 
+import com.negociadororq.domain.model.TipoOperacionPendiente
 import com.negociadororq.application.port.output.ClockPort
 import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
@@ -15,12 +16,12 @@ class FacturaVencimientoServiceSpec extends Specification {
     FacturaOutputPort facturaPort = Mock()
     NegociacionOutputPort negociacionPort = Mock()
     CompanyOutputPort companyPort = Mock()
-    CupoReversionService cupoReversionService = Mock()
+    ReversionExactaService reversionExacta = Mock()
     ClockPort clock = Mock() {
         now() >> LocalDateTime.now()
     }
     FacturaVencimientoService service = new FacturaVencimientoService(
-            facturaPort, negociacionPort, companyPort, cupoReversionService, clock)
+            facturaPort, negociacionPort, companyPort, reversionExacta, clock)
 
     def "marca facturas con dias <= 10 como VENCIDA"() {
         given:
@@ -153,16 +154,17 @@ class FacturaVencimientoServiceSpec extends Specification {
         then:
         f.estadoNegociacion == "VENCIDA"
         0 * negociacionPort.findById(_)
-        0 * cupoReversionService.revertirCupoEmpresa(_, _)
+        0 * reversionExacta.revertir(*_)
     }
 
-    def "factura NEGOCIADA que vence reversa cupos de empresa y fondeadores antes de marcarla VENCIDA"() {
+    def "factura NEGOCIADA que vence: reversión exacta de lo descontado (A2) antes de marcarla VENCIDA"() {
         given:
         def f = new Factura()
         f.numeroFactura = "F_NEG"
         f.estadoNegociacion = "NEGOCIADA"
         f.fechavencimientoFactura = LocalDate.now().plusDays(5)
         f.negociacionId = "neg-1"
+        f.cufe = "CUFE-F_NEG"
         f.rutProveedor = "RUT-PROV"
         f.rutPagador = "RUT-PAG"
         f.valorNetoFactura = new BigDecimal("7000.00")
@@ -186,8 +188,7 @@ class FacturaVencimientoServiceSpec extends Specification {
 
         then:
         f.estadoNegociacion == "VENCIDA"
-        1 * cupoReversionService.revertirCupoEmpresa(2L, new BigDecimal("7000.00"))
-        1 * cupoReversionService.revertirCupoFondeadorFactoring(1L, 2L, new BigDecimal("7000.00"))
+        1 * reversionExacta.revertir(TipoOperacionPendiente.VENCIMIENTO, _, _, _)
         1 * facturaPort.save(f)
     }
 
@@ -207,6 +208,6 @@ class FacturaVencimientoServiceSpec extends Specification {
         then:
         f.estadoNegociacion == "VENCIDA"
         0 * negociacionPort.findById(_)
-        0 * cupoReversionService.revertirCupoEmpresa(_, _)
+        0 * reversionExacta.revertir(*_)
     }
 }
