@@ -254,13 +254,19 @@ class ConservacionCuposIT {
         revertir(camino, e);
         assertIguales(inicial, cupos());
         assertThat(estado(e)).isEqualTo(ReversionExactaService.REVERTIDA);
-        assertThat(correosA(e)).isEqualTo(1);
+        // Fase 28d (decisión de John): la plantilla A solo si ningún otro correo informa la reversión (no en el rechazo
+        // ni en la fallida, que tienen el suyo).
+        long esperadoA = 1;
+        if (camino == Camino.RECHAZO || camino == Camino.LIQUIDACION_FALLIDA) {
+            esperadoA = 0;
+        }
+        assertThat(correosA(e)).isEqualTo(esperadoA);
 
         // reversión repetida, por el mismo camino y por otro: una sola vez (cupos y plantilla A)
         revertir(camino, e);
         revertir(Camino.LIQUIDACION_FALLIDA, e);
         assertIguales(inicial, cupos());
-        assertThat(correosA(e)).isEqualTo(1);
+        assertThat(correosA(e)).isEqualTo(esperadoA);
     }
 
     @RepeatedTest(20)
@@ -280,7 +286,8 @@ class ConservacionCuposIT {
         t2.join();
         assertThat(fallos).isEmpty();
         assertIguales(inicial, cupos());
-        assertThat(correosA(e)).isEqualTo(1);
+        // los dos caminos de la carrera (fallida y rechazo) tienen su propio correo: ninguno lleva la plantilla A
+        assertThat(correosA(e)).isZero();
     }
 
     @Test
@@ -312,7 +319,7 @@ class ConservacionCuposIT {
         exacta.revertir(com.negociadororq.domain.model.TipoOperacionPendiente.RECHAZO, e.negociacionId, e.cufe,
                 "rechazo");
         assertIguales(inicial, cupos());
-        assertThat(correosA(e)).isEqualTo(1);
+        assertThat(correosA(e)).as("el rechazo avisa con su propio correo, sin plantilla A").isZero();
     }
 
     // ─── apoyo ─────────────────────────────────────────────────────────────────────────────────────────────────────
