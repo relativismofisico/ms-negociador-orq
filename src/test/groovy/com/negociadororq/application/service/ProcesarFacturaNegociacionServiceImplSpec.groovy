@@ -59,7 +59,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
             facturaPort, cupoConsumidorService, userPort, companyPort,
             empresaQuotaPort, fondeadorQuotaPort, facturaPatchPort, validacionFacturaService,
             payerFundingVisibilityPort, indirectFunderOfferPort, indirectFunderOfferSupplierQuotaPort, clock,
-            operacionPendientePort
+            operacionPendientePort, Mock(AuditoriaNegociacionService)
     )
 
     def buildFactura(String numero, String rutProv, String rutPag) {
@@ -136,7 +136,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def reqFact = buildReqFact("FECI001")
 
         when:
-        def resultado = service.procesarFactura(request, reqFact, "neg-1")
+        def resultado = service.procesarFactura(request, reqFact, "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         resultado.numeroFactura == "FECI001"
@@ -156,7 +156,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when: "Se procesa"
-        service.procesarFactura(request, buildReqFact("FECI040"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI040"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then: "Se traduce a una excepción de negocio distinguible de 'sin cupo' — el frontend puede ofrecer reintentar"
         def ex = thrown(ConflictoException)
@@ -172,7 +172,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when: "Se procesa"
-        service.procesarFactura(request, buildReqFact("FECI041"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI041"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then: "Se traduce a una excepción de negocio distinguible de 'sin cupo', mencionando al fondeador afectado"
         def ex = thrown(ConflictoException)
@@ -215,7 +215,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def reqFact = buildReqFact("FECI002")
 
         when:
-        def resultado = service.procesarFactura(request, reqFact, "neg-1")
+        def resultado = service.procesarFactura(request, reqFact, "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_DESCUENTO, _)
@@ -236,7 +236,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI003"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI003"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -257,7 +257,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI004"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI004"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -276,7 +276,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-INCORRECTO", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI005"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI005"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -295,7 +295,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("CONFIRMING", "PAG-INCORRECTO", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI006"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI006"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -316,7 +316,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI007"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI007"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -334,7 +334,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-NO-EXISTE")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI008"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI008"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(com.negociadororq.application.exception.RecursoNoEncontradoException)
@@ -359,7 +359,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI008"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI008"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -404,7 +404,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
                 .build()
 
         when:
-        def resultado = service.procesarFactura(request, reqFact, "neg-1")
+        def resultado = service.procesarFactura(request, reqFact, "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         resultado.fondeadores[0].rutFondeador == "FOND-LOCAL"
@@ -439,7 +439,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI010"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI010"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -470,7 +470,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI014"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI014"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -506,7 +506,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI013"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI013"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -540,7 +540,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI014"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI014"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -582,7 +582,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI011"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI011"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         1 * facturaPatchPort.marcarComoNegociada(_, _, { actores ->
@@ -626,7 +626,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "900.341.104-5", "OP-001")
 
         when:
-        def resultado = service.procesarFactura(request, buildReqFact("FECI012"), "neg-1")
+        def resultado = service.procesarFactura(request, buildReqFact("FECI012"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         resultado != null
@@ -665,7 +665,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI020"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI020"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -682,7 +682,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI021"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI021"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -704,7 +704,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI022"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI022"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -725,7 +725,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        def resultado = service.procesarFactura(request, buildReqFact("FECI023"), "neg-1")
+        def resultado = service.procesarFactura(request, buildReqFact("FECI023"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         resultado.numeroFactura == "FECI023"
@@ -751,7 +751,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI024"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI024"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         1 * indirectFunderOfferSupplierQuotaPort.descontarCupo(77L, 10L, new BigDecimal("2000.00")) >> 1
@@ -771,7 +771,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        def resultado = service.procesarFactura(request, buildReqFact("FECI023B"), "neg-1")
+        def resultado = service.procesarFactura(request, buildReqFact("FECI023B"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         resultado.numeroFactura == "FECI023B"
@@ -795,7 +795,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI023C"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI023C"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         1 * indirectFunderOfferSupplierQuotaPort.crear(77L, 10L, _, _)
@@ -831,7 +831,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI025"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI025"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         0 * payerFundingVisibilityPort.estaHabilitado(_)
@@ -879,7 +879,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI030"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI030"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -893,7 +893,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        def resultado = service.procesarFactura(request, buildReqFact("FECI031"), "neg-1")
+        def resultado = service.procesarFactura(request, buildReqFact("FECI031"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         resultado.numeroFactura == "FECI031"
@@ -906,7 +906,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
         when:
-        def resultado = service.procesarFactura(request, buildReqFact("FECI032"), "neg-1")
+        def resultado = service.procesarFactura(request, buildReqFact("FECI032"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         resultado.numeroFactura == "FECI032"
@@ -956,7 +956,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001")
 
         when:
-        service.procesarFactura(request, buildReqFact("FECI033"), "neg-1")
+        service.procesarFactura(request, buildReqFact("FECI033"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         def ex = thrown(RuntimeException)
@@ -970,7 +970,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001")
 
         when:
-        def resultado = service.procesarFactura(request, buildReqFact("FECI034"), "neg-1")
+        def resultado = service.procesarFactura(request, buildReqFact("FECI034"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
         resultado.numeroFactura == "FECI034"

@@ -98,7 +98,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         "spring.sql.init.mode=always",
         "spring.sql.init.schema-locations=classpath:test-schema/reversion_cupos.sql,"
                 + "classpath:test-schema/indirect_funder_offer_supplier_quota.sql,"
-                + "classpath:db/migration/V3__operacion_pendiente.sql"
+                + "classpath:db/migration/V3__operacion_pendiente.sql,"
+                + "classpath:db/migration/V4__outbox_negociador.sql"
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ConservacionCuposIT {
@@ -169,7 +170,8 @@ class ConservacionCuposIT {
 
     @BeforeEach
     void preparar() {
-        for (String tabla : List.of("operacion_pendiente", "indirect_funder_offer_supplier_quota", "user_quota",
+        for (String tabla : List.of("outbox_negociador", "operacion_pendiente", "indirect_funder_offer_supplier_quota",
+                "user_quota",
                 "`user`", "parametrization", "funder")) {
             jdbc.update("DELETE FROM " + tabla);
         }
@@ -204,10 +206,28 @@ class ConservacionCuposIT {
                 .id(OFERTA).funderId(FONDEADOR).payerId(EMPRESA_PAG).payerRate(new BigDecimal("0.0150"))
                 .supplierQuotaTemplate(new BigDecimal("9000000.00")).estado("APROBADO").activo(true).build()));
 
-        exacta = new ReversionExactaService(operaciones, operador, indirectoPort, tx);
+        // Fase 28d (A2): la plantilla A va al outbox JDBC (outbox_negociador) en la MISMA transacción de la reversión,
+        // con id determinista; este puerto de prueba inserta en la tabla real igual que el adaptador de commons.
+        com.negociadororq.application.port.output.CorreoTransaccionalOutputPort correos = (id, evento) -> {
+            try {
+                jdbc.update("INSERT INTO outbox_negociador (event_id, tipo, clave_kafka, topic, payload, estado, intentos,"
+                        + " proximo_intento, fecha_creacion) VALUES (?, 'negociador.notificacion-email', ?,"
+                        + " 'notificacion.email', ?, 'PENDIENTE', 0, NOW(3), NOW(3))", id,
+                        "negociacion:" + evento.getIdNegociacion(), evento.getTipoNotificacion());
+                return true;
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                return false;
+            }
+        };
+        com.negociadororq.application.service.CorreosReversionService correosReversion =
+                new com.negociadororq.application.service.CorreosReversionService(correos, companyPort, negociacionPort,
+                        clock);
+        com.negociadororq.application.service.AuditoriaNegociacionService auditoria =
+                mock(com.negociadororq.application.service.AuditoriaNegociacionService.class);
+        exacta = new ReversionExactaService(operaciones, operador, indirectoPort, tx, auditoria, correosReversion);
         procesar = new ProcesarFacturaNegociacionServiceImpl(facturaPort, operador, userPort, companyPort,
                 empresaQuotaPort, fondeadorQuotaPort, facturaPatchPort, validacion, visibilidad, ofertas, indirectoPort,
-                clock, operaciones);
+                clock, operaciones, auditoria);
     }
 
     static Stream<Arguments> combinaciones() {
@@ -234,11 +254,13 @@ class ConservacionCuposIT {
         revertir(camino, e);
         assertIguales(inicial, cupos());
         assertThat(estado(e)).isEqualTo(ReversionExactaService.REVERTIDA);
+        assertThat(correosA(e)).isEqualTo(1);
 
-        // reversión repetida, por el mismo camino y por otro: una sola vez
+        // reversión repetida, por el mismo camino y por otro: una sola vez (cupos y plantilla A)
         revertir(camino, e);
         revertir(Camino.LIQUIDACION_FALLIDA, e);
         assertIguales(inicial, cupos());
+        assertThat(correosA(e)).isEqualTo(1);
     }
 
     @RepeatedTest(20)
@@ -258,6 +280,7 @@ class ConservacionCuposIT {
         t2.join();
         assertThat(fallos).isEmpty();
         assertIguales(inicial, cupos());
+        assertThat(correosA(e)).isEqualTo(1);
     }
 
     @Test
@@ -283,11 +306,13 @@ class ConservacionCuposIT {
                 e.negociacionId, e.cufe, "rechazo")).isInstanceOf(RuntimeException.class);
         jdbc.update("UPDATE funder SET payer_id = ? WHERE funder_id = ? AND payer_id = 999", EMPRESA_PAG, FONDEADOR);
         assertIguales(tras, cupos());
-        assertThat(estado(e)).isEqualTo(ReversionExactaService.COMPLETADA);
+        assertThat(estado(e)).isEqualTo(ReversionExactaService.CUPOS_DESCONTADOS);
+        assertThat(correosA(e)).as("sin reversión no hay plantilla A").isZero();
 
         exacta.revertir(com.negociadororq.domain.model.TipoOperacionPendiente.RECHAZO, e.negociacionId, e.cufe,
                 "rechazo");
         assertIguales(inicial, cupos());
+        assertThat(correosA(e)).isEqualTo(1);
     }
 
     // ─── apoyo ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -394,6 +419,12 @@ class ConservacionCuposIT {
         });
         t.start();
         return t;
+    }
+
+    private long correosA(Escenario e) {
+        Long n = jdbc.queryForObject("SELECT COUNT(*) FROM outbox_negociador WHERE clave_kafka = ?"
+                + " AND payload = 'OPERACION_REVERTIDA'", Long.class, "negociacion:" + e.negociacionId);
+        return n == null ? 0L : n;
     }
 
     private String estado(Escenario e) {

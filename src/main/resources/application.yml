@@ -196,6 +196,17 @@ logging:
 # Log de auditoría (ms-commons-util → ms-auditoria-util), publicado por el outbox. auditoria.enabled=false lo apaga.
 auditoria:
   topic: ${AUDITORIA_TOPIC:auditoria.accion}
+  # Fase 28d (A2): toda la auditoría (y los correos de la reversión, plantillas A y B) sale por el outbox JDBC de
+  # ms-commons-util, tabla outbox_negociador (V4; en qa/prod db/manual/V4). Relay con ack, reintentos con backoff hasta
+  # max-intentos (10) y después FALLIDO, que se conserva (nunca se borra solo; gauges outbox.* y log de alerta).
+  # Limpieza: los ENVIADO con más de retencion (30 días) se borran cada intervalo-limpieza (1 h), bajo ShedLock.
+  outbox:
+    enabled: ${AUDITORIA_OUTBOX_ENABLED:true}
+    almacen: jdbc
+    jdbc:
+      tabla: ${AUDITORIA_OUTBOX_JDBC_TABLA:outbox_negociador}
+    retencion: ${AUDITORIA_OUTBOX_RETENCION:P30D}
+    timeout-ack: ${AUDITORIA_OUTBOX_TIMEOUT_ACK:PT30S}
 
 # Fase 28d (H): validación del OTP por HTTP en ms-security-util (POST /auth/internal/otp/validacion).
 otp:

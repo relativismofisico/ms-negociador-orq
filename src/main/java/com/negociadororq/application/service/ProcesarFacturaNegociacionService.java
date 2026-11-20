@@ -18,5 +18,14 @@ public interface ProcesarFacturaNegociacionService {
      */
     FacturaNegociada procesarFactura(NegociacionRequestDto request, FacturaNegociada facturaRequest,
             String negociacionId);
+
+    /**
+     * Fase 28d (A2): marca la factura NEGOCIADA (estado de firma y actores) en Mongo. Lo llama la transacción Mongo de la
+     * creación, junto con la negociación y su marcador; idempotente.
+     *
+     * @param request   datos de la negociación en curso
+     * @param procesada la factura ya procesada (con su CUFE y fondeadores)
+     */
+    void marcarComoNegociada(NegociacionRequestDto request, FacturaNegociada procesada);
 }
 

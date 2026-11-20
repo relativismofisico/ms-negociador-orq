@@ -14,9 +14,14 @@ import java.util.regex.Pattern;
  * {@code operacion_pendiente.datos} de la operación CREAR_NEGOCIACION ({@code negociacion|cufe}), en la misma
  * transacción MySQL que los descuentos. Los montos van como texto para conservar el {@link BigDecimal} sin redondeos.
  *
+ * <p>Con el descuento va el contexto mínimo de la operación ({@link Contexto}: tipo, empresa que la inició, contraparte
+ * y número de la factura), sin datos sensibles: lo necesita el correo de la reversión (plantilla A) cuando la
+ * negociación no llegó a existir en Mongo.</p>
+ *
  * @param descuentos cada cupo tocado y su monto
+ * @param contexto   contexto de la operación, o null (registros sin contexto)
  */
-public record DescuentoCupos(List<Descuento> descuentos) {
+public record DescuentoCupos(List<Descuento> descuentos, Contexto contexto) {
 
     /** Versión del formato JSON. */
     static final int VERSION = 1;
@@ -25,10 +30,19 @@ public record DescuentoCupos(List<Descuento> descuentos) {
     private static final int GRUPO_A = 2;
     private static final int GRUPO_B = 3;
     private static final int GRUPO_MONTO = 4;
+    private static final int GRUPO_CONTEXTO = 3;
+    private static final int GRUPO_CTX_TIPO = 1;
+    private static final int GRUPO_CTX_EMPRESA = 2;
+    private static final int GRUPO_CTX_CONTRAPARTE = 3;
+    private static final int GRUPO_CTX_NUMERO = 4;
 
+    private static final String TEXTO = "\"((?:[^\"\\\\]|\\\\.)*)\"";
     private static final Pattern ELEMENTO = Pattern.compile(
             "\\{\"tipo\":\"([A-Z_]+)\",\"a\":(\\d+|null),\"b\":(\\d+|null),\"monto\":\"(-?\\d+(?:\\.\\d+)?)\"\\}");
-    private static final Pattern CABECERA = Pattern.compile("^\\{\"v\":(\\d+),\"descuentos\":\\[(.*)\\]\\}$");
+    private static final Pattern CABECERA = Pattern.compile(
+            "^\\{\"v\":(\\d+),\"descuentos\":\\[(.*?)\\](?:,\"contexto\":(\\{.*\\}))?\\}$");
+    private static final Pattern CONTEXTO = Pattern.compile("^\\{\"tipoOperacion\":" + TEXTO + ",\"rutEmpresa\":" + TEXTO
+            + ",\"rutContraparte\":" + TEXTO + ",\"numeroFactura\":" + TEXTO + "\\}$");
 
     /** Qué cupo se tocó. */
     public enum Tipo {
@@ -65,10 +79,29 @@ public record DescuentoCupos(List<Descuento> descuentos) {
     }
 
     /**
+     * Contexto de la operación para el correo de la reversión.
+     *
+     * @param tipoOperacion  FACTORING o CONFIRMING
+     * @param rutEmpresa     empresa que inició la negociación
+     * @param rutContraparte su contraparte (el pagador en FACTORING, el proveedor en CONFIRMING)
+     * @param numeroFactura  número de la factura (se muestra; la identidad es el CUFE de la clave)
+     */
+    public record Contexto(String tipoOperacion, String rutEmpresa, String rutContraparte, String numeroFactura) {
+    }
+
+    /**
      * @param descuentos cada cupo tocado y su monto
+     * @param contexto   contexto de la operación, o null
      */
     public DescuentoCupos {
         descuentos = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNull(descuentos, "descuentos")));
+    }
+
+    /**
+     * @param descuentos cada cupo tocado y su monto (sin contexto)
+     */
+    public DescuentoCupos(final List<Descuento> descuentos) {
+        this(descuentos, null);
     }
 
     /**
@@ -85,7 +118,14 @@ public record DescuentoCupos(List<Descuento> descuentos) {
                     .append(",\"b\":").append(d.b()).append(",\"monto\":\"").append(d.monto().toPlainString())
                     .append("\"}");
         }
-        return sb.append("]}").toString();
+        sb.append(']');
+        if (contexto != null) {
+            sb.append(",\"contexto\":{\"tipoOperacion\":").append(texto(contexto.tipoOperacion()))
+                    .append(",\"rutEmpresa\":").append(texto(contexto.rutEmpresa()))
+                    .append(",\"rutContraparte\":").append(texto(contexto.rutContraparte()))
+                    .append(",\"numeroFactura\":").append(texto(contexto.numeroFactura())).append('}');
+        }
+        return sb.append('}').toString();
     }
 
     /**
@@ -116,7 +156,28 @@ public record DescuentoCupos(List<Descuento> descuentos) {
         if (fin != cuerpo.length()) {
             throw new IllegalArgumentException("registro de lo descontado con otro formato");
         }
-        return new DescuentoCupos(lista);
+        Contexto ctx = null;
+        if (cabecera.group(GRUPO_CONTEXTO) != null) {
+            final Matcher c = CONTEXTO.matcher(cabecera.group(GRUPO_CONTEXTO));
+            if (!c.matches()) {
+                throw new IllegalArgumentException("registro de lo descontado con otro formato");
+            }
+            ctx = new Contexto(sinEscape(c.group(GRUPO_CTX_TIPO)), sinEscape(c.group(GRUPO_CTX_EMPRESA)),
+                    sinEscape(c.group(GRUPO_CTX_CONTRAPARTE)), sinEscape(c.group(GRUPO_CTX_NUMERO)));
+        }
+        return new DescuentoCupos(lista, ctx);
+    }
+
+    private static String texto(final String valor) {
+        String v = "";
+        if (valor != null) {
+            v = valor;
+        }
+        return "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    private static String sinEscape(final String valor) {
+        return valor.replace("\\\"", "\"").replace("\\\\", "\\");
     }
 
     private static Long id(final String texto) {

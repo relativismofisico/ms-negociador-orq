@@ -67,6 +67,8 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
     private final ClockPort clock;
     /** Fase 28d (A2): registro exacto de lo descontado ({@code operacion_pendiente}), en la misma transacción. */
     private final OperacionPendienteOutputPort operacionPendientePort;
+    /** Fase 28d (A2): auditoría CUPOS_DESCONTADOS, en la misma transacción que los descuentos (outbox JDBC). */
+    private final AuditoriaNegociacionService auditoria;
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -188,22 +190,22 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         // Fase 28d (A2): el registro va en la MISMA transacción que los descuentos (REQUIRES_NEW de esta factura): o se
         // confirman juntos o ninguno. Una clave repetida (la misma factura dos veces en la negociación) revierte todo.
+        String tipoOperacion = request.getTipoOperacion().getTipo();
+        String contraparte = factura.getRutProveedor();
+        if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
+            contraparte = factura.getRutPagador();
+        }
+        DescuentoCupos.Contexto contexto = new DescuentoCupos.Contexto(tipoOperacion.toUpperCase(Locale.ROOT),
+                request.getRutEmpresa(), contraparte, factura.getNumeroFactura());
         if (!operacionPendientePort.registrar(TipoOperacionPendiente.CREAR_NEGOCIACION,
-                OperacionPendiente.clave(negociacionId, factura.getCufe()), ReversionExactaService.COMPLETADA,
-                new DescuentoCupos(descuentos).aJson())) {
+                OperacionPendiente.clave(negociacionId, factura.getCufe()), ReversionExactaService.CUPOS_DESCONTADOS,
+                new DescuentoCupos(descuentos, contexto).aJson())) {
             throw new ConflictoException("La factura ya está registrada en esta negociación.", "FACTURA_REPETIDA");
         }
+        auditoria.cuposDescontados(negociacionId, factura.getCufe(), factura.getNumeroFactura(), descuentos.size());
 
-        // ==========================================
-        // ACTUALIZAR FACTURA
-        // ==========================================
-
-        List<ActorFactura> actores =
-                construirActores(factura, fondeadores);
-
-        EstadoFirma estadoFirma = calcularEstadoFirma(request.getTipoOperacion().getTipo());
-
-        facturaPatchPort.marcarComoNegociada(factura.getId(), estadoFirma, actores);
+        // Fase 28d (A2): la factura se marca NEGOCIADA en la transacción Mongo de la creación (marcarComoNegociada),
+        // junto con la negociación y su marcador; aquí solo se toca MySQL.
 
         // ==========================================
         // RESPUESTA
@@ -216,6 +218,15 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         reqFact.setValorFactura(factura.getValorFactura());
 
         return reqFact;
+    }
+
+    @Override
+    public void marcarComoNegociada(NegociacionRequestDto request, FacturaNegociada procesada) {
+        Factura factura = new ResolutorFactura(facturaPort).resuelta(procesada);
+        List<FondeadorAsignacion> fondeadores = Optional.ofNullable(procesada.getFondeadores())
+                .orElse(Collections.emptyList());
+        facturaPatchPort.marcarComoNegociada(factura.getId(),
+                calcularEstadoFirma(request.getTipoOperacion().getTipo()), construirActores(factura, fondeadores));
     }
 
     private List<FondeadorAsignacion> obtenerFondeadores(
