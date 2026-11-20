@@ -1826,3 +1826,11 @@ cuando la causa está resuelta; ver "Runbook: eventos fallidos del outbox".
 1. `db/manual/V4__outbox_negociador.sql` antes de arrancar (en entornos con Flyway apagado).
 2. `db/manual` de Mongo: índice único implícito por `_id` en `negociacion_marca` (no requiere script).
 3. ms-commons-util 0.6.2 publicada antes.
+
+## Opción A, A3: rechazo y endoso rechazado por vigencia (Fase 28d)
+
+- **Rechazo en la firma** (`AprobacionEndosoDescuentoServiceImpl`): cuando un actor requerido rechaza, se revierten los cupos con `ReversionExactaService` (camino `RECHAZO`). Después siguen el aviso de liquidación fallida (con su marca de efecto ya emitido) y el estado RECHAZADA en Mongo.
+- **Endoso rechazado por vigencia** (`EndosoDescuentoServiceImpl`): si la vigencia del descuento del fondeador ya no permite endosar, se revierte (camino `ENDOSO_RECHAZADO`) y la factura vuelve a SIN_NEGOCIAR. Lo mismo ocurre si la factura ya no existe en la base de datos.
+- **Exacto y una sola vez**: se devuelve lo registrado en `operacion_pendiente` al crear la negociación (A2), con un CAS COMPLETADA → REVERTIDA. La auditoría `CUPOS_REVERTIDOS` y la plantilla A van en la misma transacción MySQL. Un reintento, o un segundo camino sobre la misma factura, responde `YA_REVERTIDA`: no devuelve nada ni envía otra plantilla A.
+- **Caída a mitad**: la reversión va primero. Si el proceso muere antes del cambio en Mongo, el reconciliador de firma (A1) reprocesa la solicitud y la reversión responde `YA_REVERTIDA`.
+- **Sin registro de lo descontado**: pasa a REVISION_MANUAL y envía la plantilla B; no se adivina el monto.
