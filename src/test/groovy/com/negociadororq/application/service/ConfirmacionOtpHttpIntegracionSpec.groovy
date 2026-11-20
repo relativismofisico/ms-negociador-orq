@@ -229,7 +229,7 @@ class ConfirmacionOtpHttpIntegracionSpec extends Specification {
         def aprobacion = new AprobacionEndosoDescuentoServiceImpl(negociacionPort, Mock(FacturaPatchOutputPort),
                 endosoPatchConMemoria, outbox, Mock(ReversionExactaService), Mock(CompanyOutputPort),
                 Mock(FondeadorQuotaOutputPort), facturaPort, userPort, pendientes, firmaEndoso, Mock(NotificacionService),
-                endosoPort, documento, clock, "otp.requested", "liquidacion", Mock(AuditoriaNegociacionService))
+                endosoPort, documento, clock, "otp.requested", "liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService))
         endoso = Endoso.builder().id("end-a1").negociacionId(NEG).numerosFactura([FAC]).aprobaciones([]).firmasOtp([]).build()
         documento.generarDocumentoFormal(endoso, negociacion, [factura], [fn], "op-prov")
         mongo.getCollection("endosos").insertOne(new Document([negociacionId: NEG, numerosFactura: [FAC]]))

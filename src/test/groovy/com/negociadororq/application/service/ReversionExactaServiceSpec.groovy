@@ -57,6 +57,35 @@ class ReversionExactaServiceSpec extends Specification {
         1 * correos.revertida("neg-1", "CUFE-1", CTX)
     }
 
+    def "Fase 28d (A4): el camino de la fallida devuelve exacto pero sin plantilla A (ya tiene su correo)"() {
+        given:
+        operaciones.buscar(*_) >> Optional.of(registro("COMPLETADA",
+                datos([new DescuentoCupos.Descuento(DescuentoCupos.Tipo.OPERADOR, 1L, null, 1G)])))
+        operaciones.transicionar(_, _, "COMPLETADA", "REVERTIDA") >> true
+
+        when:
+        def r = servicio.revertir(TipoOperacionPendiente.LIQUIDACION_FALLIDA, "neg-1", "CUFE-1", "fallida")
+
+        then:
+        r == ReversionExactaService.Resultado.REVERTIDA
+        1 * cupos.revertirCupoUsuario(1L, 1G)
+        1 * auditoria.cuposRevertidos("neg-1", "CUFE-1", "LIQUIDACION_FALLIDA", 1)
+        0 * correos.revertida(*_)
+    }
+
+    def "Fase 28d (A4): la liquidación cancelada sí lleva la plantilla A"() {
+        given:
+        operaciones.buscar(*_) >> Optional.of(registro("COMPLETADA",
+                datos([new DescuentoCupos.Descuento(DescuentoCupos.Tipo.OPERADOR, 1L, null, 1G)])))
+        operaciones.transicionar(_, _, "COMPLETADA", "REVERTIDA") >> true
+
+        when:
+        servicio.revertir(TipoOperacionPendiente.LIQUIDACION_CANCELADA, "neg-1", "CUFE-1", "cancelada")
+
+        then:
+        1 * correos.revertida("neg-1", "CUFE-1", CTX)
+    }
+
     def "desde CUPOS_DESCONTADOS (creación sin terminar) también revierte"() {
         given:
         operaciones.buscar(*_) >> Optional.of(registro("CUPOS_DESCONTADOS",

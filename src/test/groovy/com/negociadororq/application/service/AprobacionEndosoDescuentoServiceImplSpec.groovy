@@ -38,6 +38,9 @@ import java.math.BigDecimal
 import java.time.LocalDateTime
 
 class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
+    // Fase 28d (A4): seguimiento de la solicitud de liquidación
+    SeguimientoLiquidacionService seguimientoLiquidacion = Mock()
+
 
     NegociacionOutputPort negociacionPort = Mock()
     FacturaPatchOutputPort facturaPatchPort = Mock()
@@ -64,7 +67,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
             reversionExacta, companyPort, fondeadorQuotaPort, facturaPort,
             userPort, pendingOtpPort, firmaEndosoService, notificacionService, endosoPort,
             documentoEndosoService, clock,
-            "topic-otp-request", "topic-liquidacion", auditoriaNegociacion)
+            "topic-otp-request", "topic-liquidacion", auditoriaNegociacion, seguimientoLiquidacion)
 
     def setup() {
         // Fase 28d: el reclamo de la firma de la empresa en el endoso pasa (un solo actor por empresa en estos casos)
@@ -423,6 +426,8 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         1 * facturaPatchPort.actualizarEstadosPorCufe({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.DESCUENTO, EstadoNegociacion.APROBADA)
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.ACEPTADO)
         1 * outboxService.guardarEventoConId({ it.startsWith("liquidacion.solicitada|neg-001|CUFE-") }, "neg-001", "topic-liquidacion", _)
+        // Fase 28d (A4): con la solicitud, su seguimiento hasta el resultado
+        1 * seguimientoLiquidacion.registrarSolicitud("neg-001", { it.startsWith("CUFE-") }, _, { it.startsWith("liquidacion.solicitada|neg-001|CUFE-") })
     }
 
     def "resolverRolActor lanza ReglaDeNegocioException si actor no identificable"() {

@@ -41,6 +41,19 @@ public class OutboxAdapter implements OutboxOutputPort {
         }
     }
 
+    @Override
+    public boolean reencolar(String idEvento) {
+        return repository.findById(idEvento).map(e -> {
+            e.setEnviado(false);
+            e.setFallido(false);
+            e.setMotivoFallo(null);
+            e.setFechaEnvio(null);
+            e.setIntentos(0);
+            repository.save(e);
+            return true;
+        }).orElse(false);
+    }
+
     private OutboxEventEntity entidad(String id, String aggregateId, String tipoEvento, Object evento) {
         try {
             OutboxEventEntity entity = new OutboxEventEntity();

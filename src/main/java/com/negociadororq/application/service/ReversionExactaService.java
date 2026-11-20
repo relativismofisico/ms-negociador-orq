@@ -108,7 +108,11 @@ public class ReversionExactaService {
             }
             descuento.descuentos().forEach(this::devolver);
             auditoria.cuposRevertidos(negociacionId, cufe, camino.name(), descuento.descuentos().size());
-            correos.revertida(negociacionId, cufe, descuento.contexto());
+            // Fase 28d (A4): la fallida ya avisa con su propio correo (liquidación fallida); la plantilla A va en los
+            // demás caminos (rechazo, endoso, vencimiento, creación abortada, liquidación cancelada).
+            if (camino != TipoOperacionPendiente.LIQUIDACION_FALLIDA) {
+                correos.revertida(negociacionId, cufe, descuento.contexto());
+            }
             return true;
         });
         if (Boolean.TRUE.equals(revertida)) {

@@ -11,5 +11,9 @@ public enum TipoOperacionPendiente {
     /** Ídem, por liquidación fallida. */
     LIQUIDACION_FALLIDA,
     /** Ídem, por vencimiento de la factura. */
-    VENCIMIENTO
+    VENCIMIENTO,
+    /** Fase 28d (A4): solicitud de liquidación en seguimiento hasta su resultado (reenvíos y cancelación). */
+    LIQUIDACION_PENDIENTE,
+    /** Fase 28d (A4): reversión por una liquidación sin resultado cancelada en el liquidador (con la plantilla A). */
+    LIQUIDACION_CANCELADA
 }
