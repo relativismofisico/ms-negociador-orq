@@ -191,8 +191,10 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         // Fase 28d (A2): el registro va en la MISMA transacción que los descuentos (REQUIRES_NEW de esta factura): o se
         // confirman juntos o ninguno. Una clave repetida (la misma factura dos veces en la negociación) revierte todo.
         String tipoOperacion = request.getTipoOperacion().getTipo();
-        String contraparte = "FACTORING".equalsIgnoreCase(tipoOperacion) ? factura.getRutPagador()
-                : factura.getRutProveedor();
+        String contraparte = factura.getRutProveedor();
+        if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
+            contraparte = factura.getRutPagador();
+        }
         DescuentoCupos.Contexto contexto = new DescuentoCupos.Contexto(tipoOperacion.toUpperCase(Locale.ROOT),
                 request.getRutEmpresa(), contraparte, factura.getNumeroFactura());
         if (!operacionPendientePort.registrar(TipoOperacionPendiente.CREAR_NEGOCIACION,

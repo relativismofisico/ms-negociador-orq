@@ -37,7 +37,7 @@ class AuditoriaAdaptersSpec extends Specification {
         def e = evento()
 
         when:
-        new AuditoriaOutboxAdapter(outbox, "auditoria.accion").registrar(e)
+        new AuditoriaOutboxAdapter(Stub(org.springframework.beans.factory.ObjectProvider) { getIfAvailable() >> null }, outbox, "auditoria.accion").registrar(e)
 
         then:
         1 * outbox.guardarEvento("NEGOCIACION:NEG-1", "auditoria.accion", e)

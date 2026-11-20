@@ -120,11 +120,16 @@ public class CorreosReversionService {
             return;
         }
         final DescuentoCupos.Contexto c = ctx.get();
-        final boolean factoring = FACTORING.equalsIgnoreCase(c.tipoOperacion());
-        final String rolIniciadora = factoring ? "PROVEEDOR" : "PAGADOR";
-        final String rolContraparte = factoring ? "PAGADOR" : "PROVEEDOR";
+        String rolIniciadora = "PAGADOR";
+        String rolContraparte = "PROVEEDOR";
+        String tipoTexto = "Confirming";
+        if (FACTORING.equalsIgnoreCase(c.tipoOperacion())) {
+            rolIniciadora = "PROVEEDOR";
+            rolContraparte = "PAGADOR";
+            tipoTexto = "Factoring";
+        }
         final Map<String, Object> data = new LinkedHashMap<>();
-        data.put("tipoOperacion", factoring ? "Factoring" : "Confirming");
+        data.put("tipoOperacion", tipoTexto);
         data.put("numeroFactura", c.numeroFactura());
         data.put("idNegociacion", negociacionId);
         data.put("fechaHora", clock.now().atZone(ZoneId.systemDefault()).withZoneSameInstant(COLOMBIA).format(FECHA_HORA));
@@ -161,8 +166,10 @@ public class CorreosReversionService {
         if (factura.isEmpty()) {
             return Optional.empty();
         }
-        final String contraparte = FACTORING.equalsIgnoreCase(tipo) ? factura.get().getRutPagador()
-                : factura.get().getRutProveedor();
+        String contraparte = factura.get().getRutProveedor();
+        if (FACTORING.equalsIgnoreCase(tipo)) {
+            contraparte = factura.get().getRutPagador();
+        }
         return Optional.of(new DescuentoCupos.Contexto(tipo, n.getRutEmpresa(), contraparte,
                 factura.get().getNumeroFactura()));
     }

@@ -4,7 +4,6 @@ import com.factoring.commons.auditoria.outbox.AuditoriaOutboxPort;
 import com.factoring.commons.outbox.TipoDeEvento;
 import com.factoring.commons.outbox.TiposDeEvento;
 import com.negociadororq.domain.event.NotificacionEmailEvent;
-import org.flywaydb.core.Flyway;
 import org.springframework.boot.autoconfigure.AbstractDependsOnBeanFactoryPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.flyway.FlywayMigrationInitializer;
@@ -48,7 +47,7 @@ public class OutboxNegociadorConfig {
 
     /** Con Flyway en el classpath, el outbox de commons se crea después de las migraciones. */
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass(Flyway.class)
+    @ConditionalOnClass(name = "org.flywaydb.core.Flyway")
     static class DespuesDeFlyway {
 
         @Bean

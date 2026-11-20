@@ -30,6 +30,7 @@ public record DescuentoCupos(List<Descuento> descuentos, Contexto contexto) {
     private static final int GRUPO_A = 2;
     private static final int GRUPO_B = 3;
     private static final int GRUPO_MONTO = 4;
+    private static final int GRUPO_CONTEXTO = 3;
     private static final int GRUPO_CTX_TIPO = 1;
     private static final int GRUPO_CTX_EMPRESA = 2;
     private static final int GRUPO_CTX_CONTRAPARTE = 3;
@@ -156,8 +157,8 @@ public record DescuentoCupos(List<Descuento> descuentos, Contexto contexto) {
             throw new IllegalArgumentException("registro de lo descontado con otro formato");
         }
         Contexto ctx = null;
-        if (cabecera.group(3) != null) {
-            final Matcher c = CONTEXTO.matcher(cabecera.group(3));
+        if (cabecera.group(GRUPO_CONTEXTO) != null) {
+            final Matcher c = CONTEXTO.matcher(cabecera.group(GRUPO_CONTEXTO));
             if (!c.matches()) {
                 throw new IllegalArgumentException("registro de lo descontado con otro formato");
             }
@@ -168,7 +169,10 @@ public record DescuentoCupos(List<Descuento> descuentos, Contexto contexto) {
     }
 
     private static String texto(final String valor) {
-        final String v = valor == null ? "" : valor;
+        String v = "";
+        if (valor != null) {
+            v = valor;
+        }
         return "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 

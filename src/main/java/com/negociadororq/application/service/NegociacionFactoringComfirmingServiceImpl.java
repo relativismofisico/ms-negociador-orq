@@ -41,7 +41,6 @@ import com.negociadororq.domain.model.OperacionPendiente;
 import com.negociadororq.domain.model.TipoOperacionPendiente;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementación de {@link NegociacionFactoringComfirmingService}.
@@ -144,31 +143,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         String idNegociacion = negociacionPort.nuevoId();
 
         for (FacturaNegociada facturaReq : request.getFacturas()) {
-
-            try {
-                FacturaNegociada procesada = procesarFacturaNegociacionService.procesarFactura(request, facturaReq,
-                        idNegociacion);
-                facturasAceptadas.add(procesada);
-
-            } catch (NegociadorException e) {
-                if (e instanceof ServicioDependienteNoDisponibleException) {
-                    abortar(idNegociacion, facturasAceptadas, e);
-                    throw e;
-                }
-                // Rechazo de negocio (sin cupo, vigencia, rol...): como siempre, esa factura queda fuera con su motivo y
-                // las demás se negocian. Su transacción MySQL se revirtió: no descontó nada.
-                log.info(String.format("Factura %s no negociada: %s", facturaReq.getNumeroFactura(), e.getMessage()));
-                String motivo = motivoRechazo(e);
-                errores.add(motivo);
-                facturasRechazadas.add(facturaReq.getNumeroFactura() + " -> " + motivo);
-            } catch (RuntimeException e) {
-                // Fase 28d (A2, decisión de John): un fallo técnico (BD, caída, error que no es de negocio) aborta TODA la
-                // creación y devuelve exacto lo ya descontado en las facturas anteriores (plantilla A una vez).
-                log.log(java.util.logging.Level.SEVERE, String.format("Error técnico procesando la factura %s: se aborta "
-                        + "la creación de la negociación %s", facturaReq.getNumeroFactura(), idNegociacion), e);
-                abortar(idNegociacion, facturasAceptadas, e);
-                throw e;
-            }
+            procesarUna(request, facturaReq, idNegociacion, facturasAceptadas, errores, facturasRechazadas);
         }
 
 
@@ -422,23 +397,45 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private Negociacion guardarEnMongo(NegociacionRequestDto request, Negociacion negociacion,
             List<FacturaNegociada> facturasAceptadas) {
         String id = negociacion.getId();
+        return transaccionMongo.ejecutar(() -> {
+            if (!marca.crear(id, MarcaNegociacionOutputPort.Tipo.CREADA)) {
+                log.warning(String.format("[NEGOCIACION-CANCELADA] %s: la creación llegó después de la cancelación del "
+                        + "reconciliador; no se crea", id));
+                throw new ConflictoException("La negociación tardó demasiado en completarse y se canceló; los cupos "
+                        + "reservados se restablecen. Vuelve a intentarlo.", NEGOCIACION_CANCELADA);
+            }
+            Negociacion guardada = negociacionPort.save(negociacion);
+            for (FacturaNegociada fn : facturasAceptadas) {
+                procesarFacturaNegociacionService.marcarComoNegociada(request, fn);
+                facturaPatchPort.actualizarNegociacionIdPorCufe(ResolutorFactura.referencia(fn), id);
+            }
+            notificacionService.notificarCreacionNegociacion(guardada);
+            return guardada;
+        });
+    }
+
+    /**
+     * Una factura de la solicitud: aceptada (sus cupos descontados), rechazada por negocio (como siempre: queda fuera con
+     * su motivo y las demás se negocian) o, por un fallo técnico, aborta toda la creación (Fase 28d, A2, decisión de John):
+     * se devuelve exacto lo ya descontado en las facturas anteriores, con la plantilla A, y la excepción sube.
+     */
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    private void procesarUna(NegociacionRequestDto request, FacturaNegociada facturaReq, String idNegociacion,
+            List<FacturaNegociada> facturasAceptadas, List<String> errores, List<String> facturasRechazadas) {
         try {
-            return transaccionMongo.ejecutar(() -> {
-                if (!marca.crear(id, MarcaNegociacionOutputPort.Tipo.CREADA)) {
-                    throw new ConflictoException("La negociación tardó demasiado en completarse y se canceló; los cupos "
-                            + "reservados se restablecen. Vuelve a intentarlo.", NEGOCIACION_CANCELADA);
-                }
-                Negociacion guardada = negociacionPort.save(negociacion);
-                for (FacturaNegociada fn : facturasAceptadas) {
-                    procesarFacturaNegociacionService.marcarComoNegociada(request, fn);
-                    facturaPatchPort.actualizarNegociacionIdPorCufe(ResolutorFactura.referencia(fn), id);
-                }
-                notificacionService.notificarCreacionNegociacion(guardada);
-                return guardada;
-            });
-        } catch (ConflictoException e) {
-            log.warning(String.format("[NEGOCIACION-CANCELADA] %s: la creación llegó después de la cancelación del "
-                    + "reconciliador; no se crea", id));
+            facturasAceptadas.add(procesarFacturaNegociacionService.procesarFactura(request, facturaReq, idNegociacion));
+        } catch (ServicioDependienteNoDisponibleException e) {
+            abortar(idNegociacion, facturasAceptadas, e);
+            throw e;
+        } catch (NegociadorException e) {
+            log.info(String.format("Factura %s no negociada: %s", facturaReq.getNumeroFactura(), e.getMessage()));
+            String motivo = motivoRechazo(e);
+            errores.add(motivo);
+            facturasRechazadas.add(facturaReq.getNumeroFactura() + " -> " + motivo);
+        } catch (RuntimeException e) {
+            log.log(java.util.logging.Level.SEVERE, String.format("Error técnico procesando la factura %s: se aborta "
+                    + "la creación de la negociación %s", facturaReq.getNumeroFactura(), idNegociacion), e);
+            abortar(idNegociacion, facturasAceptadas, e);
             throw e;
         }
     }
