@@ -381,7 +381,7 @@ class ConservacionCuposIT {
                     notificacionService, exacta).revertirPorFactura(e.negociacionId, e.cufe, e.numero, "op-1", "fallo");
             case RECHAZO -> new AprobacionEndosoDescuentoServiceImpl(negociacionPort, facturaPatchPort, null, null,
                     exacta, companyPort, fondeadorQuotaPort, facturaPort, userPort, null, null, notificacionService, null,
-                    null, clock, "otp.requested", "liquidacion", null)
+                    null, clock, "otp.requested", "liquidacion", null, null)
                     .revertirCupos(e.negociacionId, e.negociada, "rechazo");
             case ENDOSO_RECHAZADO -> {
                 // La factura ya no está en la base: el endoso la rechaza y revierte sus cupos.
