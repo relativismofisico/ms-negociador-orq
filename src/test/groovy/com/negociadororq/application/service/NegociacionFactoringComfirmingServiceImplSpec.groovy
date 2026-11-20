@@ -178,8 +178,8 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
 
         def fn1Procesada = buildFn("FECI001", "PROV-001", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
         def fn2Procesada = buildFn("FECI002", "PROV-001", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
-        procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1Procesada
-        procesarFacturaNegociacionService.procesarFactura(_, fn2) >> fn2Procesada
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _) >> fn1Procesada
+        procesarFacturaNegociacionService.procesarFactura(_, fn2, _) >> fn2Procesada
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1, fn2])
 
@@ -203,7 +203,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         facturaPort.findAllByNumeroFactura("FECI003") >> listaDe(buildFactura("FECI003", "PROV-001", "PAG-001"))
 
-        procesarFacturaNegociacionService.procesarFactura(_, fn1) >> {
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _) >> {
             throw new com.negociadororq.application.exception.ReglaDeNegocioException("Factura sin cupo")
         }
 
@@ -225,7 +225,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         facturaPort.findAllByNumeroFactura("FECI010") >> listaDe(buildFactura("FECI010", "PROV-001", "PAG-001"))
 
-        procesarFacturaNegociacionService.procesarFactura(_, fn1) >> {
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _) >> {
             throw new com.negociadororq.application.exception.RecursoNoEncontradoException("Operador no existe")
         }
 
@@ -246,7 +246,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         facturaPort.findAllByNumeroFactura("FECI009") >> listaDe(buildFactura("FECI009", "PROV-001", "PAG-001"))
 
-        procesarFacturaNegociacionService.procesarFactura(_, fn1) >> {
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _) >> {
             throw new IllegalStateException("could not execute statement; SQL [update cupo set saldo=? where id=?]")
         }
 
@@ -273,8 +273,8 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         facturaPort.findAllByNumeroFactura("FECI005") >> listaDe(buildFactura("FECI005", "PROV-001", "PAG-001"))
 
         def fn1Procesada = buildFn("FECI004", "PROV-001", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
-        procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1Procesada
-        procesarFacturaNegociacionService.procesarFactura(_, fn2) >> {
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _) >> fn1Procesada
+        procesarFacturaNegociacionService.procesarFactura(_, fn2, _) >> {
             throw new com.negociadororq.application.exception.ReglaDeNegocioException("FECI005 sin cupo")
         }
 
@@ -299,7 +299,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         facturaPort.findAllByNumeroFactura("FECI006") >> listaDe(buildFactura("FECI006", "PROV-RAIZ", "PAG-001"))
 
         def procesada = buildFn("FECI006", "PROV-RAIZ", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
-        procesarFacturaNegociacionService.procesarFactura(_, _) >> procesada
+        procesarFacturaNegociacionService.procesarFactura(_, _, _) >> procesada
 
         def request = buildRequest("FACTORING", "PROV-RAIZ", "OP-001", "PROVEEDOR", [fn])
 
@@ -320,7 +320,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         facturaPort.findAllByNumeroFactura("FECI007") >> listaDe(buildFactura("FECI007", "PROV-FACTURA", "PAG-001"))
 
         def procesada = buildFn("FECI007", "PROV-FACTURA", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
-        procesarFacturaNegociacionService.procesarFactura(_, _) >> procesada
+        procesarFacturaNegociacionService.procesarFactura(_, _, _) >> procesada
 
         // Fase 28d (C): en FACTORING la empresa que negocia es el proveedor de la factura.
         def request = buildRequest("FACTORING", "PROV-FACTURA", "OP-001", "EMPRESA", [fn])
@@ -343,7 +343,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         facturaPort.findAllByNumeroFactura("FECI008") >> listaDe(buildFactura("FECI008", "PROV-001", "PAG-UNICO"))
 
         def procesada = buildFn("FECI008", "PROV-001", "PAG-UNICO").tap { cufe = "CUFE-" + numeroFactura }
-        procesarFacturaNegociacionService.procesarFactura(_, _) >> procesada
+        procesarFacturaNegociacionService.procesarFactura(_, _, _) >> procesada
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
 
@@ -372,7 +372,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         then:
         def ex = thrown(PeticionInvalidaException)
         ex.codigo == "MULTIPLES_CONTRAPARTES"
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
     }
 
     def "crearNegociacion lanza PeticionInvalidaException si las facturas tienen mas de un proveedor (CONFIRMING)"() {
@@ -391,7 +391,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         then:
         def ex = thrown(PeticionInvalidaException)
         ex.codigo == "MULTIPLES_CONTRAPARTES"
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
     }
 
     // ─── totalNegociado ───────────────────────────────────────────────────────
@@ -407,8 +407,8 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         facturaPort.findAllByNumeroFactura("FECI011") >> listaDe(buildFactura("FECI011", "PROV-001", "PAG-001"))
         facturaPort.findAllByNumeroFactura("FECI012") >> listaDe(buildFactura("FECI012", "PROV-001", "PAG-001"))
 
-        procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1
-        procesarFacturaNegociacionService.procesarFactura(_, fn2) >> fn2
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _) >> fn1
+        procesarFacturaNegociacionService.procesarFactura(_, fn2, _) >> fn2
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1, fn2])
 
@@ -427,7 +427,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         facturaPort.findAllByNumeroFactura("FECI013") >> listaDe(buildFactura("FECI013", "PROV-001", "PAG-001"))
 
-        procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
+        procesarFacturaNegociacionService.procesarFactura(_, fn, _) >> fn
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
 
@@ -452,8 +452,8 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         facturaPort.findAllByNumeroFactura("FECI014") >> listaDe(buildFactura("FECI014", "PROV-001", "PAG-001"))
         facturaPort.findAllByNumeroFactura("FECI015") >> listaDe(buildFactura("FECI015", "PROV-001", "PAG-001"))
 
-        procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1
-        procesarFacturaNegociacionService.procesarFactura(_, fn2) >> fn2
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _) >> fn1
+        procesarFacturaNegociacionService.procesarFactura(_, fn2, _) >> fn2
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1, fn2])
 
@@ -471,7 +471,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def fn = buildFn("FECI016", "PROV-001", "PAG-001")
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         facturaPort.findAllByNumeroFactura("FECI016") >> listaDe(buildFactura("FECI016", "PROV-001", "PAG-001"))
-        procesarFacturaNegociacionService.procesarFactura(_, _) >> fn
+        procesarFacturaNegociacionService.procesarFactura(_, _, _) >> fn
         idNegociacionAAsignar = "NEG-SAVED"
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
@@ -498,7 +498,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         then:
         def ex = thrown(AccionNoPermitidaException)
         ex.codigo == "OPERACION_NO_HABILITADA"
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
     }
 
     def "crearNegociacion lanza RecursoNoEncontradoException si la empresa solicitante no existe"() {
@@ -532,7 +532,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def ex = thrown(AccionNoPermitidaException)
         ex.codigo == "OPERACION_NO_HABILITADA"
         ex.message.contains("PAG-SIN-FACTORING")
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
     }
 
     def "crearNegociacion lanza AccionNoPermitidaException si el proveedor (contraparte CONFIRMING) no tiene la operación habilitada"() {
@@ -551,7 +551,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def ex = thrown(AccionNoPermitidaException)
         ex.codigo == "OPERACION_NO_HABILITADA"
         ex.message.contains("PROV-SIN-CONFIRMING")
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
     }
 
     def "crearNegociacion continua normalmente cuando la empresa y la contraparte tienen la operación habilitada"() {
@@ -561,8 +561,8 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         facturaPort.findAllByNumeroFactura("FECI020") >> listaDe(buildFactura("FECI020", "PROV-001", "PAG-A"))
         facturaPort.findAllByNumeroFactura("FECI021") >> listaDe(buildFactura("FECI021", "PROV-001", "PAG-A"))
-        procesarFacturaNegociacionService.procesarFactura(_, fn1) >> fn1
-        procesarFacturaNegociacionService.procesarFactura(_, fn2) >> fn2
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _) >> fn1
+        procesarFacturaNegociacionService.procesarFactura(_, fn2, _) >> fn2
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1, fn2])
 
@@ -578,7 +578,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def fn = buildFn("FECI017", "PROV-001", "PAG-001")
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         facturaPort.findAllByNumeroFactura("FECI017") >> listaDe(buildFactura("FECI017", "PROV-001", "PAG-001"))
-        procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
+        procesarFacturaNegociacionService.procesarFactura(_, fn, _) >> fn
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
 
@@ -607,7 +607,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def ex = thrown(AccionNoPermitidaException)
         ex.codigo == "TESORERIA_NO_VERIFICADA"
         ex.message.contains("PAG-001")
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
     }
 
     def "crearNegociacion continua normalmente si la empresa NO califica para tesorería (no es fondeadora ni autofondeadora), aunque tesorería no esté verificada"() {
@@ -618,7 +618,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         facturaPort.findAllByNumeroFactura("FECI024") >> listaDe(buildFactura("FECI024", "PROV-001", "PAG-001"))
 
         def fn = buildFn("FECI024", "PROV-001", "PAG-001")
-        procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
+        procesarFacturaNegociacionService.procesarFactura(_, fn, _) >> fn
 
         def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn])
 
@@ -636,7 +636,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         facturaPort.findAllByNumeroFactura("FECI025") >> listaDe(buildFactura("FECI025", "PROV-001", "PAG-001"))
 
         def fn = buildFn("FECI025", "PROV-001", "PAG-001")
-        procesarFacturaNegociacionService.procesarFactura(_, fn) >> fn
+        procesarFacturaNegociacionService.procesarFactura(_, fn, _) >> fn
 
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR", [fn])
 
@@ -667,7 +667,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         def ex = thrown(ReglaDeNegocioException)
         ex.codigo == "CLASE_OPERACION_INVALIDA"
         ex.message == mensaje
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
         0 * negociacionPort.save(_)
 
         where:
@@ -730,7 +730,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         then: "con un RUT falso la factura ya no se resuelve (C: número + RUT de la solicitud)"
         def ex = thrown(com.negociadororq.application.exception.NegociadorException)
         ex.codigo == codigo
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
         0 * negociacionPort.save(_)
 
         where:
@@ -755,7 +755,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         then:
         def ex = thrown(PeticionInvalidaException)
         ex.codigo == "FACTURA_SIN_CONTRAPARTE"
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
     }
 
     def "Fase 28d: un solo proveedor en la base pasa aunque el cliente no mande su RUT (CONFIRMING)"() {
@@ -763,7 +763,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
         facturaPort.findAllByNumeroFactura("F28D-4") >> listaDe(buildFactura("F28D-4", "PROV-A", "PAG-001"))
         facturaPort.findAllByNumeroFactura("F28D-5") >> listaDe(buildFactura("F28D-5", "PROV-A", "PAG-001"))
-        procesarFacturaNegociacionService.procesarFactura(_, _) >> { args -> args[1] }
+        procesarFacturaNegociacionService.procesarFactura(_, _, _) >> { args -> args[1] }
         def request = buildRequest("CONFIRMING", "PAG-001", "OP-001", "PAGADOR",
                 [buildFn("F28D-4", "", "PAG-001"), buildFn("F28D-5", null, "PAG-001")])
 
@@ -786,7 +786,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
 
         then:
         thrown(com.negociadororq.application.exception.AccionNoPermitidaException)
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
     }
 
     def "Fase 28d (C): dos empresas con la factura 1: A negocia la suya (CUFE de la base) y la de B no se toca"() {
@@ -801,7 +801,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         service.crearNegociacion(request)
 
         then:
-        1 * procesarFacturaNegociacionService.procesarFactura(_, { it.cufe == "CUFE-A" && it.rutProveedor == "PROV-A" }) >>
+        1 * procesarFacturaNegociacionService.procesarFactura(_, { it.cufe == "CUFE-A" && it.rutProveedor == "PROV-A" }, _) >>
                 { args -> args[1] }
         1 * facturaPatchPort.actualizarNegociacionIdPorCufe({ it.cufe() == "CUFE-A" && it.rutProveedor() == "PROV-A" }, _)
         0 * facturaPatchPort.actualizarNegociacionIdPorCufe({ it.cufe() == "CUFE-B" }, _)
@@ -821,7 +821,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         then:
         def ex = thrown(com.negociadororq.application.exception.AccionNoPermitidaException)
         ex.codigo == ResolutorFactura.FACTURA_DE_OTRA_EMPRESA
-        0 * procesarFacturaNegociacionService.procesarFactura(_, _)
+        0 * procesarFacturaNegociacionService.procesarFactura(_, _, _)
         0 * facturaPatchPort._
         0 * negociacionPort.save(_)
     }

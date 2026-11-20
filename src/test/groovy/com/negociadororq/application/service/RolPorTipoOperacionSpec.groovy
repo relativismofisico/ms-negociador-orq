@@ -42,7 +42,7 @@ class RolPorTipoOperacionSpec extends Specification {
 
     NegociacionOutputPort negociacionPort = Mock()
     OutboxService outboxService = Mock()
-    CupoReversionService cupoReversionService = Mock()
+    ReversionExactaService cupoReversionService = Mock()
     PendingOtpOutputPort pendingOtpPort = Mock()
     FirmaEndosoService firmaEndosoService = Mock()
     EndosoPatchOutputPort endosoPatchPort = Mock()

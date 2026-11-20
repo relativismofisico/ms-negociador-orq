@@ -20,4 +20,12 @@ public interface NegociacionOutputPort {
      * @return la negociación persistida
      */
     Negociacion save(Negociacion negociacion);
+
+    /**
+     * Fase 28d (A2): un id nuevo de negociación, generado antes de tocar cupos (clave del registro exacto de lo
+     * descontado y del marcador del reconciliador).
+     *
+     * @return el id
+     */
+    String nuevoId();
 }

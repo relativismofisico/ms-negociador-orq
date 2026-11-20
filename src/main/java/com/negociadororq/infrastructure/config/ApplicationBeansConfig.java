@@ -30,7 +30,6 @@ import com.negociadororq.application.port.output.PdfFirmaOutputPort;
 import com.negociadororq.application.port.output.PdfGeneradorOutputPort;
 import com.negociadororq.application.port.output.PendingOtpOutputPort;
 import com.negociadororq.application.port.output.PersonOutputPort;
-import com.negociadororq.application.port.output.ReversionCuposReclamoOutputPort;
 import com.negociadororq.application.port.output.TemplateEngineOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.application.port.output.UserQuotaOutputPort;
@@ -69,6 +68,7 @@ import com.negociadororq.application.service.ReanudadorOperacion;
 import com.negociadororq.application.service.ReconciliadorOperacionesService;
 import com.negociadororq.application.service.ReversionCuposService;
 import com.negociadororq.application.service.ReversionCuposServiceImpl;
+import com.negociadororq.application.service.ReversionExactaService;
 import com.negociadororq.application.service.TasaConversionService;
 import com.negociadororq.application.service.TasaConversionServiceImpl;
 import com.negociadororq.application.service.TemplateRenderService;
@@ -242,9 +242,28 @@ public class ApplicationBeansConfig {
             final FacturaOutputPort facturaPort,
             final NegociacionOutputPort negociacionPort,
             final CompanyOutputPort companyPort,
-            final CupoReversionService cupoReversionService,
+            final ReversionExactaService reversionExactaService,
             final ClockPort clock) {
-        return new FacturaVencimientoService(facturaPort, negociacionPort, companyPort, cupoReversionService, clock);
+        return new FacturaVencimientoService(facturaPort, negociacionPort, companyPort, reversionExactaService, clock);
+    }
+
+    /**
+     * Fase 28d (A2): devuelve exactamente lo que la creación descontó (registro en {@code operacion_pendiente}), una vez.
+     *
+     * @param operacionPendienteOutputPort {@code operacion_pendiente}
+     * @param cupoReversionService         devoluciones de operador, empresa y fondeadores
+     * @param indirecto                    devolución de la oferta indirecta
+     * @param transactionOperations        transacción MySQL
+     * @return el servicio
+     */
+    @Bean
+    public ReversionExactaService reversionExactaService(
+            final OperacionPendienteOutputPort operacionPendienteOutputPort,
+            final CupoReversionService cupoReversionService,
+            final IndirectFunderOfferSupplierQuotaOutputPort indirecto,
+            final TransactionOperations transactionOperations) {
+        return new ReversionExactaService(operacionPendienteOutputPort, cupoReversionService, indirecto,
+                transactionOperations);
     }
 
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por
@@ -266,23 +285,15 @@ public class ApplicationBeansConfig {
                 facturaPort, clock, topicNotificacionEmail, urlPlataformaOperador);
     }
 
-    @SuppressWarnings("checkstyle:ParameterNumber")
     @Bean
     public ReversionCuposService reversionCuposService(
             final NegociacionOutputPort negociacionPort,
             final FacturaOutputPort facturaPort,
             final FacturaPatchOutputPort facturaPatchPort,
-            final EndosoPatchOutputPort endosoPatchPort,
-            final CupoReversionService cupoReversionService,
-            final UserOutputPort userPort,
-            final CompanyOutputPort companyPort,
             final NotificacionService notificacionService,
-            final ReversionCuposReclamoOutputPort reclamoPort,
-            final TransactionOperations transactionOperations) {
-        return new ReversionCuposServiceImpl(
-                negociacionPort, facturaPort, facturaPatchPort, endosoPatchPort,
-                cupoReversionService, userPort, companyPort, notificacionService,
-                reclamoPort, transactionOperations);
+            final ReversionExactaService reversionExactaService) {
+        return new ReversionCuposServiceImpl(negociacionPort, facturaPort, facturaPatchPort, notificacionService,
+                reversionExactaService);
     }
 
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por
@@ -301,11 +312,12 @@ public class ApplicationBeansConfig {
             final PayerFundingVisibilityOutputPort payerFundingVisibilityPort,
             final IndirectFunderOfferOutputPort indirectFunderOfferPort,
             final IndirectFunderOfferSupplierQuotaOutputPort indirectFunderOfferSupplierQuotaPort,
-            final ClockPort clock) {
+            final ClockPort clock,
+            final OperacionPendienteOutputPort operacionPendienteOutputPort) {
         return new ProcesarFacturaNegociacionServiceImpl(
                 facturaPort, cupoConsumidorService, userPort, companyPort, empresaQuotaPort,
                 fondeadorQuotaPort, facturaPatchPort, validacionFacturaService, payerFundingVisibilityPort,
-                indirectFunderOfferPort, indirectFunderOfferSupplierQuotaPort, clock);
+                indirectFunderOfferPort, indirectFunderOfferSupplierQuotaPort, clock, operacionPendienteOutputPort);
     }
 
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por
@@ -345,13 +357,13 @@ public class ApplicationBeansConfig {
             final CompanyOutputPort companyPort,
             final FondeadorQuotaOutputPort fondeadorQuotaPort,
             final UserOutputPort userPort,
-            final CupoReversionService cupoReversionService,
+            final ReversionExactaService reversionExactaService,
             final ClockPort clock,
             final AuditoriaNegociacionService auditoriaNegociacionService) {
         return new EndosoDescuentoServiceImpl(
                 negociacionPort, endosoPort, facturaPort, notificacionService, facturaPatchPort,
                 documentoEndosoService, negociacionPatchPort, companyPort, fondeadorQuotaPort,
-                userPort, cupoReversionService, clock, auditoriaNegociacionService);
+                userPort, reversionExactaService, clock, auditoriaNegociacionService);
     }
 
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por
@@ -363,7 +375,7 @@ public class ApplicationBeansConfig {
             final FacturaPatchOutputPort facturaPatchPort,
             final EndosoPatchOutputPort endosoPatchPort,
             final OutboxService outboxService,
-            final CupoReversionService cupoReversionService,
+            final ReversionExactaService reversionExactaService,
             final CompanyOutputPort companyPort,
             final FondeadorQuotaOutputPort fondeadorQuotaPort,
             final FacturaOutputPort facturaPort,
@@ -378,7 +390,7 @@ public class ApplicationBeansConfig {
             @Value("${topics.liquidacion}") final String topicLiquidacionSolicitada,
             final AuditoriaNegociacionService auditoriaNegociacionService) {
         return new AprobacionEndosoDescuentoServiceImpl(
-                negociacionPort, facturaPatchPort, endosoPatchPort, outboxService, cupoReversionService,
+                negociacionPort, facturaPatchPort, endosoPatchPort, outboxService, reversionExactaService,
                 companyPort, fondeadorQuotaPort, facturaPort, userPort, pendingOtpPort, firmaEndosoService,
                 notificacionService, endosoPort, documentoEndosoService, clock,
                 topicRequestOtp, topicLiquidacionSolicitada, auditoriaNegociacionService);

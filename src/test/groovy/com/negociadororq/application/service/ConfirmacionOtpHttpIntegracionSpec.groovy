@@ -227,7 +227,7 @@ class ConfirmacionOtpHttpIntegracionSpec extends Specification {
             guardarEventoConId(*_) >> { args -> eventosOutbox << args[3]; null }
         }
         def aprobacion = new AprobacionEndosoDescuentoServiceImpl(negociacionPort, Mock(FacturaPatchOutputPort),
-                endosoPatchConMemoria, outbox, Mock(CupoReversionService), Mock(CompanyOutputPort),
+                endosoPatchConMemoria, outbox, Mock(ReversionExactaService), Mock(CompanyOutputPort),
                 Mock(FondeadorQuotaOutputPort), facturaPort, userPort, pendientes, firmaEndoso, Mock(NotificacionService),
                 endosoPort, documento, clock, "otp.requested", "liquidacion", Mock(AuditoriaNegociacionService))
         endoso = Endoso.builder().id("end-a1").negociacionId(NEG).numerosFactura([FAC]).aprobaciones([]).firmasOtp([]).build()

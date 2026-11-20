@@ -22,6 +22,7 @@ import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
 import com.negociadororq.application.port.output.IndirectFunderOfferOutputPort;
 import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort;
+import com.negociadororq.application.port.output.OperacionPendienteOutputPort;
 import com.negociadororq.application.port.output.OptimisticLockConflictException;
 import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
@@ -29,6 +30,7 @@ import com.negociadororq.application.util.VigenciaDescuentoValidator;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.model.ActorFactura;
 import com.negociadororq.domain.model.Company;
+import com.negociadororq.domain.model.DescuentoCupos;
 import com.negociadororq.domain.model.EmpresaQuota;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
@@ -36,6 +38,8 @@ import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.domain.model.IndirectFunderOffer;
 import com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota;
+import com.negociadororq.domain.model.OperacionPendiente;
+import com.negociadororq.domain.model.TipoOperacionPendiente;
 import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
@@ -61,10 +65,13 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
     private final IndirectFunderOfferOutputPort indirectFunderOfferPort;
     private final IndirectFunderOfferSupplierQuotaOutputPort indirectFunderOfferSupplierQuotaPort;
     private final ClockPort clock;
+    /** Fase 28d (A2): registro exacto de lo descontado ({@code operacion_pendiente}), en la misma transacción. */
+    private final OperacionPendienteOutputPort operacionPendientePort;
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public FacturaNegociada procesarFactura(NegociacionRequestDto request, FacturaNegociada reqFact) {
+    public FacturaNegociada procesarFactura(NegociacionRequestDto request, FacturaNegociada reqFact,
+            String negociacionId) {
 
         // Fase 28d (C): la solicitud ya trae el CUFE y los RUT de la base (resueltos en crearNegociacion).
         Factura factura = new ResolutorFactura(facturaPort).resuelta(reqFact);
@@ -156,9 +163,14 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         // DESCONTAR CUPOS
         // ==========================================
 
+        // Fase 28d (A2): cada descuento, con su id y el monto exacto, para devolver exactamente eso al revertir.
+        List<DescuentoCupos.Descuento> descuentos = new ArrayList<>();
+
         cupoConsumidorService.descontarCupo(userId, valorFactura);
+        descuentos.add(new DescuentoCupos.Descuento(DescuentoCupos.Tipo.OPERADOR, userId, null, valorFactura));
 
         empresaQuota.setCurrentQuota(empresaQuota.getCurrentQuota().subtract(valorFactura));
+        descuentos.add(new DescuentoCupos.Descuento(DescuentoCupos.Tipo.EMPRESA, companyId, null, valorFactura));
 
         // saveAndFlush (no save): fuerza que el conflicto de @Version se detecte acá
         // mismo, no al hacer commit de la transacción (donde ya no se puede traducir
@@ -172,7 +184,15 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                     "CUPO_EMPRESA_CONCURRENCIA");
         }
 
-        descontarCupoFondeadores(request, factura, fondeadores, valorFactura);
+        descontarCupoFondeadores(request, factura, fondeadores, valorFactura, descuentos);
+
+        // Fase 28d (A2): el registro va en la MISMA transacción que los descuentos (REQUIRES_NEW de esta factura): o se
+        // confirman juntos o ninguno. Una clave repetida (la misma factura dos veces en la negociación) revierte todo.
+        if (!operacionPendientePort.registrar(TipoOperacionPendiente.CREAR_NEGOCIACION,
+                OperacionPendiente.clave(negociacionId, factura.getCufe()), ReversionExactaService.COMPLETADA,
+                new DescuentoCupos(descuentos).aJson())) {
+            throw new ConflictoException("La factura ya está registrada en esta negociación.", "FACTURA_REPETIDA");
+        }
 
         // ==========================================
         // ACTUALIZAR FACTURA
@@ -367,7 +387,8 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
             NegociacionRequestDto request,
             Factura factura,
             List<FondeadorAsignacion> fondeadores,
-            BigDecimal valorFactura
+            BigDecimal valorFactura,
+            List<DescuentoCupos.Descuento> descuentos
     ) {
 
         for (FondeadorAsignacion fon : fondeadores) {
@@ -403,10 +424,14 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                     FondeadorQuota quota = asignacionDirecta.get();
                     quota.setSupplierCurrentQuota(quota.getSupplierCurrentQuota().subtract(valorFactura));
                     guardarCupoFondeadorConVersionado(quota, fon.getRutFondeador());
+                    descuentos.add(new DescuentoCupos.Descuento(DescuentoCupos.Tipo.FONDEADOR_FACTORING, funderId,
+                            supplierId, valorFactura));
 
                 } else {
 
-                    descontarCupoIndirecto(funderId, payerId, supplierId, valorFactura);
+                    Long ofertaId = descontarCupoIndirecto(funderId, payerId, supplierId, valorFactura);
+                    descuentos.add(new DescuentoCupos.Descuento(DescuentoCupos.Tipo.INDIRECTO, ofertaId, supplierId,
+                            valorFactura));
                 }
 
             } else {
@@ -425,6 +450,8 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                                 .subtract(valorFactura));
 
                 guardarCupoFondeadorConVersionado(quota, fon.getRutFondeador());
+                descuentos.add(new DescuentoCupos.Descuento(DescuentoCupos.Tipo.FONDEADOR_CONFIRMING, funderId,
+                        payerId, valorFactura));
             }
         }
     }
@@ -463,7 +490,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
      * del UNIQUE se traduce a {@link ConflictoException} en el adapter y se
      * absorbe acá — la fila ya existe, el reintento la descuenta.</p>
      */
-    private void descontarCupoIndirecto(Long funderId, Long payerId, Long supplierId, BigDecimal valorFactura) {
+    private Long descontarCupoIndirecto(Long funderId, Long payerId, Long supplierId, BigDecimal valorFactura) {
 
         IndirectFunderOffer oferta = indirectFunderOfferPort
                 .findActivaAprobada(funderId, payerId)
@@ -472,7 +499,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         int filas = indirectFunderOfferSupplierQuotaPort.descontarCupo(oferta.getId(), supplierId, valorFactura);
         if (filas > 0) {
-            return;
+            return oferta.getId();
         }
 
         try {
@@ -492,6 +519,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                             + "indirecta. Vuelve a intentar.",
                     "CUPO_PROVEEDOR_CONCURRENCIA");
         }
+        return oferta.getId();
     }
 
     private List<ActorFactura> construirActores(

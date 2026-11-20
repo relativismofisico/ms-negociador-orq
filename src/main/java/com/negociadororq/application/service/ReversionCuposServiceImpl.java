@@ -1,43 +1,32 @@
 package com.negociadororq.application.service;
 
-import java.math.BigDecimal;
-import java.util.Locale;
-
 import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
-import com.negociadororq.application.port.output.CompanyOutputPort;
-import com.negociadororq.application.port.output.EndosoPatchOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
-import com.negociadororq.application.port.output.ReversionCuposReclamoOutputPort;
-import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.enums.EstadoNegociacion;
-import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
-import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Negociacion;
-import com.negociadororq.domain.model.User;
+import com.negociadororq.domain.model.TipoOperacionPendiente;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.springframework.transaction.support.TransactionOperations;
 
 /**
- * Implementación de {@link ReversionCuposService}.
+ * Implementación de {@link ReversionCuposService} (liquidación fallida).
  *
- * <p>Idempotente frente a un {@code liquidacion-fallida} duplicado, concurrente o tardío:</p>
  * <ol>
  *   <li>Guarda de estado: una factura LIQUIDADA o con la firma ya RECHAZADA no se toca (ni cupos, ni firma, ni
  *       notificación).</li>
- *   <li>Reclamo y cupos en UNA transacción de MySQL: el reclamo ({@link ReversionCuposReclamoOutputPort}, clave
- *       única {@code (numero_factura, negociacion_id)}) y las cuatro reversiones de cupo se confirman o se revierten
- *       juntos. El reclamo vive en MySQL y no en la firma de la factura (Mongo) porque los cupos están en MySQL: un
- *       reclamo en Mongo no se podría confirmar junto con ellos.</li>
- *   <li>Solo quien gana el reclamo marca la firma y notifica, después del commit. Si la firma falla después, el
- *       reintento ve el reclamo, no vuelve a revertir y solo completa la firma (la notificación queda a lo sumo una
- *       vez).</li>
+ *   <li>Fase 28d (A2): la devolución es la exacta de lo que la creación descontó ({@link ReversionExactaService}: al
+ *       operador y a la empresa que negociaron, por el monto descontado, incluido el cupo indirecto de FACTORING), una sola
+ *       vez por {@code negociacion|cufe} venga del camino que venga (CAS en {@code operacion_pendiente}). Antes devolvía
+ *       el valor bruto de la factura aunque se hubiera descontado el neto, y no devolvía la oferta indirecta (la reversión
+ *       entera fallaba).</li>
+ *   <li>Solo quien revierte marca la firma y notifica. Si ya estaba revertida, solo completa la firma (sin notificar otra
+ *       vez). Sin registro de lo descontado: REVISION_MANUAL y nada cambia.</li>
  * </ol>
  */
 @Log
@@ -48,16 +37,8 @@ public class ReversionCuposServiceImpl
     private final NegociacionOutputPort negociacionPort;
     private final FacturaOutputPort facturaPort;
     private final FacturaPatchOutputPort facturaPatchPort;
-    private final EndosoPatchOutputPort endosoPatchPort;
-
-    private final CupoReversionService cupoReversionService;
-    private final UserOutputPort userPort;
-    private final CompanyOutputPort companyPort;
-
     private final NotificacionService notificacionService;
-
-    private final ReversionCuposReclamoOutputPort reclamoPort;
-    private final TransactionOperations transaccion;
+    private final ReversionExactaService reversionExacta;
 
     @Override
     public void revertirPorFactura(
@@ -70,10 +51,6 @@ public class ReversionCuposServiceImpl
         if (negociacionId == null || negociacionId.isBlank() || cufe == null || cufe.isBlank()) {
             throw EventosSinCufe.rechazar("liquidacion-fallida", negociacionId, numeroFactura);
         }
-
-        // ==========================================
-        // NEGOCIACIÓN Y FACTURA (por CUFE)
-        // ==========================================
 
         Negociacion negociacion =
                 negociacionPort
@@ -91,10 +68,6 @@ public class ReversionCuposServiceImpl
 
         Factura factura = new ResolutorFactura(facturaPort).deLaNegociacion(enNegociacion);
 
-        // ==========================================
-        // GUARDA DE ESTADO
-        // ==========================================
-
         if (EstadoNegociacion.LIQUIDADA.name().equals(factura.getEstadoNegociacion())
                 || EstadoFirma.RECHAZADA.name().equals(factura.getEstadoFirma())) {
             log.info(String.format("Reversión ignorada factura=%s: estado negociación=%s, firma=%s",
@@ -102,125 +75,24 @@ public class ReversionCuposServiceImpl
             return;
         }
 
-        // ==========================================
-        // RECLAMO + CUPOS (una transacción)
-        // ==========================================
+        ReversionExactaService.Resultado resultado = reversionExacta.revertir(
+                TipoOperacionPendiente.LIQUIDACION_FALLIDA, negociacion.getId(), cufe, motivo);
 
-        Boolean reclamada = transaccion.execute(estado ->
-                reclamoPort.reclamar(numero, negociacion.getId())
-                        && revertirCupos(enNegociacion, actorId, factura, negociacion));
-
-        if (!Boolean.TRUE.equals(reclamada)) {
-            // Otra entrega ya revirtió los cupos de esta negociación. Solo se completa la firma por si aquella
-            // falló después de confirmar; no se notifica otra vez.
-            log.info(String.format("Reversión ya aplicada factura=%s negociación=%s: no se revierte otra vez",
-                    numero, negociacion.getId()));
-            facturaPatchPort.actualizarEstadoFirmaPorCufe(ResolutorFactura.referencia(enNegociacion), EstadoFirma.RECHAZADA);
-            return;
-        }
-
-        // ==========================================
-        // ACTUALIZAR ESTADOS, LOG Y NOTIFICACIÓN
-        // ==========================================
-
-        finalizarReversion(enNegociacion, motivo, negociacion);
-    }
-
-    /**
-     * Las cuatro reversiones, dentro de la transacción del reclamo: si una falla (p. ej. un fondeador que no
-     * existe), ninguna queda confirmada y el reclamo tampoco.
-     */
-    private boolean revertirCupos(FacturaNegociada facturaNegociada, String actorId, Factura factura,
-            Negociacion negociacion) {
-
-        // ==========================================
-        // TIPO OPERACIÓN
-        // ==========================================
-
-        String tipoOperacion =
-                negociacion.getTipoOperacion()
-                        .getTipo()
-                        .toUpperCase(Locale.ROOT);
-
-        // ==========================================
-        // VALOR
-        // ==========================================
-
-        BigDecimal valor =
-                facturaNegociada.getValorFactura();
-
-        // ==========================================
-        // REVERSAR CUPO OPERADOR
-        // ==========================================
-
-        Long userId =
-                userPort
-                        .findByUsername(actorId)
-                        .map(User::getIdeUser)
-                        .orElseThrow(() ->
-                                new RecursoNoEncontradoException(
-                                        "Usuario no encontrado"));
-
-        cupoReversionService.revertirCupoUsuario(
-                userId,
-                valor);
-
-        // ==========================================
-        // REVERSAR CUPO EMPRESA
-        // ==========================================
-
-        Long companyId =
-                companyPort
-                        .findByNit(negociacion.getRutEmpresa())
-                        .map(Company::getIdeCompany)
-                        .orElseThrow(() ->
-                                new RecursoNoEncontradoException(
-                                        "Empresa no encontrada"));
-
-        // En la transacción del reclamo, no en una propia (REQUIRES_NEW): ver la javadoc de la clase.
-        cupoReversionService.revertirCupoEmpresaEnTransaccionActual(
-                companyId,
-                valor);
-
-        // ==========================================
-        // REVERSAR CUPOS FONDEADORES
-        // ==========================================
-
-        revertirCuposFondeadores(facturaNegociada, factura, tipoOperacion, valor);
-
-        return true;
-    }
-
-    private void revertirCuposFondeadores(
-            FacturaNegociada facturaNegociada, Factura factura, String tipoOperacion, BigDecimal valor) {
-
-        if (facturaNegociada.getFondeadores() == null) {
-            return;
-        }
-
-        for (FondeadorAsignacion fon : facturaNegociada.getFondeadores()) {
-            Long funderId = companyPort.findByNit(fon.getRutFondeador())
-                    .map(Company::getIdeCompany)
-                    .orElseThrow(() -> new RecursoNoEncontradoException("Fondeador no encontrado"));
-
-            if ("FACTORING".equals(tipoOperacion)) {
-                Long supplierId = companyPort.findByNit(factura.getRutProveedor())
-                        .map(Company::getIdeCompany)
-                        .orElseThrow(() -> new RecursoNoEncontradoException("Proveedor no encontrado"));
-                cupoReversionService.revertirCupoFondeadorFactoring(funderId, supplierId, valor);
+        switch (resultado) {
+            case REVERTIDA -> {
+                facturaPatchPort.actualizarEstadoFirmaPorCufe(ResolutorFactura.referencia(enNegociacion),
+                        EstadoFirma.RECHAZADA);
+                notificacionService.notificarLiquidacionFallida(negociacion, numero, motivo);
             }
-
-            if ("CONFIRMING".equals(tipoOperacion)) {
-                Long payerId = companyPort.findByNit(factura.getRutPagador())
-                        .map(Company::getIdeCompany)
-                        .orElseThrow(() -> new RecursoNoEncontradoException("Pagador no encontrado"));
-                cupoReversionService.revertirCupoFondeadorConfirming(funderId, payerId, valor);
+            case YA_REVERTIDA -> {
+                // Otra entrega u otro camino ya devolvió los cupos: solo se completa la firma, sin notificar otra vez.
+                log.info(String.format("Reversión ya aplicada factura=%s negociación=%s: no se revierte otra vez",
+                        numero, negociacion.getId()));
+                facturaPatchPort.actualizarEstadoFirmaPorCufe(ResolutorFactura.referencia(enNegociacion),
+                        EstadoFirma.RECHAZADA);
             }
+            default -> log.warning(String.format("Reversión de la factura %s de la negociación %s en REVISION_MANUAL: "
+                    + "no hay registro de lo descontado", numero, negociacion.getId()));
         }
-    }
-
-    private void finalizarReversion(FacturaNegociada enNegociacion, String motivo, Negociacion negociacion) {
-        facturaPatchPort.actualizarEstadoFirmaPorCufe(ResolutorFactura.referencia(enNegociacion), EstadoFirma.RECHAZADA);
-        notificacionService.notificarLiquidacionFallida(negociacion, enNegociacion.getNumeroFactura(), motivo);
     }
 }

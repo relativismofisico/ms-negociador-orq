@@ -47,6 +47,17 @@ public interface IndirectFunderOfferSupplierQuotaOutputPort {
     int descontarCupo(Long offerId, Long supplierId, java.math.BigDecimal valor);
 
     /**
+     * Fase 28d (A2): devuelve {@code valor} a la fila de consumo del par, de forma atómica
+     * ({@code current_quota = current_quota + valor}); la inversa exacta de {@link #descontarCupo}.
+     *
+     * @param offerId    oferta indirecta
+     * @param supplierId proveedor
+     * @param valor      monto a devolver
+     * @return filas afectadas (0 si la fila de consumo no existe)
+     */
+    int devolverCupo(Long offerId, Long supplierId, java.math.BigDecimal valor);
+
+    /**
      * Persiste el consumo actualizado (tras descontar cupo).
      *
      * @param quota consumo con el cupo ya descontado

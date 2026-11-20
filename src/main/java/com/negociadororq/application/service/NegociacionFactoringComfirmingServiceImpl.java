@@ -122,10 +122,15 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                     .add(request.getFacturas().get(i));
         }
 
+        // Fase 28d (A2): el id de la negociación se genera ANTES de tocar cupos: es la clave del registro exacto de lo
+        // descontado de cada factura (negociacion|cufe), que se escribe en la misma transacción que los descuentos.
+        String idNegociacion = negociacionPort.nuevoId();
+
         for (FacturaNegociada facturaReq : request.getFacturas()) {
 
             try {
-                FacturaNegociada procesada = procesarFacturaNegociacionService.procesarFactura(request, facturaReq);
+                FacturaNegociada procesada = procesarFacturaNegociacionService.procesarFactura(request, facturaReq,
+                        idNegociacion);
                 facturasAceptadas.add(procesada);
 
             } catch (Exception e) {
@@ -144,6 +149,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
         // Construir negociación resumen con estado según resultados
         Negociacion negociacion = new Negociacion();
+        negociacion.setId(idNegociacion);
         negociacion.setTipoOperacion(request.getTipoOperacion());
         negociacion.setRutEmpresa(request.getRutEmpresa());
 

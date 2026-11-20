@@ -40,4 +40,18 @@ public interface IndirectFunderOfferSupplierQuotaRepository
     int descontarCupo(@Param("offerId") Long offerId,
                       @Param("supplierId") Long supplierId,
                       @Param("valor") BigDecimal valor);
+
+    /**
+     * Fase 28d (A2): la inversa exacta de {@link #descontarCupo}, atómica en la base de datos.
+     *
+     * @return número de filas afectadas — 0 si la fila de consumo no existe.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE IndirectFunderOfferSupplierQuotaEntity e "
+            + "SET e.currentQuota = e.currentQuota + :valor "
+            + "WHERE e.offerId = :offerId AND e.supplierId = :supplierId")
+    int devolverCupo(@Param("offerId") Long offerId,
+                     @Param("supplierId") Long supplierId,
+                     @Param("valor") BigDecimal valor);
 }

@@ -1,6 +1,5 @@
 package com.negociadororq.application.service;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -35,17 +34,15 @@ import com.negociadororq.domain.event.OtpRequestEvent;
 import com.negociadororq.domain.model.AprobacionActorDto;
 import com.negociadororq.domain.model.AprobacionFacturaRequest;
 import com.negociadororq.domain.model.AprobacionRequest;
-import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.EstadoFirmaOtp;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
-import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.Negociacion;
 import com.negociadororq.domain.model.Operacion;
 import com.negociadororq.domain.model.PendingOtp;
 import com.negociadororq.domain.model.ReferenciaFactura;
-import com.negociadororq.domain.model.User;
+import com.negociadororq.domain.model.TipoOperacionPendiente;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,7 +58,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final FacturaPatchOutputPort facturaPatchPort;
     private final EndosoPatchOutputPort endosoPatchPort;
     private final OutboxService outboxService;
-    private final CupoReversionService cupoReversionService;
+    /** Fase 28d (A2): reversión exacta de lo descontado al crear la negociación. */
+    private final ReversionExactaService reversionExacta;
     private final CompanyOutputPort companyPort;
     private final FondeadorQuotaOutputPort fondeadorQuotaPort;
     private final FacturaOutputPort facturaPort;
@@ -325,7 +323,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             String motivoError = "La factura " + factura.getNumeroFactura()
                     + " fue rechazada durante el proceso de aprobación/endoso";
 
-            revertirCupos(factura, tipoOperacion, factura.getRutProveedor(), rutOperador);
+            revertirCupos(idNegociacion, factura, motivoError);
             String efectoFallida = EFECTO_LIQUIDACION_FALLIDA + factura.getNumeroFactura();
             if (!yaEmitido(pending, efectoFallida)) {
                 notificacionService.notificarLiquidacionFallida(negociacion, factura.getNumeroFactura(), motivoError);
@@ -621,59 +619,16 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     }
 
     /**
-     * Revierte el cupo consumido (usuario, empresa y cada fondeador asignado) por una factura
-     * que fue rechazada durante el proceso de aprobación/endoso.
+     * Fase 28d (A2): devuelve exactamente lo que la creación de la negociación descontó para la factura rechazada (al
+     * operador y a la empresa que negociaron, por el monto descontado, incluido el cupo indirecto), una sola vez
+     * ({@link ReversionExactaService}). Antes devolvía el cupo al operador que rechazaba y a la empresa proveedora.
      *
-     * @param factura       factura negociada rechazada, con sus fondeadores asignados
-     * @param tipoOperacion FACTORING o CONFIRMING, para reversar el cupo del lado correcto
-     * @param rutEmpresa    RUT de la empresa cuyo cupo se revierte
-     * @param rutOperador   username del operador cuyo cupo individual se revierte
+     * @param idNegociacion negociación
+     * @param factura       factura negociada rechazada (con su CUFE)
+     * @param motivo        motivo del rechazo
      */
-    @Transactional
-    public void revertirCupos(FacturaNegociada factura, Operacion tipoOperacion, String rutEmpresa, String rutOperador) {
-
-        Factura facturaDb = new ResolutorFactura(facturaPort).deLaNegociacion(factura);
-
-        BigDecimal valorFactura = Optional.ofNullable(facturaDb.getValorNetoFactura())
-                .orElse(facturaDb.getValorFactura());
-
-        if (valorFactura == null) {
-            valorFactura = BigDecimal.ZERO;
-        }
-
-        Long userId = userPort.findByUsername(rutOperador)
-                .map(User::getIdeUser)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
-
-        cupoReversionService.revertirCupoUsuario(userId, valorFactura);
-
-        Long companyId = companyPort.findByNit(rutEmpresa)
-                .map(Company::getIdeCompany)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Empresa no encontrada"));
-
-        cupoReversionService.revertirCupoEmpresa(companyId, valorFactura);
-
-        if (factura.getFondeadores() != null && !factura.getFondeadores().isEmpty()) {
-            for (FondeadorAsignacion fon : factura.getFondeadores()) {
-                Long funderId = companyPort.findByNit(fon.getRutFondeador())
-                        .map(Company::getIdeCompany)
-                        .orElseThrow(() -> new RecursoNoEncontradoException("Fondeador no encontrado: " + fon.getRutFondeador()));
-
-                if ("FACTORING".equalsIgnoreCase(tipoOperacion.getTipo())) {
-                    Long supplierId = companyPort.findByNit(facturaDb.getRutProveedor())
-                            .map(Company::getIdeCompany)
-                            .orElseThrow(() -> new RecursoNoEncontradoException("Proveedor no encontrado"));
-                    cupoReversionService.revertirCupoFondeadorFactoring(funderId, supplierId, valorFactura);
-                }
-
-                if ("CONFIRMING".equalsIgnoreCase(tipoOperacion.getTipo())) {
-                    Long payerId = companyPort.findByNit(facturaDb.getRutPagador())
-                            .map(Company::getIdeCompany)
-                            .orElseThrow(() -> new RecursoNoEncontradoException("Pagador no encontrado"));
-                    cupoReversionService.revertirCupoFondeadorConfirming(funderId, payerId, valorFactura);
-                }
-            }
-        }
+    public void revertirCupos(String idNegociacion, FacturaNegociada factura, String motivo) {
+        reversionExacta.revertir(TipoOperacionPendiente.RECHAZO, idNegociacion, factura.getCufe(), motivo);
     }
 
     /**

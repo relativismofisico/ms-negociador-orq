@@ -1,6 +1,5 @@
 package com.negociadororq.application.service;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,10 +28,9 @@ import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Endoso;
 import com.negociadororq.domain.model.Factura;
 import com.negociadororq.domain.model.FacturaNegociada;
-import com.negociadororq.domain.model.FondeadorAsignacion;
 import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.domain.model.Negociacion;
-import com.negociadororq.domain.model.User;
+import com.negociadororq.domain.model.TipoOperacionPendiente;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,7 +53,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     private final CompanyOutputPort companyPort;
     private final FondeadorQuotaOutputPort fondeadorQuotaPort;
     private final UserOutputPort userPort;
-    private final CupoReversionService cupoReversionService;
+    /** Fase 28d (A2): reversión exacta de lo descontado al crear la negociación. */
+    private final ReversionExactaService reversionExacta;
     private final ClockPort clock;
     private final AuditoriaNegociacionService auditoria;
 
@@ -114,9 +113,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                 // negociación consumió cupos para esta factura, pero el documento
                 // ya no está en BD — no hay factura que revertir a SIN_NEGOCIAR,
                 // solo los cupos.
-                revertirCupos(facturaNegociada.getValorFactura(), facturaNegociada.getFondeadores(), tipoOperacion,
-                        request.getRutActor(), request.getRutOperador(),
-                        facturaNegociada.getRutProveedor(), facturaNegociada.getRutPagador());
+                reversionExacta.revertir(TipoOperacionPendiente.ENDOSO_RECHAZADO, request.getIdNegociacion(),
+                        facturaNegociada.getCufe(), "factura no existe en BD al endosar");
                 facturasRechazadas.add(numeroFactura + " (factura no existe en BD)");
                 continue;
             }
@@ -131,11 +129,8 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
             }
 
             if (!vigenciaPermiteEndosar(factura, facturaNegociada, tipoOperacion)) {
-                BigDecimal valorFactura = Optional.ofNullable(factura.getValorNetoFactura())
-                        .orElse(factura.getValorFactura());
-                revertirCupos(valorFactura, facturaNegociada.getFondeadores(), tipoOperacion,
-                        request.getRutActor(), request.getRutOperador(),
-                        factura.getRutProveedor(), factura.getRutPagador());
+                reversionExacta.revertir(TipoOperacionPendiente.ENDOSO_RECHAZADO, request.getIdNegociacion(),
+                        facturaNegociada.getCufe(), "vigencia del descuento vencida");
                 factura.setEstadoNegociacion("SIN_NEGOCIAR");
                 facturaPort.save(factura);
                 facturasRechazadas.add(numeroFactura + " (vigencia del descuento vencida)");
@@ -329,44 +324,6 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
             return Optional.empty();
         }
         return fondeadorQuotaPort.findByFunderIdAndPayerId(funderId, payerId);
-    }
-
-    // Reversión de cupos para facturas rechazadas al endosar (vigencia vencida,
-    // o el documento ya no existe en BD): mismo bloque CupoReversionService que
-    // ya usa AprobacionEndosoDescuentoServiceImpl.revertirCupos para el rechazo
-    // por OTP, replicado acá porque ese método no está expuesto por ninguna
-    // interfaz inyectable (vive solo en esa clase, llamado internamente).
-    private void revertirCupos(BigDecimal valorFactura, List<FondeadorAsignacion> fondeadores, String tipoOperacion,
-            String rutEmpresa, String rutOperador, String rutProveedor, String rutPagador) {
-
-        BigDecimal valor = Optional.ofNullable(valorFactura).orElse(BigDecimal.ZERO);
-
-        userPort.findByUsername(rutOperador).map(User::getIdeUser)
-                .ifPresent(userId -> cupoReversionService.revertirCupoUsuario(userId, valor));
-
-        companyPort.findByNit(rutEmpresa).map(Company::getIdeCompany)
-                .ifPresent(companyId -> cupoReversionService.revertirCupoEmpresa(companyId, valor));
-
-        if (fondeadores == null) {
-            return;
-        }
-
-        for (FondeadorAsignacion fon : fondeadores) {
-            Long funderId = companyPort.findByNit(fon.getRutFondeador()).map(Company::getIdeCompany).orElse(null);
-            if (funderId == null) {
-                continue;
-            }
-
-            if ("FACTORING".equalsIgnoreCase(tipoOperacion)) {
-                companyPort.findByNit(rutProveedor).map(Company::getIdeCompany)
-                        .ifPresent(supplierId ->
-                                cupoReversionService.revertirCupoFondeadorFactoring(funderId, supplierId, valor));
-            } else if ("CONFIRMING".equalsIgnoreCase(tipoOperacion)) {
-                companyPort.findByNit(rutPagador).map(Company::getIdeCompany)
-                        .ifPresent(payerId ->
-                                cupoReversionService.revertirCupoFondeadorConfirming(funderId, payerId, valor));
-            }
-        }
     }
 
 }

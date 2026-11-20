@@ -1,19 +1,15 @@
 package com.negociadororq.application.service;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.FacturaOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
-import com.negociadororq.domain.model.Company;
 import com.negociadororq.domain.model.Factura;
-import com.negociadororq.domain.model.Negociacion;
+import com.negociadororq.domain.model.TipoOperacionPendiente;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 
@@ -34,7 +30,8 @@ public class FacturaVencimientoService {
     private final FacturaOutputPort facturaPort;
     private final NegociacionOutputPort negociacionPort;
     private final CompanyOutputPort companyPort;
-    private final CupoReversionService cupoReversionService;
+    /** Fase 28d (A2): reversión exacta de lo descontado al crear la negociación. */
+    private final ReversionExactaService reversionExacta;
     private final ClockPort clock;
 
     /**
@@ -101,51 +98,15 @@ public class FacturaVencimientoService {
         log.info(String.format("Proceso finalizado. Facturas vencidas actualizadas=%d", actualizadas));
     }
 
-    // rutOperador no se persiste ni en Factura ni en Negociacion: no hay forma
-    // de identificar qué operador consumió el cupo para revertirle el suyo acá
-    // (limitación conocida, distinta a la reversión de EndosoDescuentoServiceImpl,
-    // que sí tiene el rutOperador de la request). Se revierten empresa y
-    // fondeadores, que sí son identificables desde la Negociacion.
+    // Fase 28d (A2): la reversión devuelve exactamente lo que la creación descontó para la factura (incluido el cupo del
+    // operador, que antes no se devolvía porque el operador no se guardaba, y el indirecto), una sola vez. Sin registro
+    // de lo descontado, REVISION_MANUAL ([OPERACION-PENDIENTE-ATASCADA]) y nada cambia.
     private void revertirCuposPorAbandono(Factura factura) {
-        if (factura.getNegociacionId() == null) {
+        if (factura.getNegociacionId() == null || factura.getCufe() == null) {
             return;
         }
-
-        Optional<Negociacion> negociacionOpt = negociacionPort.findById(factura.getNegociacionId());
-        if (negociacionOpt.isEmpty()) {
-            return;
-        }
-        Negociacion negociacion = negociacionOpt.get();
-
-        BigDecimal valor = Optional.ofNullable(factura.getValorNetoFactura())
-                .orElse(Optional.ofNullable(factura.getValorFactura()).orElse(BigDecimal.ZERO));
-
-        companyPort.findByNit(negociacion.getRutEmpresa()).map(Company::getIdeCompany)
-                .ifPresent(companyId -> cupoReversionService.revertirCupoEmpresa(companyId, valor));
-
-        String tipoOperacion = null;
-        if (negociacion.getTipoOperacion() != null) {
-            tipoOperacion = negociacion.getTipoOperacion().getTipo();
-        }
-        List<String> rutFondeadores = Optional.ofNullable(negociacion.getRutFondeadores())
-                .orElse(Collections.emptyList());
-
-        for (String rutFondeador : rutFondeadores) {
-            Long funderId = companyPort.findByNit(rutFondeador).map(Company::getIdeCompany).orElse(null);
-            if (funderId == null) {
-                continue;
-            }
-
-            if (FACTORING.equalsIgnoreCase(tipoOperacion)) {
-                companyPort.findByNit(factura.getRutProveedor()).map(Company::getIdeCompany)
-                        .ifPresent(supplierId ->
-                                cupoReversionService.revertirCupoFondeadorFactoring(funderId, supplierId, valor));
-            } else if (CONFIRMING.equalsIgnoreCase(tipoOperacion)) {
-                companyPort.findByNit(factura.getRutPagador()).map(Company::getIdeCompany)
-                        .ifPresent(payerId ->
-                                cupoReversionService.revertirCupoFondeadorConfirming(funderId, payerId, valor));
-            }
-        }
+        reversionExacta.revertir(TipoOperacionPendiente.VENCIMIENTO, factura.getNegociacionId(), factura.getCufe(),
+                "vencimiento de la factura");
     }
 
 }

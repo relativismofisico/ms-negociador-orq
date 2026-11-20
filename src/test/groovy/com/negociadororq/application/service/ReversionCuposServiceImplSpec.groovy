@@ -1,325 +1,157 @@
 package com.negociadororq.application.service
 
-import com.negociadororq.application.port.output.CompanyOutputPort
-import com.negociadororq.application.port.output.EndosoPatchOutputPort
+import com.negociadororq.application.exception.ConflictoException
+import com.negociadororq.application.exception.RecursoNoEncontradoException
 import com.negociadororq.application.port.output.FacturaOutputPort
 import com.negociadororq.application.port.output.FacturaPatchOutputPort
 import com.negociadororq.application.port.output.NegociacionOutputPort
-import com.negociadororq.application.port.output.ReversionCuposReclamoOutputPort
-import com.negociadororq.application.port.output.UserOutputPort
 import com.negociadororq.domain.enums.EstadoFirma
-import com.negociadororq.domain.model.Company
 import com.negociadororq.domain.model.Factura
 import com.negociadororq.domain.model.FacturaNegociada
 import com.negociadororq.domain.model.FondeadorAsignacion
 import com.negociadororq.domain.model.Negociacion
 import com.negociadororq.domain.model.Operacion
-import com.negociadororq.domain.model.User
-import org.springframework.transaction.support.TransactionOperations
+import com.negociadororq.domain.model.ReferenciaFactura
+import com.negociadororq.domain.model.TipoOperacionPendiente
 import spock.lang.Specification
 
-import java.math.BigDecimal
-
+/**
+ * Liquidación fallida (Fase 28d, A2): la devolución es la exacta de lo descontado ({@link ReversionExactaService}); este
+ * servicio decide cuándo revertir (guarda de estado, CUFE, factura de la negociación) y qué hacer después (firma y
+ * aviso solo si esta entrega revirtió). La conservación de cupos al centavo la prueba ConservacionCuposIT (MySQL real).
+ */
 class ReversionCuposServiceImplSpec extends Specification {
 
     NegociacionOutputPort negociacionPort = Mock()
     FacturaOutputPort facturaPort = Mock()
     FacturaPatchOutputPort facturaPatchPort = Mock()
-    EndosoPatchOutputPort endosoPatchPort = Mock()
-    CupoReversionService cupoReversionService = Mock()
-    UserOutputPort userPort = Mock()
-    CompanyOutputPort companyPort = Mock()
     NotificacionService notificacionService = Mock()
-    ReversionCuposReclamoOutputPort reclamoPort = Mock()
+    ReversionExactaService reversionExacta = Mock()
 
-    ReversionCuposServiceImpl service = new ReversionCuposServiceImpl(
-            negociacionPort, facturaPort, facturaPatchPort, endosoPatchPort,
-            cupoReversionService, userPort, companyPort, notificacionService,
-            reclamoPort, TransactionOperations.withoutTransaction()
-    )
+    ReversionCuposServiceImpl service = new ReversionCuposServiceImpl(negociacionPort, facturaPort, facturaPatchPort,
+            notificacionService, reversionExacta)
 
-    def setup() {
-        reclamoPort.reclamar(_, _) >> true
+    static Negociacion negociacion(String numero = "FECI-1") {
+        def fn = FacturaNegociada.builder().numeroFactura(numero).cufe("CUFE-" + numero).rutProveedor("PROV-001")
+                .rutPagador("PAG-001").valorFactura(new BigDecimal("1000.00"))
+                .fondeadores([FondeadorAsignacion.builder().rutFondeador("FON-001").build()]).build()
+        Negociacion.builder().id("neg-001").rutEmpresa("PROV-001").tipoOperacion(new Operacion("FACTORING", "ANTICIPO"))
+                .facturas([fn]).build()
     }
 
-    def buildFactura(String numero) {
-        def f = new Factura()
-        f.numeroFactura = numero
-        f.cufe = "CUFE-" + numero
-        f.rutProveedor = "PROV-001"
-        f.rutPagador = "PAG-001"
-        return f
+    static Factura factura(String numero = "FECI-1", String estado = "NEGOCIADA", String firma = "CESION") {
+        new Factura(numeroFactura: numero, cufe: "CUFE-" + numero, rutProveedor: "PROV-001", rutPagador: "PAG-001",
+                estadoNegociacion: estado, estadoFirma: firma)
     }
 
-    def buildNegociacion(String tipo, String numero, BigDecimal valor) {
-        def fn = FacturaNegociada.builder()
-                .numeroFactura(numero)
-                .cufe("CUFE-" + numero).rutProveedor("PROV-001").rutPagador("PAG-001")
-                .valorFactura(valor)
-                .fondeadores([FondeadorAsignacion.builder().rutFondeador("FOND-001").build()])
-                .build()
-        Negociacion.builder()
-                .id("neg-001")
-                .rutEmpresa("EMP-001")
-                .tipoOperacion(new Operacion(tipo, "DESC"))
-                .facturas([fn])
-                .build()
-    }
-
-    // ─── flujo exitoso FACTORING ─────────────────────────────────────────────
-
-    def "revertirPorFactura FACTORING revierte cupos operador, empresa y fondeador"() {
+    def "esta entrega revierte: firma RECHAZADA y un aviso"() {
         given:
-        def numero = "FECI001"
-        def valor = new BigDecimal("5000.00")
-        def factura = buildFactura(numero)
-        def neg = buildNegociacion("FACTORING", numero, valor)
-
-        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(factura)
-        negociacionPort.findById("neg-001") >> Optional.of(neg)
-        userPort.findByUsername("USR-OP") >> Optional.of(User.builder().ideUser(1L).build())
-        companyPort.findByNit("EMP-001") >> Optional.of(Company.builder().ideCompany(10L).build())
-        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(20L).build())
-        companyPort.findByNit("PROV-001") >> Optional.of(Company.builder().ideCompany(30L).build())
+        negociacionPort.findById("neg-001") >> Optional.of(negociacion())
+        facturaPort.findByCufe("CUFE-FECI-1") >> Optional.of(factura())
 
         when:
-        service.revertirPorFactura("neg-001", "CUFE-" + numero, numero, "USR-OP", "Error de pago")
+        service.revertirPorFactura("neg-001", "CUFE-FECI-1", "FECI-1", "USR-OP", "Motivo")
 
         then:
-        1 * cupoReversionService.revertirCupoUsuario(1L, valor)
-        1 * cupoReversionService.revertirCupoEmpresaEnTransaccionActual(10L, valor)
-        0 * cupoReversionService.revertirCupoEmpresa(_, _)
-        1 * cupoReversionService.revertirCupoFondeadorFactoring(20L, 30L, valor)
-        1 * facturaPatchPort.actualizarEstadoFirmaPorCufe({ it.cufe() == "CUFE-" + numero }, EstadoFirma.RECHAZADA)
-        1 * notificacionService.notificarLiquidacionFallida(neg, numero, "Error de pago")
+        1 * reversionExacta.revertir(TipoOperacionPendiente.LIQUIDACION_FALLIDA, "neg-001", "CUFE-FECI-1", "Motivo") >>
+                ReversionExactaService.Resultado.REVERTIDA
+        1 * facturaPatchPort.actualizarEstadoFirmaPorCufe(new ReferenciaFactura("CUFE-FECI-1", "PROV-001", "PAG-001"),
+                EstadoFirma.RECHAZADA)
+        1 * notificacionService.notificarLiquidacionFallida(_, "FECI-1", "Motivo")
     }
 
-    // ─── flujo exitoso CONFIRMING ─────────────────────────────────────────────
-
-    def "revertirPorFactura CONFIRMING revierte cupo fondeador confirming"() {
+    def "ya revertida (otro camino u otra entrega): solo completa la firma, sin otro aviso"() {
         given:
-        def numero = "FECI002"
-        def valor = new BigDecimal("3000.00")
-        def factura = buildFactura(numero)
-        def neg = buildNegociacion("CONFIRMING", numero, valor)
-
-        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(factura)
-        negociacionPort.findById("neg-001") >> Optional.of(neg)
-        userPort.findByUsername("USR-OP") >> Optional.of(User.builder().ideUser(1L).build())
-        companyPort.findByNit("EMP-001") >> Optional.of(Company.builder().ideCompany(10L).build())
-        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(20L).build())
-        companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().ideCompany(40L).build())
+        negociacionPort.findById("neg-001") >> Optional.of(negociacion())
+        facturaPort.findByCufe("CUFE-FECI-1") >> Optional.of(factura())
+        reversionExacta.revertir(*_) >> ReversionExactaService.Resultado.YA_REVERTIDA
 
         when:
-        service.revertirPorFactura("neg-001", "CUFE-" + numero, numero, "USR-OP", "Motivo")
+        service.revertirPorFactura("neg-001", "CUFE-FECI-1", "FECI-1", "USR-OP", "Motivo")
 
         then:
-        1 * cupoReversionService.revertirCupoFondeadorConfirming(20L, 40L, valor)
-        0 * cupoReversionService.revertirCupoFondeadorFactoring(_, _, _)
+        1 * facturaPatchPort.actualizarEstadoFirmaPorCufe(_, EstadoFirma.RECHAZADA)
+        0 * notificacionService._
     }
 
-    // ─── factura no encontrada ────────────────────────────────────────────────
-
-    def "revertirPorFactura lanza RuntimeException si factura no existe"() {
+    def "sin registro de lo descontado (REVISION_MANUAL): no marca la firma ni avisa"() {
         given:
-        negociacionPort.findById("neg-001") >> Optional.of(buildNegociacion("FACTORING", "NO-EXISTE", BigDecimal.ONE))
-        facturaPort.findByCufe("CUFE-" + "NO-EXISTE") >> Optional.empty()
+        negociacionPort.findById("neg-001") >> Optional.of(negociacion())
+        facturaPort.findByCufe("CUFE-FECI-1") >> Optional.of(factura())
+        reversionExacta.revertir(*_) >> ReversionExactaService.Resultado.SIN_REGISTRO
 
         when:
-        service.revertirPorFactura("neg-001", "CUFE-" + "NO-EXISTE", "NO-EXISTE", "USR", "Motivo")
+        service.revertirPorFactura("neg-001", "CUFE-FECI-1", "FECI-1", "USR-OP", "Motivo")
 
         then:
-        def ex = thrown(com.negociadororq.application.exception.ConflictoException)
-        ex.codigo == ResolutorFactura.FACTURA_NO_COINCIDE
+        0 * facturaPatchPort._
+        0 * notificacionService._
     }
 
-    // ─── negociacion no encontrada ────────────────────────────────────────────
-
-    def "revertirPorFactura lanza RuntimeException si negociacion no existe"() {
+    def "factura #estado / firma #firma: no revierte, no marca ni notifica"() {
         given:
-        facturaPort.findByCufe("CUFE-" + "FECI003") >> Optional.of(buildFactura("FECI003"))
-        negociacionPort.findById("neg-001") >> Optional.empty()
+        negociacionPort.findById("neg-001") >> Optional.of(negociacion())
+        facturaPort.findByCufe("CUFE-FECI-1") >> Optional.of(factura("FECI-1", estado, firma))
 
         when:
-        service.revertirPorFactura("neg-001", "CUFE-" + "FECI003", "FECI003", "USR", "Motivo")
+        service.revertirPorFactura("neg-001", "CUFE-FECI-1", "FECI-1", "USR-OP", "Motivo")
 
         then:
-        def ex = thrown(RuntimeException)
-        ex.message.contains("Negociación no encontrada")
-    }
-
-    // ─── usuario no encontrado ────────────────────────────────────────────────
-
-    def "revertirPorFactura lanza RuntimeException si usuario no existe"() {
-        given:
-        def numero = "FECI004"
-        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(buildFactura(numero))
-        negociacionPort.findById("neg-001") >> Optional.of(buildNegociacion("FACTORING", numero, new BigDecimal("100")))
-        userPort.findByUsername("USR_NO") >> Optional.empty()
-
-        when:
-        service.revertirPorFactura("neg-001", "CUFE-" + numero, numero, "USR_NO", "Motivo")
-
-        then:
-        def ex = thrown(RuntimeException)
-        ex.message.contains("Usuario no encontrado")
-    }
-
-    // ─── empresa no encontrada ────────────────────────────────────────────────
-
-    def "revertirPorFactura lanza RuntimeException si empresa no existe"() {
-        given:
-        def numero = "FECI005"
-        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(buildFactura(numero))
-        negociacionPort.findById("neg-001") >> Optional.of(buildNegociacion("FACTORING", numero, new BigDecimal("100")))
-        userPort.findByUsername("USR-OP") >> Optional.of(User.builder().ideUser(1L).build())
-        companyPort.findByNit("EMP-001") >> Optional.empty()
-
-        when:
-        service.revertirPorFactura("neg-001", "CUFE-" + numero, numero, "USR-OP", "Motivo")
-
-        then:
-        def ex = thrown(RuntimeException)
-        ex.message.contains("Empresa no encontrada")
-    }
-
-    // ─── sin fondeadores ─────────────────────────────────────────────────────
-
-    def "revertirPorFactura sin fondeadores no revierte cupo fondeador"() {
-        given:
-        def numero = "FECI006"
-        def valor = new BigDecimal("1000.00")
-        def factura = buildFactura(numero)
-
-        def fn = FacturaNegociada.builder()
-                .numeroFactura(numero)
-                .cufe("CUFE-" + numero).rutProveedor("PROV-001").rutPagador("PAG-001")
-                .valorFactura(valor)
-                .fondeadores(null)
-                .build()
-        def neg = Negociacion.builder()
-                .id("neg-001")
-                .rutEmpresa("EMP-001")
-                .tipoOperacion(new Operacion("FACTORING", "DESC"))
-                .facturas([fn])
-                .build()
-
-        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(factura)
-        negociacionPort.findById("neg-001") >> Optional.of(neg)
-        userPort.findByUsername("USR-OP") >> Optional.of(User.builder().ideUser(1L).build())
-        companyPort.findByNit("EMP-001") >> Optional.of(Company.builder().ideCompany(10L).build())
-
-        when:
-        service.revertirPorFactura("neg-001", "CUFE-" + numero, numero, "USR-OP", "Motivo")
-
-        then:
-        0 * cupoReversionService.revertirCupoFondeadorFactoring(_, _, _)
-        0 * cupoReversionService.revertirCupoFondeadorConfirming(_, _, _)
-        1 * facturaPatchPort.actualizarEstadoFirmaPorCufe({ it.cufe() == "CUFE-" + numero }, EstadoFirma.RECHAZADA)
-    }
-
-    // ─── idempotencia ────────────────────────────────────────────────────────
-
-    def "revertirPorFactura sobre factura #estadoNegociacion / firma #estadoFirma no revierte, no marca ni notifica"() {
-        given:
-        def numero = "FECI-GUARDA"
-        def factura = buildFactura(numero)
-        factura.estadoNegociacion = estadoNegociacion
-        factura.estadoFirma = estadoFirma
-        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(factura)
-        negociacionPort.findById("neg-001") >> Optional.of(buildNegociacion("FACTORING", numero, BigDecimal.ONE))
-
-        when:
-        service.revertirPorFactura("neg-001", "CUFE-" + numero, numero, "USR-OP", "Motivo")
-
-        then:
-        0 * negociacionPort.save(_)
-        0 * reclamoPort._
-        0 * cupoReversionService._
+        0 * reversionExacta._
         0 * facturaPatchPort._
         0 * notificacionService._
 
         where:
-        estadoNegociacion | estadoFirma
-        "LIQUIDADA"       | "CESION"
-        "LIQUIDADA"       | "DESCUENTO"
-        "NEGOCIADA"       | "RECHAZADA"
+        estado      | firma
+        "LIQUIDADA" | "CESION"
+        "NEGOCIADA" | "RECHAZADA"
     }
 
-    def "revertirPorFactura con la reversión ya reclamada no revierte ni notifica; solo completa la firma"() {
+    def "negociación inexistente: RecursoNoEncontrado sin revertir"() {
         given:
-        def numero = "FECI-DUP"
-        def neg = buildNegociacion("FACTORING", numero, new BigDecimal("700.00"))
-        facturaPort.findByCufe("CUFE-" + numero) >> Optional.of(buildFactura(numero))
-        negociacionPort.findById("neg-001") >> Optional.of(neg)
+        negociacionPort.findById(_) >> Optional.empty()
 
         when:
-        service.revertirPorFactura("neg-001", "CUFE-" + numero, numero, "USR-OP", "Motivo")
+        service.revertirPorFactura("neg-001", "CUFE-FECI-1", "FECI-1", "USR-OP", "Motivo")
 
         then:
-        1 * reclamoPort.reclamar(numero, "neg-001") >> false
-        0 * cupoReversionService._
-        0 * userPort._
-        1 * facturaPatchPort.actualizarEstadoFirmaPorCufe({ it.cufe() == "CUFE-" + numero }, EstadoFirma.RECHAZADA)
-        0 * notificacionService._
+        thrown(RecursoNoEncontradoException)
+        0 * reversionExacta._
     }
-
-    // ─── Fase 28d (C): por negociación y CUFE ────────────────────────────────
 
     def "Fase 28d (C): sin CUFE o sin negociación => [EVENTO-SIN-CUFE], contador y nada se toca (#caso)"() {
         given:
         def antes = EventosSinCufe.rechazados()
 
         when:
-        service.revertirPorFactura(negociacion, cufe, "FECI-X", "USR-OP", "Motivo")
+        service.revertirPorFactura(neg, cufe, "FECI-X", "USR-OP", "Motivo")
 
         then:
         def ex = thrown(IllegalArgumentException)
         ex.message.startsWith("[EVENTO-SIN-CUFE]")
         EventosSinCufe.rechazados() == antes + 1
         0 * negociacionPort._
-        0 * facturaPort._
-        0 * reclamoPort._
-        0 * cupoReversionService._
+        0 * reversionExacta._
         0 * facturaPatchPort._
 
         where:
-        caso              | negociacion | cufe
-        "sin CUFE"        | "neg-001"   | null
-        "CUFE vacío"      | "neg-001"   | " "
-        "sin negociación" | null        | "CUFE-FECI-X"
+        caso              | neg       | cufe
+        "sin CUFE"        | "neg-001" | null
+        "CUFE vacío"      | "neg-001" | " "
+        "sin negociación" | null      | "CUFE-FECI-X"
     }
 
     def "Fase 28d (C): un CUFE que no está en la negociación => FACTURA_NO_COINCIDE sin revertir"() {
         given:
-        negociacionPort.findById("neg-001") >> Optional.of(buildNegociacion("FACTORING", "FECI-1", BigDecimal.TEN))
+        negociacionPort.findById("neg-001") >> Optional.of(negociacion())
 
         when:
         service.revertirPorFactura("neg-001", "CUFE-DE-OTRA-EMPRESA", "FECI-1", "USR-OP", "Motivo")
 
         then:
-        def ex = thrown(com.negociadororq.application.exception.ConflictoException)
+        def ex = thrown(ConflictoException)
         ex.codigo == ResolutorFactura.FACTURA_NO_COINCIDE
-        0 * reclamoPort._
-        0 * cupoReversionService._
+        0 * reversionExacta._
         0 * facturaPatchPort._
-    }
-
-    def "Fase 28d (C): dos empresas con la factura 1: se revierte y marca solo la de la negociación (por su CUFE)"() {
-        given: "la negociación de A tiene su factura 1; B tiene otra factura 1 en la base"
-        def neg = buildNegociacion("FACTORING", "1", new BigDecimal("300.00"))
-        negociacionPort.findById("neg-001") >> Optional.of(neg)
-        facturaPort.findByCufe("CUFE-1") >> Optional.of(buildFactura("1"))
-        userPort.findByUsername("USR-OP") >> Optional.of(User.builder().ideUser(1L).build())
-        companyPort.findByNit(_) >> Optional.of(Company.builder().ideCompany(10L).build())
-
-        when:
-        service.revertirPorFactura("neg-001", "CUFE-1", "1", "USR-OP", "Motivo")
-
-        then:
-        0 * facturaPort.findAllByNumeroFactura(_)
-        1 * facturaPatchPort.actualizarEstadoFirmaPorCufe(
-                new com.negociadororq.domain.model.ReferenciaFactura("CUFE-1", "PROV-001", "PAG-001"), EstadoFirma.RECHAZADA)
-        0 * facturaPatchPort.actualizarEstadoFirmaPorCufe({ it.cufe() != "CUFE-1" }, _)
     }
 }
