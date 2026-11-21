@@ -761,5 +761,9 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         1 * notificacionService.notificarLiquidacionFallida(_, "FECI001", _)
         1 * notificacionService.notificarFirmaEndoso(_)
         0 * outboxService.guardarEventoConId(_, _, "topic-liquidacion", _)
+        // Fase 28d (A3): cada intento pide la reversión; la exacta la aplica una sola vez (CAS) y la segunda responde
+        // YA_REVERTIDA sin devolver ni enviar la plantilla A otra vez (ReversionExactaServiceSpec).
+        2 * reversionExacta.revertir(TipoOperacionPendiente.RECHAZO, "neg-001", "CUFE-FECI001", _) >>>
+                [ReversionExactaService.Resultado.REVERTIDA, ReversionExactaService.Resultado.YA_REVERTIDA]
     }
 }

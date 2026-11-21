@@ -497,7 +497,8 @@ class EndosoDescuentoServiceImplSpec extends Specification {
         resultado.facturasRechazadas.any { it.contains("vigencia del descuento") }
         0 * endosoPort.save(_)
         1 * reversionExacta.revertir(TipoOperacionPendiente.ENDOSO_RECHAZADO, _, _, _)
-        1 * facturaPort.save({ it.estadoNegociacion == "SIN_NEGOCIAR" })
+        1 * facturaPort.save({ it.estadoNegociacion == "VENCIDA" })
+        0 * facturaPort.save({ it.estadoNegociacion == "SIN_NEGOCIAR" })
     }
 
     def "factura dentro de vigencia DIAS_ANTES_VENCIMIENTO se endosa normalmente"() {

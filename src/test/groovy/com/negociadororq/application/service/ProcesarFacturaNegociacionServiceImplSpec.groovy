@@ -245,10 +245,10 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
 
     // ─── estado incorrecto ────────────────────────────────────────────────────
 
-    def "procesarFactura lanza RuntimeException cuando estado no es SIN_NEGOCIAR"() {
+    def "procesarFactura lanza RuntimeException cuando estado no es SIN_NEGOCIAR (#estado)"() {
         given:
         def factura = buildFactura("FECI004", "PROV-001", "PAG-001")
-        factura.estadoNegociacion = "NEGOCIADA"
+        factura.estadoNegociacion = estado
 
         facturaPort.findByCufe("CUFE-" + "FECI004") >> Optional.of(factura)
         validacionFacturaService.validarFacturaVencida({ it instanceof Factura && it.numeroFactura == "FECI004" }, null) >>
@@ -262,6 +262,9 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         then:
         def ex = thrown(RuntimeException)
         ex.message.contains("no negociable")
+
+        where: "Fase 28d (A3): la factura vencida (también la del endoso rechazado por vigencia) o rechazada no se negocia"
+        estado << ["NEGOCIADA", "VENCIDA", "RECHAZADA"]
     }
 
     // ─── permiso incorrecto FACTORING ─────────────────────────────────────────

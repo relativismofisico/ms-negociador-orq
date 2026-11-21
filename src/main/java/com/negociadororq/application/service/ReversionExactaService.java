@@ -1,6 +1,8 @@
 package com.negociadororq.application.service;
 
+import java.util.EnumSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import com.negociadororq.application.port.output.IndirectFunderOfferSupplierQuotaOutputPort;
@@ -27,6 +29,15 @@ import org.springframework.transaction.support.TransactionOperations;
  * </ul>
  */
 public class ReversionExactaService {
+
+    /**
+     * Fase 28d (decisión de John): caminos que ya avisan de la reversión con su propio correo y por eso NO llevan la
+     * plantilla A. El rechazo envía "Factura rechazada" (notificarLiquidacionFallida) y la fallida, su correo de
+     * liquidación fallida. La plantilla A queda para la creación abortada, el endoso rechazado por vigencia, el vencimiento
+     * y la liquidación cancelada.
+     */
+    static final Set<TipoOperacionPendiente> CON_CORREO_PROPIO =
+            EnumSet.of(TipoOperacionPendiente.RECHAZO, TipoOperacionPendiente.LIQUIDACION_FALLIDA);
 
     /** Estado de CREAR_NEGOCIACION: cupos descontados, la negociación todavía no está en Mongo (A2, commit 2). */
     public static final String CUPOS_DESCONTADOS = "CUPOS_DESCONTADOS";
@@ -108,7 +119,10 @@ public class ReversionExactaService {
             }
             descuento.descuentos().forEach(this::devolver);
             auditoria.cuposRevertidos(negociacionId, cufe, camino.name(), descuento.descuentos().size());
-            correos.revertida(negociacionId, cufe, descuento.contexto());
+            // Fase 28d (decisión de John): la plantilla A solo cuando ningún otro correo informa la reversión.
+            if (!CON_CORREO_PROPIO.contains(camino)) {
+                correos.revertida(negociacionId, cufe, descuento.contexto());
+            }
             return true;
         });
         if (Boolean.TRUE.equals(revertida)) {
