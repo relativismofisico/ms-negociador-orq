@@ -122,6 +122,35 @@ public class SeguimientoLiquidacionService {
     }
 
     /**
+     * Fase 28d (A5, reconciliador): las facturas con firma final y solicitud escritas (misma transacción Mongo) cuyo
+     * seguimiento no consta en MySQL (la instancia cayó entre las dos escrituras). Registra el seguimiento y reencola la
+     * solicitud (el liquidador la procesa una sola vez por negociacion|cufe|fecha); después el seguimiento sigue solo.
+     *
+     * @return seguimientos registrados ahora
+     */
+    public int reemitirSinSeguimiento() {
+        int registrados = 0;
+        for (Factura f : facturaPort.findConSeguimientoLiquidacionPendiente()) {
+            if (registrados >= parametros.lote()) {
+                break;
+            }
+            if (f.getNegociacionId() == null || f.getSolicitudLiquidacionId() == null) {
+                continue;
+            }
+            if (registrarSolicitud(f.getNegociacionId(), f.getCufe(), f.getNumeroFactura(),
+                    f.getSolicitudLiquidacionId())) {
+                outbox.reencolar(f.getSolicitudLiquidacionId());
+                registrados++;
+                LOG.info(String.format("[LIQUIDACION-SEGUIMIENTO-REEMITIDO] negociación %s CUFE %s: firma final sin "
+                        + "seguimiento; se registra y se reencola la solicitud.", f.getNegociacionId(), f.getCufe()));
+            }
+            facturaPatch.quitarSeguimientoLiquidacionPendiente(
+                    new ReferenciaFactura(f.getCufe(), f.getRutProveedor(), f.getRutPagador()));
+        }
+        return registrados;
+    }
+
+    /**
      * Un ciclo del seguimiento.
      *
      * @return operaciones atendidas en el ciclo

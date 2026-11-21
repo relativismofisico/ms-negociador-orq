@@ -46,6 +46,35 @@ public class FacturaPatchAdapter implements FacturaPatchOutputPort {
     }
 
     @Override
+    public boolean actualizarEstadosSiNoVencida(ReferenciaFactura ref, EstadoFirma estadoFirma,
+                                                EstadoNegociacion estadoNegociacion) {
+        FacturaPatchRepository.Resultado r = repository.actualizarEstadosSiNoVencida(ref, estadoFirma, estadoNegociacion);
+        exigirCoincidencia(r != FacturaPatchRepository.Resultado.NO_COINCIDE, ref);
+        return r == FacturaPatchRepository.Resultado.ACTUALIZADA;
+    }
+
+    @Override
+    public boolean marcarFirmaFinalConSolicitud(ReferenciaFactura ref, EstadoFirma firmaFinal, String idEvento) {
+        return repository.marcarFirmaFinalConSolicitud(ref, firmaFinal, idEvento);
+    }
+
+    @Override
+    public boolean marcarVencidaSiCoincide(String facturaId, String estadoLeido, String firmaLeida,
+                                           boolean reversionPendiente) {
+        return repository.marcarVencidaSiCoincide(facturaId, estadoLeido, firmaLeida, reversionPendiente);
+    }
+
+    @Override
+    public void quitarReversionPendiente(String facturaId) {
+        repository.quitarReversionPendiente(facturaId);
+    }
+
+    @Override
+    public void quitarSeguimientoLiquidacionPendiente(ReferenciaFactura ref) {
+        repository.quitarSeguimientoLiquidacionPendiente(ref);
+    }
+
+    @Override
     public void actualizarNegociacionIdPorCufe(ReferenciaFactura ref, String negociacionId) {
         exigirCoincidencia(repository.actualizarNegociacionIdPorCufe(ref, negociacionId), ref);
     }

@@ -309,10 +309,10 @@ class PendingOtpPorOperadorIntegracionSpec extends Specification {
             }
             boolean reclamarFirmaEmpresa(String i, String n, String r, String o) { endosoPatch.reclamarFirmaEmpresa(i, n, r, o) }
         }
-        def aprobacion = new AprobacionEndosoDescuentoServiceImpl(negociacionPort, Mock(FacturaPatchOutputPort), endosoPatchConMemoria,
+        def aprobacion = new AprobacionEndosoDescuentoServiceImpl(negociacionPort, Stub(FacturaPatchOutputPort) { marcarFirmaFinalConSolicitud(*_) >> true; actualizarEstadosSiNoVencida(*_) >> true }, endosoPatchConMemoria,
                 Mock(OutboxService), Mock(ReversionExactaService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort),
                 facturaPort, userPort, pendientes, firmaEndoso, Mock(NotificacionService), endosoPort, documento, clock,
-                "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService))
+                "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService), TransaccionMongoDirecta.INSTANCIA)
         endoso = Endoso.builder().id("end-29").negociacionId(NEG).numerosFactura([FAC]).aprobaciones([]).firmasOtp([]).build()
         documento.generarDocumentoFormal(endoso, negociacion, [factura], [fn], "op-prov")
         mongo.getCollection("endosos").insertOne(new Document([negociacionId: NEG, numerosFactura: [FAC]]))

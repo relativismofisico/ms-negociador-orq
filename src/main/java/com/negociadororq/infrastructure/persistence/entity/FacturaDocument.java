@@ -72,4 +72,10 @@ public class FacturaDocument {
     private List<ActorFactura> actores;
     private String usuarioCargaFactura;
     private String empresaCargaFactura;
+    /** Fase 28d (A5): id del evento liquidacion.solicitada escrito con la firma final (misma transacción Mongo). */
+    private String solicitudLiquidacionId;
+    /** Fase 28d (A5): firma final y solicitud escritas; el seguimiento (MySQL) aún no consta. */
+    private Boolean seguimientoLiquidacionPendiente;
+    /** Fase 28d (A5): el job la marcó VENCIDA y la reversión de cupos aún no terminó (se retoma). */
+    private Boolean vencimientoReversionPendiente;
 }

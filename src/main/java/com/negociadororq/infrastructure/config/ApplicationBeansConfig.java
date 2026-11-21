@@ -247,11 +247,12 @@ public class ApplicationBeansConfig {
     @Bean
     public FacturaVencimientoService facturaVencimientoService(
             final FacturaOutputPort facturaPort,
-            final NegociacionOutputPort negociacionPort,
-            final CompanyOutputPort companyPort,
+            final FacturaPatchOutputPort facturaPatchPort,
+            final OperacionPendienteOutputPort operacionPendienteOutputPort,
             final ReversionExactaService reversionExactaService,
             final ClockPort clock) {
-        return new FacturaVencimientoService(facturaPort, negociacionPort, companyPort, reversionExactaService, clock);
+        return new FacturaVencimientoService(facturaPort, facturaPatchPort, operacionPendienteOutputPort,
+                reversionExactaService, clock);
     }
 
     /**
@@ -466,12 +467,14 @@ public class ApplicationBeansConfig {
             @Value("${topics.otp-request}") final String topicRequestOtp,
             @Value("${topics.liquidacion}") final String topicLiquidacionSolicitada,
             final AuditoriaNegociacionService auditoriaNegociacionService,
-            final SeguimientoLiquidacionService seguimientoLiquidacionService) {
+            final SeguimientoLiquidacionService seguimientoLiquidacionService,
+            final TransaccionMongoOutputPort transaccionMongoOutputPort) {
         return new AprobacionEndosoDescuentoServiceImpl(
                 negociacionPort, facturaPatchPort, endosoPatchPort, outboxService, reversionExactaService,
                 companyPort, fondeadorQuotaPort, facturaPort, userPort, pendingOtpPort, firmaEndosoService,
                 notificacionService, endosoPort, documentoEndosoService, clock,
-                topicRequestOtp, topicLiquidacionSolicitada, auditoriaNegociacionService, seguimientoLiquidacionService);
+                topicRequestOtp, topicLiquidacionSolicitada, auditoriaNegociacionService, seguimientoLiquidacionService,
+                transaccionMongoOutputPort);
     }
 
     // Igual que con OperadorServiceImpl más arriba: sin @Bean explícito para

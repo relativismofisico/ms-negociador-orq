@@ -42,11 +42,11 @@ class FirmaUnicaPorEmpresaSpec extends Specification {
     ClockPort clock = Stub() { now() >> LocalDateTime.of(2026, 11, 16, 10, 0) }
 
     AprobacionEndosoDescuentoServiceImpl service = new AprobacionEndosoDescuentoServiceImpl(
-            negociacionPort, Mock(FacturaPatchOutputPort), endosoPatchPort, outboxService,
+            negociacionPort, Stub(FacturaPatchOutputPort) { marcarFirmaFinalConSolicitud(*_) >> true; actualizarEstadosSiNoVencida(*_) >> true }, endosoPatchPort, outboxService,
             Mock(ReversionExactaService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort), Mock(FacturaOutputPort),
             Mock(UserOutputPort), pendingOtpPort, firmaEndosoService, Mock(NotificacionService),
             Mock(EndosoOutputPort), Mock(DocumentoEndosoService), clock,
-            "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService))
+            "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService), TransaccionMongoDirecta.INSTANCIA)
 
     Negociacion negociacion(String tipo, String rutQueYaFirmo, RolActor rol) {
         def aprobaciones = rutQueYaFirmo == null ? [] : [new AprobacionActorDto(rutActor: rutQueYaFirmo, rolActor: rol,

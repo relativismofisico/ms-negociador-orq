@@ -226,10 +226,10 @@ class ConfirmacionOtpHttpIntegracionSpec extends Specification {
             guardarEvento(*_) >> { args -> eventosOutbox << args[2]; null }
             guardarEventoConId(*_) >> { args -> eventosOutbox << args[3]; null }
         }
-        def aprobacion = new AprobacionEndosoDescuentoServiceImpl(negociacionPort, Mock(FacturaPatchOutputPort),
+        def aprobacion = new AprobacionEndosoDescuentoServiceImpl(negociacionPort, Stub(FacturaPatchOutputPort) { marcarFirmaFinalConSolicitud(*_) >> true; actualizarEstadosSiNoVencida(*_) >> true },
                 endosoPatchConMemoria, outbox, Mock(ReversionExactaService), Mock(CompanyOutputPort),
                 Mock(FondeadorQuotaOutputPort), facturaPort, userPort, pendientes, firmaEndoso, Mock(NotificacionService),
-                endosoPort, documento, clock, "otp.requested", "liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService))
+                endosoPort, documento, clock, "otp.requested", "liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService), TransaccionMongoDirecta.INSTANCIA)
         endoso = Endoso.builder().id("end-a1").negociacionId(NEG).numerosFactura([FAC]).aprobaciones([]).firmasOtp([]).build()
         documento.generarDocumentoFormal(endoso, negociacion, [factura], [fn], "op-prov")
         mongo.getCollection("endosos").insertOne(new Document([negociacionId: NEG, numerosFactura: [FAC]]))

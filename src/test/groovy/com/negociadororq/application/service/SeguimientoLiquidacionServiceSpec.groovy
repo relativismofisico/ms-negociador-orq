@@ -50,6 +50,50 @@ class SeguimientoLiquidacionServiceSpec extends Specification {
                 AHORA.plusMinutes(7).plusSeconds(30), 50) >> [o]
     }
 
+    static Factura firmaSinSeguimiento(String negociacion = "neg-1", String idEvento = "liquidacion.solicitada|neg-1|CUFE-1") {
+        new Factura().tap {
+            cufe = "CUFE-1"; rutProveedor = "PROV"; rutPagador = "PAG"; numeroFactura = "F-1"; negociacionId = negociacion
+            estadoNegociacion = "NEGOCIADA"; estadoFirma = "CESION"; solicitudLiquidacionId = idEvento
+            seguimientoLiquidacionPendiente = true
+        }
+    }
+
+    def "A5, reconciliador: firma final sin seguimiento -> registra el seguimiento, reencola la solicitud y quita la marca"() {
+        when:
+        def n = servicio.reemitirSinSeguimiento()
+
+        then:
+        1 * facturaPort.findConSeguimientoLiquidacionPendiente() >> [firmaSinSeguimiento()]
+        1 * operaciones.registrar(TipoOperacionPendiente.LIQUIDACION_PENDIENTE, CLAVE, "LIQ_SOLICITADA", DATOS) >> true
+        1 * outbox.reencolar("liquidacion.solicitada|neg-1|CUFE-1") >> true
+        1 * facturaPatch.quitarSeguimientoLiquidacionPendiente(new ReferenciaFactura("CUFE-1", "PROV", "PAG"))
+        n == 1
+    }
+
+    def "A5, reconciliador: si el seguimiento ya constaba (la aprobación lo escribió) no reencola y solo quita la marca"() {
+        when:
+        def n = servicio.reemitirSinSeguimiento()
+
+        then:
+        1 * facturaPort.findConSeguimientoLiquidacionPendiente() >> [firmaSinSeguimiento()]
+        1 * operaciones.registrar(*_) >> false
+        0 * outbox.reencolar(_)
+        1 * facturaPatch.quitarSeguimientoLiquidacionPendiente(_)
+        n == 0
+    }
+
+    def "A5, reconciliador: sin negociación o sin id de la solicitud no hace nada (no inventa una solicitud)"() {
+        when:
+        def n = servicio.reemitirSinSeguimiento()
+
+        then:
+        1 * facturaPort.findConSeguimientoLiquidacionPendiente() >> [firmaSinSeguimiento(null), firmaSinSeguimiento("neg-1", null)]
+        0 * operaciones.registrar(*_)
+        0 * outbox.reencolar(_)
+        0 * facturaPatch.quitarSeguimientoLiquidacionPendiente(_)
+        n == 0
+    }
+
     def "registrar la solicitud: LIQUIDACION_PENDIENTE en LIQ_SOLICITADA con el número y el id del evento"() {
         when:
         servicio.registrarSolicitud("neg-1", "CUFE-1", "F-1", "liquidacion.solicitada|neg-1|CUFE-1")

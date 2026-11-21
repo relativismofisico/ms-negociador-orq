@@ -3,8 +3,13 @@ package com.negociadororq.infrastructure.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -16,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 
 import com.negociadororq.application.dto.EndosoRequestDto;
@@ -57,6 +63,34 @@ import com.negociadororq.infrastructure.persistence.adapter.FondeadorQuotaAdapte
 import com.negociadororq.infrastructure.persistence.adapter.IndirectFunderOfferSupplierQuotaAdapter;
 import com.negociadororq.infrastructure.persistence.adapter.OperacionPendienteJdbcAdapter;
 import com.negociadororq.infrastructure.persistence.adapter.UserQuotaAdapter;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import com.negociadororq.application.mapper.EstadoFacturaMapper;
+import com.negociadororq.application.service.FirmaFinalLiquidacion;
+import com.negociadororq.application.service.OutboxService;
+import com.negociadororq.application.service.SeguimientoLiquidacionService;
+import com.negociadororq.domain.enums.EstadoFirma;
+import com.negociadororq.domain.event.LiquidacionSolicitadaEvent;
+import com.negociadororq.domain.model.ReferenciaFactura;
+import com.negociadororq.domain.model.TipoOperacionPendiente;
+import com.negociadororq.infrastructure.persistence.adapter.FacturaAdapter;
+import com.negociadororq.infrastructure.persistence.adapter.FacturaPatchAdapter;
+import com.negociadororq.infrastructure.persistence.adapter.OutboxAdapter;
+import com.negociadororq.infrastructure.persistence.adapter.TransaccionMongoAdapter;
+import com.negociadororq.infrastructure.persistence.entity.FacturaDocument;
+import com.negociadororq.infrastructure.persistence.repository.FacturaPatchRepository;
+import com.negociadororq.infrastructure.persistence.repository.FacturaRepository;
+import com.negociadororq.infrastructure.persistence.repository.OutboxEventRepository;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.data.mongodb.repository.support.MongoRepositoryFactory;
+import org.testcontainers.containers.MongoDBContainer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
@@ -119,6 +153,12 @@ class ConservacionCuposIT {
     @ServiceConnection
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
             .withCreateContainerCmdModifier(c -> c.withName("integrity-e2e-tc-mysql-"
+                    + java.util.UUID.randomUUID().toString().substring(0, 8)));
+
+    /** Fase 28d (A5): Mongo 7 replica set real para la factura, el outbox y la transacción de la firma final. */
+    @Container
+    static final MongoDBContainer MONGO = new MongoDBContainer("mongo:7.0")
+            .withCreateContainerCmdModifier(c -> c.withName("integrity-e2e-tc-mongo-"
                     + java.util.UUID.randomUUID().toString().substring(0, 8)));
 
     @TestConfiguration
@@ -381,7 +421,7 @@ class ConservacionCuposIT {
                     notificacionService, exacta).revertirPorFactura(e.negociacionId, e.cufe, e.numero, "op-1", "fallo");
             case RECHAZO -> new AprobacionEndosoDescuentoServiceImpl(negociacionPort, facturaPatchPort, null, null,
                     exacta, companyPort, fondeadorQuotaPort, facturaPort, userPort, null, null, notificacionService, null,
-                    null, clock, "otp.requested", "liquidacion", null, null)
+                    null, clock, "otp.requested", "liquidacion", null, null, null)
                     .revertirCupos(e.negociacionId, e.negociada, "rechazo");
             case ENDOSO_RECHAZADO -> {
                 // La factura ya no está en la base: el endoso la rechaza y revierte sus cupos.
@@ -404,13 +444,321 @@ class ConservacionCuposIT {
                 when(facturaPort.findByCufe(e.cufe)).thenReturn(Optional.of(e.factura));
             }
             case VENCIMIENTO -> {
+                // Fase 28d (A5): fila 1 de la tabla (negociación en curso, firmas pendientes): vence y revierte.
                 e.factura.setFechavencimientoFactura(LocalDate.now().plusDays(3));
-                when(facturaPort.findFacturasPendientesVencimiento()).thenReturn(List.of(e.factura));
-                new FacturaVencimientoService(facturaPort, negociacionPort, companyPort, exacta, clock)
+                e.factura.setId("id-" + e.cufe);
+                e.factura.setEstadoFirma(e.modo == Modo.CONFIRMING ? "SIN_DESCUENTO" : "SIN_CESION");
+                when(facturaPort.findCandidatasVencimiento(any(), any())).thenReturn(List.of(e.factura));
+                when(facturaPort.findVencidasConReversionPendiente()).thenReturn(List.of());
+                when(facturaPatchPort.marcarVencidaSiCoincide(any(), any(), any(), anyBoolean())).thenReturn(true);
+                new FacturaVencimientoService(facturaPort, facturaPatchPort, operaciones, exacta, clock)
                         .actualizarFacturasVencidas();
                 e.factura.setEstadoNegociacion("NEGOCIADA");
             }
             default -> throw new IllegalStateException();
+        }
+    }
+
+    // ─── Fase 28d (A5): vencimiento nocturno contra la firma final, con Mongo y MySQL reales ─────────────────────
+
+    /** Las piezas Mongo reales de A5 (factura, patch con compare-and-set, outbox y transacción). */
+    private final class Mongo implements AutoCloseable {
+        final MongoClient cliente = MongoClients.create(MONGO.getReplicaSetUrl());
+        final SimpleMongoClientDatabaseFactory fabrica = new SimpleMongoClientDatabaseFactory(cliente, "negociador_a5");
+        final MongoTemplate plantilla = new MongoTemplate(fabrica);
+        final MongoRepositoryFactory repos = new MongoRepositoryFactory(plantilla);
+        final OutboxEventRepository outboxRepo = repos.getRepository(OutboxEventRepository.class);
+        final OutboxAdapter outbox = new OutboxAdapter(outboxRepo, new ObjectMapper().registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS));
+        final FacturaAdapter facturas = new FacturaAdapter(repos.getRepository(FacturaRepository.class));
+        final FacturaPatchAdapter patch = new FacturaPatchAdapter(new FacturaPatchRepository(plantilla,
+                new EstadoFacturaMapper()));
+        final FirmaFinalLiquidacion firma = new FirmaFinalLiquidacion(new TransaccionMongoAdapter(fabrica), patch,
+                new OutboxService(outbox));
+        final SeguimientoLiquidacionService seguimiento = new SeguimientoLiquidacionService(operaciones, outbox,
+                facturas, patch, null, null, exacta, clock,
+                new SeguimientoLiquidacionService.Parametros(java.time.Duration.ofMinutes(15), 4, 8, 50));
+
+        Mongo() {
+            plantilla.getDb().drop();
+            // la colección debe existir antes de escribir en una transacción
+            plantilla.createCollection(FacturaDocument.class);
+            plantilla.createCollection("outbox_event");
+        }
+
+        FacturaVencimientoService job(ReversionExactaService reversion) {
+            return new FacturaVencimientoService(facturas, patch, operaciones, reversion, clock);
+        }
+
+        /** La factura del escenario en Mongo, antes de la liquidación, a {@code dias} de vencer. */
+        Factura guardar(Escenario e, String estado, String firma, int dias) {
+            Factura f = e.factura;
+            f.setId(null);
+            f.setEstadoNegociacion(estado);
+            f.setEstadoFirma(firma);
+            f.setFechavencimientoFactura(LocalDate.now().plusDays(dias));
+            return facturas.save(f);
+        }
+
+        FacturaDocument doc(String cufe) {
+            return existente(plantilla.findOne(Query.query(Criteria.where("cufe").is(cufe)), FacturaDocument.class));
+        }
+
+        @Override
+        public void close() {
+            cliente.close();
+        }
+    }
+
+    private static FacturaDocument existente(FacturaDocument d) {
+        if (d == null) {
+            throw new AssertionError("la factura no está en Mongo");
+        }
+        return d;
+    }
+
+    private static String idEvento(Escenario e) {
+        return "liquidacion.solicitada|" + e.negociacionId + "|" + e.cufe;
+    }
+
+    private static EstadoFirma firmaFinal(Modo modo) {
+        return modo == Modo.CONFIRMING ? EstadoFirma.DESCUENTO : EstadoFirma.CESION;
+    }
+
+    private long contar(String sql, Object... args) {
+        return java.util.Objects.requireNonNullElse(jdbc.queryForObject(sql, Long.class, args), 0L);
+    }
+
+    private long plantillaA(Escenario e) {
+        return contar("SELECT COUNT(*) FROM outbox_negociador WHERE clave_kafka = ? AND payload = ?",
+                "negociacion:" + e.negociacionId, "OPERACION_REVERTIDA");
+    }
+
+    /** La firma final como en la aprobación: transacción Mongo y, si ganó, el seguimiento en MySQL. */
+    private boolean firmarComoLaAprobacion(Mongo m, Escenario e) {
+        ReferenciaFactura ref = new ReferenciaFactura(e.cufe, e.factura.getRutProveedor(), "PAG");
+        LiquidacionSolicitadaEvent evento = new LiquidacionSolicitadaEvent(e.negociacionId, "op-1", e.numero,
+                new Operacion(e.modo == Modo.CONFIRMING ? "CONFIRMING" : "FACTORING", "TRADICIONAL"), LocalDateTime.now(),
+                true, "req-" + e.numero, e.cufe, ref.rutProveedor(), ref.rutPagador());
+        if (!m.firma.firmarYSolicitar(ref, firmaFinal(e.modo), idEvento(e), e.negociacionId, "liquidacion.solicitada",
+                evento)) {
+            return false;
+        }
+        m.seguimiento.registrarSolicitud(e.negociacionId, e.cufe, e.numero, idEvento(e));
+        m.patch.quitarSeguimientoLiquidacionPendiente(ref);
+        return true;
+    }
+
+    @ParameterizedTest(name = "A5, carrera repetida firma final contra job en {0}: gana exactamente uno y nunca se "
+            + "devuelven cupos de una factura que luego se liquida")
+    @MethodSource("modos")
+    void carrera_firma_final_contra_job_gana_exactamente_uno(Modo modo) throws Exception {
+        int vueltas = 40;
+        int ganoFirma = 0;
+        int ganoJob = 0;
+        // cupos de partida para 40 negociaciones (con centavos distintos en cada uno)
+        jdbc.update("UPDATE user_quota SET quota = 99000000.00, current_quota = 90000000.11");
+        jdbc.update("UPDATE parametrization SET quota = 99000000.00, current_quota = 90000000.22");
+        jdbc.update("UPDATE funder SET supplier_quota = 99000000.00, supplier_current_quota = 90000000.33"
+                + " WHERE supplier_id IS NOT NULL");
+        jdbc.update("UPDATE funder SET payer_quota = 99000000.00, payer_current_quota = 90000000.44"
+                + " WHERE payer_id IS NOT NULL");
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET quota = 99000000.00, current_quota = 90000000.55");
+        try (Mongo m = new Mongo()) {
+            for (int i = 0; i < vueltas; i++) {
+                Map<String, BigDecimal> inicial = cupos();
+                Escenario e = crear(modo);
+                Map<String, BigDecimal> trasCrear = cupos();
+                m.guardar(e, "NEGOCIADA", "EN_APROBACION", 3);
+
+                CountDownLatch listos = new CountDownLatch(2);
+                CountDownLatch largada = new CountDownLatch(1);
+                List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+                boolean[] firmo = new boolean[1];
+                int esperaFirma = ThreadLocalRandom.current().nextInt(0, 15);
+                int esperaJob = ThreadLocalRandom.current().nextInt(0, 15);
+                Thread a = hilo(() -> {
+                    dormir(esperaFirma);
+                    firmo[0] = firmarComoLaAprobacion(m, e);
+                }, listos, largada, fallos);
+                Thread b = hilo(() -> {
+                    dormir(esperaJob);
+                    m.job(exacta).actualizarFacturasVencidas();
+                }, listos, largada, fallos);
+                listos.await();
+                largada.countDown();
+                a.join();
+                b.join();
+                assertThat(fallos).isEmpty();
+
+                FacturaDocument d = m.doc(e.cufe);
+                boolean firmaGano = "NEGOCIADA".equals(d.getEstadoNegociacion())
+                        && firmaFinal(modo).name().equals(d.getEstadoFirma());
+                boolean jobGano = "VENCIDA".equals(d.getEstadoNegociacion());
+                assertThat(firmaGano ^ jobGano).as("exactamente un ganador, vuelta %d: %s/%s", i,
+                        d.getEstadoNegociacion(), d.getEstadoFirma()).isTrue();
+                assertThat(firmo[0]).isEqualTo(firmaGano);
+                boolean evento = m.outboxRepo.existsById(idEvento(e));
+                boolean seguimiento = operaciones.buscar(TipoOperacionPendiente.LIQUIDACION_PENDIENTE,
+                        OperacionPendiente.clave(e.negociacionId, e.cufe)).isPresent();
+                if (firmaGano) {
+                    ganoFirma++;
+                    assertThat(evento).isTrue();
+                    assertThat(seguimiento).isTrue();
+                    assertThat(estado(e)).isNotEqualTo(ReversionExactaService.REVERTIDA);
+                    assertIguales(trasCrear, cupos());
+                    // la factura se liquida y el job vuelve a correr: no se devuelve nada
+                    m.plantilla.updateFirst(Query.query(Criteria.where("cufe").is(e.cufe)),
+                            new Update().set("estadoNegociacion", "LIQUIDADA"), FacturaDocument.class);
+                    m.job(exacta).actualizarFacturasVencidas();
+                    assertIguales(trasCrear, cupos());
+                    assertThat(plantillaA(e)).isZero();
+                } else {
+                    ganoJob++;
+                    assertThat(evento).isFalse();
+                    assertThat(seguimiento).isFalse();
+                    assertThat(estado(e)).isEqualTo(ReversionExactaService.REVERTIDA);
+                    assertThat(d.getVencimientoReversionPendiente()).isNull();
+                    assertIguales(inicial, cupos());
+                    assertThat(plantillaA(e)).isEqualTo(1);
+                    // la firma final llega tarde: no revive la factura ni pide la liquidación
+                    assertThat(firmarComoLaAprobacion(m, e)).isFalse();
+                    assertThat(m.outboxRepo.existsById(idEvento(e))).isFalse();
+                }
+            }
+        }
+        System.out.printf("[A5-CARRERA] %s: %d vueltas, ganó la firma %d, ganó el job %d%n", modo, vueltas, ganoFirma,
+                ganoJob);
+        assertThat(ganoFirma + ganoJob).isEqualTo(vueltas);
+    }
+
+    static Stream<Modo> modos() {
+        return Stream.of(Modo.values());
+    }
+
+    private static void dormir(int ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @ParameterizedTest(name = "A5, caída a mitad de la corrida en {0}: la siguiente retoma la reversión, una sola vez")
+    @MethodSource("modos")
+    void caida_a_mitad_de_la_corrida_se_retoma_una_sola_vez(Modo modo) {
+        try (Mongo m = new Mongo()) {
+            Map<String, BigDecimal> inicial = cupos();
+            Escenario e = crear(modo);
+            Map<String, BigDecimal> trasCrear = cupos();
+            m.guardar(e, "ENDOSADA", "EN_REVISION", 2);
+
+            ReversionExactaService seCae = spy(exacta);
+            doThrow(new IllegalStateException("caída a mitad de la corrida")).doCallRealMethod().when(seCae)
+                    .revertir(eq(TipoOperacionPendiente.VENCIMIENTO), any(), any(), any());
+
+            FacturaVencimientoService.Resumen r1 = m.job(seCae).actualizarFacturasVencidas();
+            assertThat(r1.vencidas()).isEqualTo(1);
+            assertThat(r1.fallidas()).isEqualTo(1);
+            assertThat(m.doc(e.cufe).getEstadoNegociacion()).isEqualTo("VENCIDA");
+            assertThat(m.doc(e.cufe).getVencimientoReversionPendiente()).isTrue();
+            assertIguales(trasCrear, cupos());
+            assertThat(plantillaA(e)).isZero();
+
+            FacturaVencimientoService.Resumen r2 = m.job(seCae).actualizarFacturasVencidas();
+            assertThat(r2.revertidas()).isEqualTo(1);
+            assertThat(m.doc(e.cufe).getVencimientoReversionPendiente()).isNull();
+            assertIguales(inicial, cupos());
+            assertThat(estado(e)).isEqualTo(ReversionExactaService.REVERTIDA);
+            assertThat(plantillaA(e)).isEqualTo(1);
+
+            FacturaVencimientoService.Resumen r3 = m.job(exacta).actualizarFacturasVencidas();
+            assertThat(r3.vencidas() + r3.revertidas()).isZero();
+            assertIguales(inicial, cupos());
+            assertThat(plantillaA(e)).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void a5_filas_que_no_se_tocan_y_fila_5_con_mongo_real() {
+        try (Mongo m = new Mongo()) {
+            Map<String, BigDecimal> inicial = cupos();
+            String[][] filas = {
+                    {"CARGADA", "SIN_FIRMA", "VENCIDA"},
+                    {"NEGOCIADA", "CESION", "NEGOCIADA"},
+                    {"NEGOCIADA", "DESCUENTO", "NEGOCIADA"},
+                    {"NEGOCIADA", "RECHAZADA", "NEGOCIADA"},
+                    {"LIQUIDADA", "CESION", "LIQUIDADA"},
+                    {"RECHAZADA", "RECHAZADA", "RECHAZADA"},
+                    {"BLOQUEADA", "SIN_CESION", "BLOQUEADA"},
+                    {"VENDIDA", "SIN_CESION", "VENDIDA"},
+                    {"INEXISTENTE", "SIN_CESION", "INEXISTENTE"},
+            };
+            for (int i = 0; i < filas.length; i++) {
+                Factura f = new Factura();
+                f.setNumeroFactura("FILA-" + i);
+                f.setCufe("CUFE-FILA-" + i + "-" + System.nanoTime());
+                f.setRutProveedor("PROV");
+                f.setRutPagador("PAG");
+                f.setNegociacionId(i == 0 ? null : "neg-fila-" + i);
+                f.setEstadoNegociacion(filas[i][0]);
+                f.setEstadoFirma(filas[i][1]);
+                f.setFechavencimientoFactura(LocalDate.now().plusDays(1));
+                m.facturas.save(f);
+            }
+            m.job(exacta).actualizarFacturasVencidas();
+            for (int i = 0; i < filas.length; i++) {
+                FacturaDocument d = existente(m.plantilla.findOne(
+                        Query.query(Criteria.where("numeroFactura").is("FILA-" + i)), FacturaDocument.class));
+                assertThat(d.getEstadoNegociacion()).as("fila %s/%s", filas[i][0], filas[i][1]).isEqualTo(filas[i][2]);
+                assertThat(d.getEstadoFirma()).isEqualTo(filas[i][1]);
+            }
+            assertIguales(inicial, cupos());
+            assertThat(contar("SELECT COUNT(*) FROM operacion_pendiente WHERE tipo = 'VENCIMIENTO'")).isZero();
+        }
+    }
+
+    @Test
+    void a5_la_firma_final_no_revive_una_factura_vencida_y_el_reintento_de_la_misma_firma_no_falla() {
+        try (Mongo m = new Mongo()) {
+            Escenario e = crear(Modo.FACTORING_DIRECTO);
+            m.guardar(e, "NEGOCIADA", "EN_APROBACION", 30);
+            assertThat(firmarComoLaAprobacion(m, e)).isTrue();
+            // reintento de la misma aprobación (caída antes de marcar el efecto): la firma ya es la final, no falla
+            assertThat(firmarComoLaAprobacion(m, e)).isTrue();
+            assertThat(m.outboxRepo.count()).isEqualTo(1);
+            assertThat(m.doc(e.cufe).getSolicitudLiquidacionId()).isEqualTo(idEvento(e));
+            assertThat(m.doc(e.cufe).getSeguimientoLiquidacionPendiente()).isNull();
+
+            Escenario v = crear(Modo.CONFIRMING);
+            m.guardar(v, "VENCIDA", "SIN_DESCUENTO", 30);
+            assertThat(firmarComoLaAprobacion(m, v)).isFalse();
+            assertThat(m.doc(v.cufe).getEstadoNegociacion()).isEqualTo("VENCIDA");
+            assertThat(m.outboxRepo.existsById(idEvento(v))).isFalse();
+        }
+    }
+
+    @Test
+    void a5_reconciliador_completa_el_seguimiento_de_una_firma_final_sin_seguimiento() {
+        try (Mongo m = new Mongo()) {
+            Escenario e = crear(Modo.FACTORING_INDIRECTO);
+            m.guardar(e, "NEGOCIADA", "EN_APROBACION", 2);
+            ReferenciaFactura ref = new ReferenciaFactura(e.cufe, e.factura.getRutProveedor(), "PAG");
+            // la instancia cae justo después de la transacción Mongo: firma y evento escritos, sin seguimiento
+            assertThat(m.firma.firmarYSolicitar(ref, EstadoFirma.CESION, idEvento(e), e.negociacionId,
+                    "liquidacion.solicitada", Map.of("negociacionId", e.negociacionId))).isTrue();
+            assertThat(operaciones.buscar(TipoOperacionPendiente.LIQUIDACION_PENDIENTE,
+                    OperacionPendiente.clave(e.negociacionId, e.cufe))).isEmpty();
+            assertThat(m.doc(e.cufe).getSeguimientoLiquidacionPendiente()).isTrue();
+            // ni el job la toca (vence en 2 días): la firma es la final
+            m.job(exacta).actualizarFacturasVencidas();
+            assertThat(m.doc(e.cufe).getEstadoNegociacion()).isEqualTo("NEGOCIADA");
+
+            assertThat(m.seguimiento.reemitirSinSeguimiento()).isEqualTo(1);
+            assertThat(operaciones.buscar(TipoOperacionPendiente.LIQUIDACION_PENDIENTE,
+                    OperacionPendiente.clave(e.negociacionId, e.cufe))).isPresent();
+            assertThat(m.doc(e.cufe).getSeguimientoLiquidacionPendiente()).isNull();
+            assertThat(m.seguimiento.reemitirSinSeguimiento()).isZero();
         }
     }
 

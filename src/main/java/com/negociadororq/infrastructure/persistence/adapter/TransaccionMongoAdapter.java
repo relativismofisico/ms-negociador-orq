@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 import com.negociadororq.application.port.output.TransaccionMongoOutputPort;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.MongoTransactionManager;
+import org.springframework.data.mongodb.core.MongoExceptionTranslator;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -16,6 +17,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Component
 public class TransaccionMongoAdapter implements TransaccionMongoOutputPort {
+
+    /** Intentos de una transacción que aborta por conflicto transitorio. */
+    static final int MAXIMO_INTENTOS = 5;
+    private static final MongoExceptionTranslator TRADUCTOR = new MongoExceptionTranslator();
 
     private final TransactionTemplate plantilla;
 
@@ -29,5 +34,31 @@ public class TransaccionMongoAdapter implements TransaccionMongoOutputPort {
     @Override
     public <T> T ejecutar(final Supplier<T> accion) {
         return plantilla.execute(estado -> accion.get());
+    }
+
+    @Override
+    public <T> T ejecutarConReintento(final Supplier<T> accion) {
+        for (int intento = 1; ; intento++) {
+            try {
+                return plantilla.execute(estado -> accion.get());
+            } catch (RuntimeException e) {
+                if (intento >= MAXIMO_INTENTOS || !esTransitorio(e)) {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    /**
+     * Conflicto de escritura o commit en duda (Mongo los marca con TransientTransactionError o
+     * UnknownTransactionCommitResult): vale reintentar la transacción entera.
+     */
+    static boolean esTransitorio(final Throwable error) {
+        for (Throwable causa = error; causa != null; causa = causa.getCause()) {
+            if (causa instanceof Exception e && TRADUCTOR.isTransientFailure(e)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
