@@ -22,6 +22,7 @@ import com.negociadororq.application.port.output.NegociacionPatchOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.application.util.VigenciaDescuentoValidator;
 import com.negociadororq.domain.enums.EstadoEndoso;
+import com.negociadororq.domain.enums.EstadoFactura;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.enums.EstadoNegociacion;
 import com.negociadororq.domain.model.Company;
@@ -131,7 +132,9 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
             if (!vigenciaPermiteEndosar(factura, facturaNegociada, tipoOperacion)) {
                 reversionExacta.revertir(TipoOperacionPendiente.ENDOSO_RECHAZADO, request.getIdNegociacion(),
                         facturaNegociada.getCufe(), "vigencia del descuento vencida");
-                factura.setEstadoNegociacion("SIN_NEGOCIAR");
+                // Fase 28d (A3, decisión de John): una factura no vuelve sola a SIN_NEGOCIAR; queda VENCIDA y no se
+                // puede negociar otra vez (solo se negocia desde SIN_NEGOCIAR).
+                factura.setEstadoNegociacion(EstadoFactura.VENCIDA.name());
                 facturaPort.save(factura);
                 facturasRechazadas.add(numeroFactura + " (vigencia del descuento vencida)");
                 continue;
