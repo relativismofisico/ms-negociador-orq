@@ -762,6 +762,68 @@ class ConservacionCuposIT {
         }
     }
 
+    // ─── Análisis 28d (solo lectura, sin cambiar producción): PENDIENTE traducido a SIN_NEGOCIAR ───────────────────
+
+    /** La misma solicitud de crear(), para una segunda negociación de la misma factura. */
+    private FacturaNegociada negociarOtraVez(Escenario e, String otraNegociacion) {
+        String tipo = e.modo == Modo.CONFIRMING ? "CONFIRMING" : "FACTORING";
+        String proveedor = e.factura.getRutProveedor();
+        String empresa = e.modo == Modo.CONFIRMING ? "PAG" : proveedor;
+        FacturaNegociada solicitud = FacturaNegociada.builder().numeroFactura(e.numero).cufe(e.cufe)
+                .rutProveedor(proveedor).rutPagador("PAG")
+                .fondeadores(List.of(FondeadorAsignacion.builder().rutFondeador("FOND").build())).build();
+        NegociacionRequestDto request = NegociacionRequestDto.builder().rutEmpresa(empresa)
+                .tipoOperacion(new Operacion(tipo, e.modo == Modo.CONFIRMING ? "TRADICIONAL" : "CON_RESPONSABILIDAD"))
+                .rutOperador("op-1").facturas(List.of(solicitud)).build();
+        return tx.execute(s -> procesar.procesarFactura(request, solicitud, otraNegociacion));
+    }
+
+    @ParameterizedTest(name = "análisis {0}: una factura con negociación viva y el estado PENDIENTE traducido (SIN_NEGOCIAR) "
+            + "se negocia otra vez y descuenta los cupos dos veces; la única barrera es el estado")
+    @MethodSource("modos")
+    void analisis_pendiente_traducido_permite_una_segunda_negociacion(Modo modo) {
+        // cupo para dos negociaciones también en el indirecto (el de partida alcanza para una)
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET current_quota = 9000000.55");
+        Map<String, BigDecimal> inicial = cupos();
+        Escenario e = crear(modo);
+        Map<String, BigDecimal> tras1 = cupos();
+        // Lo que escribe la aprobación cuando la factura queda PENDIENTE (EstadoFacturaMapper, sin cambios)
+        e.factura.setEstadoNegociacion(new EstadoFacturaMapper()
+                .aEstadoFactura(com.negociadororq.domain.enums.EstadoNegociacion.PENDIENTE).name());
+        e.factura.setEstadoFirma("EN_REVISION");
+        assertThat(e.factura.getEstadoNegociacion()).isEqualTo("SIN_NEGOCIAR");
+        // la creación terminó (su paso Mongo, aquí doble): la negociación está viva
+        assertThat(operaciones.transicionar(TipoOperacionPendiente.CREAR_NEGOCIACION,
+                OperacionPendiente.clave(e.negociacionId, e.cufe), "CUPOS_DESCONTADOS", "COMPLETADA")).isTrue();
+        assertThat(estado(e)).isEqualTo("COMPLETADA");
+
+        String otra = "neg-otra-" + System.nanoTime();
+        FacturaNegociada segunda = negociarOtraVez(e, otra);
+
+        assertThat(segunda).isNotNull();
+        Map<String, BigDecimal> tras2 = cupos();
+        String clave = empresaClave(modo);
+        // operador, empresa y fondeo: se descuenta el neto otra vez
+        assertThat(tras2.get("operador")).isEqualByComparingTo(tras1.get("operador").subtract(NETO));
+        assertThat(tras2.get(clave)).isEqualByComparingTo(tras1.get(clave).subtract(NETO));
+        assertThat(tras2.get(fondeoClave(modo))).isEqualByComparingTo(tras1.get(fondeoClave(modo)).subtract(NETO));
+        // dos creaciones vivas para el mismo CUFE (ninguna otra validación por CUFE lo impide)
+        assertThat(contar("SELECT COUNT(*) FROM operacion_pendiente WHERE tipo = 'CREAR_NEGOCIACION'"
+                + " AND clave_natural LIKE ? AND estado IN ('CUPOS_DESCONTADOS', 'COMPLETADA')", "%|" + e.cufe))
+                .isEqualTo(2);
+        System.out.printf("[ANALISIS-PENDIENTE] %s: segunda negociación aceptada; operador %s -> %s -> %s%n", modo,
+                inicial.get("operador"), tras1.get("operador"), tras2.get("operador"));
+    }
+
+    @Test
+    void analisis_con_el_estado_de_hoy_tras_crear_la_factura_no_se_negocia_otra_vez() {
+        Escenario e = crear(Modo.FACTORING_DIRECTO);
+        Map<String, BigDecimal> tras1 = cupos();
+        assertThatThrownBy(() -> negociarOtraVez(e, "neg-otra-" + System.nanoTime()))
+                .hasMessageContaining("no negociable");
+        assertIguales(tras1, cupos());
+    }
+
     private static Thread hilo(Runnable r, CountDownLatch listos, CountDownLatch largada, List<Throwable> fallos) {
         Thread t = new Thread(() -> {
             listos.countDown();
