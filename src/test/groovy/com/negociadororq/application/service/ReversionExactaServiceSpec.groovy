@@ -76,6 +76,19 @@ class ReversionExactaServiceSpec extends Specification {
         camino << [TipoOperacionPendiente.RECHAZO, TipoOperacionPendiente.LIQUIDACION_FALLIDA]
     }
 
+    def "Fase 28d (A4): la liquidación cancelada sí lleva la plantilla A (no tiene otro correo)"() {
+        given:
+        operaciones.buscar(*_) >> Optional.of(registro("COMPLETADA",
+                datos([new DescuentoCupos.Descuento(DescuentoCupos.Tipo.OPERADOR, 1L, null, 1G)])))
+        operaciones.transicionar(_, _, "COMPLETADA", "REVERTIDA") >> true
+
+        when:
+        servicio.revertir(TipoOperacionPendiente.LIQUIDACION_CANCELADA, "neg-1", "CUFE-1", "cancelada")
+
+        then:
+        1 * correos.revertida("neg-1", "CUFE-1", CTX)
+    }
+
     def "desde CUPOS_DESCONTADOS (creación sin terminar) también revierte"() {
         given:
         operaciones.buscar(*_) >> Optional.of(registro("CUPOS_DESCONTADOS",

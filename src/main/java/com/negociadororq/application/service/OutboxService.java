@@ -24,6 +24,16 @@ public class OutboxService {
     }
 
     /**
+     * Fase 28d (A4): vuelve a dejar pendiente de envío un evento ya escrito.
+     *
+     * @param idEvento id del evento
+     * @return true si existía
+     */
+    public boolean reencolar(String idEvento) {
+        return outboxPort.reencolar(idEvento);
+    }
+
+    /**
      * Fase 28d (C): con id determinista; si ya existe, no escribe nada.
      *
      * @param idEvento    id del evento

@@ -73,6 +73,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final String topicRequestOtp;
     private final String topicLiquidacionSolicitada;
     private final AuditoriaNegociacionService auditoria;
+    /** Fase 28d (A4): seguimiento de la solicitud de liquidación hasta su resultado. */
+    private final SeguimientoLiquidacionService seguimientoLiquidacion;
 
     /** Fase 28c: efectos que van al outbox viejo, marcados en la solicitud ({@link PendingOtp#getEfectosEmitidos()}). */
     static final String EFECTO_LIQUIDACION = "LIQUIDACION:";
@@ -379,6 +381,9 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                     log.info(String.format("[LIQUIDACION-YA-SOLICITADA] negociación %s CUFE %s: el evento ya estaba en el "
                             + "outbox.", idNegociacion, ref.cufe()));
                 }
+                // Fase 28d (A4): antes de marcar el efecto, para que un reintento de la firma complete el registro.
+                seguimientoLiquidacion.registrarSolicitud(idNegociacion, ref.cufe(), factura.getNumeroFactura(),
+                        idEventoLiquidacion(idNegociacion, ref.cufe()));
                 marcarEmitido(pending, efectoLiquidacion);
             }
         } else if (alguienAprobo) {

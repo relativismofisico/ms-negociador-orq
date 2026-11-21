@@ -231,3 +231,18 @@ outbox:
     retencion-dias: ${OUTBOX_LIMPIEZA_RETENCION_DIAS:30}
   fallidos:
     alerta-cron: ${OUTBOX_FALLIDOS_ALERTA_CRON:0 */10 * * * *}
+
+# Fase 28d (A4): seguimiento de cada solicitud de liquidación hasta su resultado, sin revertir por tiempo. Cada
+# `intervalo` se reenvía el mismo evento (hasta `reenvios`); después se pide al liquidador "cancelar si no procesada"
+# (hasta `max-cancelaciones`) y, agotado, la operación pasa a REVISION_MANUAL ([OPERACION-PENDIENTE-ATASCADA]) sin correo.
+liquidacion:
+  seguimiento:
+    intervalo: ${LIQUIDACION_SEGUIMIENTO_INTERVALO:PT15M}
+    reenvios: ${LIQUIDACION_SEGUIMIENTO_REENVIOS:4}
+    max-cancelaciones: ${LIQUIDACION_SEGUIMIENTO_MAX_CANCELACIONES:8}
+    lote: ${LIQUIDACION_SEGUIMIENTO_LOTE:50}
+  # POST /internal/liquidaciones/cancelacion de ms-liquidador-neg con el JWT de servicio. Sin valor por defecto de la URL:
+  # sin ella la cancelación falla como "liquidador no disponible" y, pasado el tope, la operación queda en revisión.
+  cancelacion:
+    base-url: ${LIQUIDADOR_BASE_URL:}
+    timeout: ${LIQUIDACION_CANCELACION_TIMEOUT:PT5S}

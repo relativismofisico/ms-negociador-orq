@@ -171,6 +171,8 @@ dependencies {
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:mysql'
     testImplementation 'org.testcontainers:mongodb'
+    // Fase 28d (A4): reenvío de liquidacion.solicitada contra Kafka real
+    testImplementation 'org.testcontainers:kafka'
 
     // Spock Framework — pruebas unitarias en Groovy
     testImplementation 'org.apache.groovy:groovy-all:4.0.21'

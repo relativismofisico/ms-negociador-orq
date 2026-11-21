@@ -7,6 +7,7 @@ import com.negociadororq.application.mapper.EstadoFacturaMapper;
 import com.negociadororq.application.mapper.OperacionMapper;
 import com.negociadororq.application.port.output.AlertaFirmaOutputPort;
 import com.negociadororq.application.port.output.AuditoriaOutputPort;
+import com.negociadororq.application.port.output.CancelacionLiquidacionOutputPort;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOperationOutputPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
@@ -74,6 +75,7 @@ import com.negociadororq.application.service.ReconciliadorOperacionesService;
 import com.negociadororq.application.service.ReversionCuposService;
 import com.negociadororq.application.service.ReversionCuposServiceImpl;
 import com.negociadororq.application.service.ReversionExactaService;
+import com.negociadororq.application.service.SeguimientoLiquidacionService;
 import com.negociadororq.application.service.TasaConversionService;
 import com.negociadororq.application.service.TasaConversionServiceImpl;
 import com.negociadororq.application.service.TemplateRenderService;
@@ -419,6 +421,28 @@ public class ApplicationBeansConfig {
                 userPort, reversionExactaService, clock, auditoriaNegociacionService);
     }
 
+    /**
+     * Fase 28d (A4): seguimiento de las solicitudes de liquidación (reenvíos, cancelación y revisión manual).
+     *
+     * @return el servicio
+     */
+    @Bean
+    @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
+    public SeguimientoLiquidacionService seguimientoLiquidacionService(
+            final OperacionPendienteOutputPort operacionPendienteOutputPort, final OutboxOutputPort outboxOutputPort,
+            final FacturaOutputPort facturaOutputPort, final FacturaPatchOutputPort facturaPatchOutputPort,
+            final CancelacionLiquidacionOutputPort cancelacionLiquidacionOutputPort,
+            final ReversionCuposService reversionCuposService, final ReversionExactaService reversionExactaService,
+            final ClockPort clockPort,
+            @Value("${liquidacion.seguimiento.intervalo:PT15M}") final java.time.Duration intervalo,
+            @Value("${liquidacion.seguimiento.reenvios:4}") final int reenvios,
+            @Value("${liquidacion.seguimiento.max-cancelaciones:8}") final int maxCancelaciones,
+            @Value("${liquidacion.seguimiento.lote:50}") final int lote) {
+        return new SeguimientoLiquidacionService(operacionPendienteOutputPort, outboxOutputPort, facturaOutputPort,
+                facturaPatchOutputPort, cancelacionLiquidacionOutputPort, reversionCuposService, reversionExactaService,
+                clockPort, new SeguimientoLiquidacionService.Parametros(intervalo, reenvios, maxCancelaciones, lote));
+    }
+
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por
     // Lombok en orden de declaración de campos) — no es una señal de diseño a corregir acá.
     @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
@@ -441,12 +465,13 @@ public class ApplicationBeansConfig {
             final ClockPort clock,
             @Value("${topics.otp-request}") final String topicRequestOtp,
             @Value("${topics.liquidacion}") final String topicLiquidacionSolicitada,
-            final AuditoriaNegociacionService auditoriaNegociacionService) {
+            final AuditoriaNegociacionService auditoriaNegociacionService,
+            final SeguimientoLiquidacionService seguimientoLiquidacionService) {
         return new AprobacionEndosoDescuentoServiceImpl(
                 negociacionPort, facturaPatchPort, endosoPatchPort, outboxService, reversionExactaService,
                 companyPort, fondeadorQuotaPort, facturaPort, userPort, pendingOtpPort, firmaEndosoService,
                 notificacionService, endosoPort, documentoEndosoService, clock,
-                topicRequestOtp, topicLiquidacionSolicitada, auditoriaNegociacionService);
+                topicRequestOtp, topicLiquidacionSolicitada, auditoriaNegociacionService, seguimientoLiquidacionService);
     }
 
     // Igual que con OperadorServiceImpl más arriba: sin @Bean explícito para

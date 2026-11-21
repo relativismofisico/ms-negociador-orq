@@ -24,4 +24,12 @@ public interface OutboxOutputPort {
      * @return {@code true} si lo guardó; {@code false} si ya existía
      */
     boolean guardarEventoConId(String idEvento, String aggregateId, String tipoEvento, Object evento);
+
+    /**
+     * Fase 28d (A4): vuelve a dejar pendiente de envío un evento ya escrito (mismo id y mismo payload), para reenviarlo.
+     *
+     * @param idEvento id del evento
+     * @return true si el evento existe y quedó pendiente
+     */
+    boolean reencolar(String idEvento);
 }
