@@ -794,6 +794,35 @@ class ConservacionCuposIT {
         assertThat(cupos().get("operador")).isEqualByComparingTo("0.00");
     }
 
+    @Test
+    void analisis_el_descuento_del_cupo_indirecto_no_exige_cupo_suficiente_en_la_sentencia() throws Exception {
+        // Auditoría de escrituras de cupo (pedida por John): PRUEBA, antes de corregir. El control de cupo suficiente del
+        // indirecto se hace en una lectura previa (validarFondeoIndirecto); la sentencia atómica resta sin condición.
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET current_quota = 100.00 WHERE offer_id = ?", OFERTA);
+        CountDownLatch listos = new CountDownLatch(2);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+        int[] filas = new int[2];
+        List<Thread> hilos = new ArrayList<>();
+        for (int k = 0; k < 2; k++) {
+            final int j = k;
+            hilos.add(hilo(() -> {
+                // los dos ya pasaron la lectura previa (100.00 >= 80.00) y descuentan
+                filas[j] = indirectoPort.descontarCupo(OFERTA, EMPRESA_PROV_IND, new BigDecimal("80.00"));
+            }, listos, largada, fallos));
+        }
+        listos.await();
+        largada.countDown();
+        for (Thread t : hilos) {
+            t.join();
+        }
+        assertThat(fallos).isEmpty();
+        assertThat(filas[0] + filas[1]).isEqualTo(2);
+        // el cupo queda NEGATIVO: -60.00 (lo correcto sería que la segunda no descontara)
+        assertThat(jdbc.queryForObject("SELECT current_quota FROM indirect_funder_offer_supplier_quota WHERE offer_id = ?",
+                BigDecimal.class, OFERTA)).isEqualByComparingTo("-60.00");
+    }
+
     // ─── Fase 28d (A5b): dos creaciones del mismo CUFE a la vez, con Mongo y MySQL reales ─────────────────────────
 
     /** El servicio real de creación sobre Mongo real (factura, negociación, marcador, transacción) y MySQL real. */
