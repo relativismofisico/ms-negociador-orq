@@ -4,7 +4,8 @@ Feature: Fase 28d (A5) — una factura VENCIDA o RECHAZADA no se vuelve a negoci
   # Decisión de John: ninguna factura vuelve sola a SIN_NEGOCIAR; la vencida (por el job nocturno o por el endoso
   # rechazado por vigencia) y la rechazada quedan fuera. Solo se negocia desde SIN_NEGOCIAR.
   # Seed _e2e-infra/seed/ms-negociador-orq.mongo.js: FE-KARATE-A5-VENC (VENCIDA) y FE-KARATE-A5-RECH (RECHAZADA), del
-  # proveedor KARATE-CF-PROV. La respuesta es 201 con la factura en los rechazos y la negociación RECHAZADA.
+  # proveedor KARATE-PAYERD (7008, operador op-e2e-prov, FACTORING habilitado) y el pagador KARATE-PAYERB (7006). La
+  # respuesta es 201 con la factura en los rechazos y la negociación RECHAZADA.
 
   Background:
     * url baseUrl
@@ -13,11 +14,11 @@ Feature: Fase 28d (A5) — una factura VENCIDA o RECHAZADA no se vuelve a negoci
       """
       function(numero) {
         return {
-          rutEmpresa: 'KARATE-CF-PROV', rolEmpresa: 'PROVEEDOR',
-          tipoOperacion: { tipo: 'FACTORING', clase: 'NORMAL' },
-          rutOperador: testData.rutOperador,
-          facturas: [ { numeroFactura: numero, cufe: 'CUFE-' + numero, rutProveedor: 'KARATE-CF-PROV',
-                        rutPagador: 'KARATE-CF-PAG', valorFactura: 1000000.55,
+          rutEmpresa: 'KARATE-PAYERD', rolEmpresa: 'PROVEEDOR',
+          tipoOperacion: { tipo: 'FACTORING', clase: 'CON_RESPONSABILIDAD' },
+          rutOperador: 'op-e2e-prov',
+          facturas: [ { numeroFactura: numero, cufe: 'CUFE-' + numero, rutProveedor: 'KARATE-PAYERD',
+                        rutPagador: 'KARATE-PAYERB', valorFactura: 1000000.55,
                         fondeadores: [ { rutFondeador: 'KARATE-CF-FON', nombreFondeador: 'Karate CF Fondeador' } ] } ]
         };
       }
