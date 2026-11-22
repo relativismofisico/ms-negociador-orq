@@ -13,6 +13,50 @@ import com.negociadororq.domain.model.ReferenciaFactura;
 public interface FacturaPatchOutputPort {
 
     /**
+     * Fase 28d (A5): como {@link #actualizarEstadosPorCufe}, pero una factura VENCIDA no se toca.
+     *
+     * @param ref               factura (CUFE y RUT de la negociación)
+     * @param estadoFirma       nuevo estado de firma
+     * @param estadoNegociacion nuevo estado de negociación
+     * @return {@code true} si se actualizó; {@code false} si la factura ya estaba VENCIDA
+     */
+    boolean actualizarEstadosSiNoVencida(ReferenciaFactura ref, EstadoFirma estadoFirma,
+                                         EstadoNegociacion estadoNegociacion);
+
+    /**
+     * Fase 28d (A5): firma final y marca de la solicitud, condicionadas a que la factura no esté VENCIDA ni en otro
+     * estado terminal (compare-and-set). Va dentro de la transacción Mongo que escribe el evento.
+     *
+     * @param ref        factura (CUFE y RUT de la negociación)
+     * @param firmaFinal CESION o DESCUENTO
+     * @param idEvento   id del evento {@code liquidacion.solicitada}
+     * @return {@code true} si ganó
+     */
+    boolean marcarFirmaFinalConSolicitud(ReferenciaFactura ref, EstadoFirma firmaFinal, String idEvento);
+
+    /**
+     * Fase 28d (A5): el job marca VENCIDA si la factura sigue como la leyó (compare-and-set).
+     *
+     * @param facturaId          id
+     * @param estadoLeido        estado de negociación leído
+     * @param firmaLeida         firma leída
+     * @param reversionPendiente si hay cupos que devolver
+     * @return {@code true} si la marcó
+     */
+    boolean marcarVencidaSiCoincide(String facturaId, String estadoLeido, String firmaLeida,
+                                    boolean reversionPendiente);
+
+    /**
+     * @param facturaId Fase 28d (A5): la reversión del vencimiento terminó
+     */
+    void quitarReversionPendiente(String facturaId);
+
+    /**
+     * @param ref Fase 28d (A5): el seguimiento de la solicitud ya consta
+     */
+    void quitarSeguimientoLiquidacionPendiente(ReferenciaFactura ref);
+
+    /**
      * @param facturaId          id de la factura
      * @param estadoFirma        nuevo estado de firma
      * @param estadoNegociacion  nuevo estado de negociación

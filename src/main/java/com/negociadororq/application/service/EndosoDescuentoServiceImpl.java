@@ -62,6 +62,11 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
     private record FacturaValidada(String numeroFactura, Factura factura, FacturaNegociada facturaNegociada) {
     }
 
+    /** Fase 28d (A5): una factura VENCIDA no se endosa (el job ya devolvió los cupos). */
+    private static boolean vencida(Factura factura) {
+        return EstadoFactura.VENCIDA.name().equals(factura.getEstadoNegociacion());
+    }
+
     @Override
     @Transactional
     public EndosoResponseDto registrarEndoso(EndosoRequestDto request) {
@@ -120,6 +125,10 @@ public class EndosoDescuentoServiceImpl implements EndosoDescuentoService {
                 continue;
             }
 
+            if (vencida(factura)) {
+                facturasRechazadas.add(numeroFactura + " (factura vencida)");
+                continue;
+            }
             boolean facturaYaEndosada = endosoPort.existsByNegociacionIdAndNumeroFactura(
                             request.getIdNegociacion(),
                             factura.getNumeroFactura());

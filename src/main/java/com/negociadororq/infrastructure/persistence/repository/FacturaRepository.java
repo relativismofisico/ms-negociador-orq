@@ -1,5 +1,6 @@
 package com.negociadororq.infrastructure.persistence.repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,8 +32,24 @@ public interface FacturaRepository extends MongoRepository<FacturaDocument, Stri
     Optional<FacturaDocument> findByCufe(String cufe);
 
     /**
-     * @return las facturas negociadas pendientes de evaluar vencimiento (no LIQUIDADA, VENCIDA ni RECHAZADA)
+     * Fase 28d (A5): candidatas del vencimiento nocturno (índice {@code ix_facturas_vencimiento_estado}).
+     *
+     * @param limite  fecha de vencimiento máxima (hoy + 10 días)
+     * @param estados estados de negociación candidatos
+     * @return las facturas que vencen hasta {@code limite} en esos estados
      */
-    @Query("{ 'estadoNegociacion': { $nin: ['LIQUIDADA', 'VENCIDA', 'RECHAZADA'] } }")
-    List<FacturaDocument> findFacturasPendientesVencimiento();
+    @Query("{ 'fechavencimientoFactura': { $lte: ?0 }, 'estadoNegociacion': { $in: ?1 } }")
+    List<FacturaDocument> findCandidatasVencimiento(LocalDate limite, List<String> estados);
+
+    /**
+     * @return Fase 28d (A5): las VENCIDA cuya reversión de cupos no terminó
+     */
+    @Query("{ 'estadoNegociacion': 'VENCIDA', 'vencimientoReversionPendiente': true }")
+    List<FacturaDocument> findVencidasConReversionPendiente();
+
+    /**
+     * @return Fase 28d (A5): las facturas con firma final y solicitud escritas sin seguimiento confirmado
+     */
+    @Query("{ 'seguimientoLiquidacionPendiente': true }")
+    List<FacturaDocument> findConSeguimientoLiquidacionPendiente();
 }

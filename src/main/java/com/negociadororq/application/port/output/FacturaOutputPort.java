@@ -1,5 +1,6 @@
 package com.negociadororq.application.port.output;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,9 +27,23 @@ public interface FacturaOutputPort {
     List<Factura> findAllByNumeroFactura(String numeroFactura);
 
     /**
-     * @return las facturas negociadas pendientes de evaluar vencimiento
+     * Fase 28d (A5): candidatas del vencimiento nocturno.
+     *
+     * @param limite  fecha de vencimiento máxima (hoy + 10 días)
+     * @param estados estados de negociación candidatos
+     * @return las facturas que vencen hasta {@code limite} en esos estados
      */
-    List<Factura> findFacturasPendientesVencimiento();
+    List<Factura> findCandidatasVencimiento(LocalDate limite, List<String> estados);
+
+    /**
+     * @return Fase 28d (A5): las VENCIDA cuya reversión de cupos no terminó (caída a mitad de la corrida)
+     */
+    List<Factura> findVencidasConReversionPendiente();
+
+    /**
+     * @return Fase 28d (A5): las facturas con firma final y solicitud de liquidación sin seguimiento confirmado
+     */
+    List<Factura> findConSeguimientoLiquidacionPendiente();
 
     /**
      * @param factura factura a persistir

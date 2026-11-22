@@ -67,9 +67,12 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
             reversionExacta, companyPort, fondeadorQuotaPort, facturaPort,
             userPort, pendingOtpPort, firmaEndosoService, notificacionService, endosoPort,
             documentoEndosoService, clock,
-            "topic-otp-request", "topic-liquidacion", auditoriaNegociacion, seguimientoLiquidacion)
+            "topic-otp-request", "topic-liquidacion", auditoriaNegociacion, seguimientoLiquidacion, TransaccionMongoDirecta.INSTANCIA)
 
     def setup() {
+        // Fase 28d (A5): la factura no está vencida (la firma final y las parciales ganan)
+        facturaPatchPort.marcarFirmaFinalConSolicitud(*_) >> true
+        facturaPatchPort.actualizarEstadosSiNoVencida(*_) >> true
         // Fase 28d: el reclamo de la firma de la empresa en el endoso pasa (un solo actor por empresa en estos casos)
         endosoPatchPort.reclamarFirmaEmpresa(*_) >> true
         // Por defecto, cada factura tiene su propio Endoso sin agrupar (comportamiento
@@ -263,7 +266,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         // En este caso fn.aprobaciones tiene FONDEADOR, el actor es PAG-001
         // actoresRequeridos FACTORING = {PAGADOR, FONDEADOR}
         // rolesQueAprobaron = {FONDEADOR} + {PAGADOR} = todosAprobaron = true
-        1 * facturaPatchPort.actualizarEstadosPorCufe({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.CESION, EstadoNegociacion.APROBADA)
+        1 * facturaPatchPort.marcarFirmaFinalConSolicitud({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.CESION, _) >> true
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.ACEPTADO)
         1 * outboxService.guardarEventoConId({ it.startsWith("liquidacion.solicitada|neg-001|CUFE-") }, "neg-001", "topic-liquidacion", {
             it.requestId == "req-otp" && it.cufe == "CUFE-FECI001" && it.rutProveedor == "PROV-001" && it.rutPagador == "PAG-001"
@@ -305,7 +308,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         def resultado = service.aprobarInterno(pending)
 
         then:
-        1 * facturaPatchPort.actualizarEstadosPorCufe({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA)
+        1 * facturaPatchPort.actualizarEstadosSiNoVencida({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA) >> true
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.RECHAZADO)
         1 * reversionExacta.revertir(TipoOperacionPendiente.RECHAZO, _, _, _)
         resultado.estado == EstadoNegociacion.RECHAZADA.name()
@@ -423,7 +426,7 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
         service.aprobarInterno(pending)
 
         then:
-        1 * facturaPatchPort.actualizarEstadosPorCufe({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.DESCUENTO, EstadoNegociacion.APROBADA)
+        1 * facturaPatchPort.marcarFirmaFinalConSolicitud({ it.cufe() == "CUFE-FECI001" }, EstadoFirma.DESCUENTO, _) >> true
         1 * endosoPatchPort.actualizarEstadoEndosoPorNoFactura("neg-001", "FECI001", EstadoEndoso.ACEPTADO)
         1 * outboxService.guardarEventoConId({ it.startsWith("liquidacion.solicitada|neg-001|CUFE-") }, "neg-001", "topic-liquidacion", _)
         // Fase 28d (A4): con la solicitud, su seguimiento hasta el resultado

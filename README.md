@@ -1839,3 +1839,25 @@ cuando la causa está resuelta; ver "Runbook: eventos fallidos del outbox".
   - La lista está en `ReversionExactaService.CON_CORREO_PROPIO`.
 - **Caída a mitad**: la reversión va primero. Si el proceso muere antes del cambio en Mongo, el reconciliador de firma (A1) reprocesa la solicitud y la reversión responde `YA_REVERTIDA`.
 - **Sin registro de lo descontado**: pasa a REVISION_MANUAL y envía la plantilla B; no se adivina el monto.
+
+## Opción A, A5: vencimiento nocturno (Fase 28d)
+
+`FacturaVencimientoService` (cron `facturas.vencimiento.cron`, con ShedLock) vence una factura a los 10 días o menos de su fecha de vencimiento solo si está **antes de la liquidación**. La tabla de estados la aprobó John:
+
+| Fila | Estado + firma | Qué hace |
+|---|---|---|
+| 1 a 4 | NEGOCIADA o ENDOSADA con firma SIN_CESION, SIN_DESCUENTO, EN_REVISION o EN_APROBACION; o SIN_NEGOCIAR con negociación y firma EN_REVISION o EN_APROBACION | VENCIDA y reversión exacta de los cupos, una vez por negociacion\|cufe, incluido el cupo del operador. Sale la plantilla A, porque el vencimiento no tiene otro correo |
+| 5 | CARGADA, o SIN_NEGOCIAR sin negociación viva | VENCIDA, sin cupos que devolver |
+| 6 | firma final (CESION, DESCUENTO, APROBACION) o seguimiento de liquidación registrado | no la toca: decide el seguimiento de A4 |
+| 7 a 11 | LIQUIDADA (con o sin giro), RECHAZADA, firma RECHAZADA (A4 cancelada), VENCIDA, BLOQUEADA, VENDIDA, INEXISTENTE | no la toca |
+
+- **Gana uno.** El job marca VENCIDA con un compare-and-set sobre el estado y la firma que leyó. La firma final de la aprobación también es un compare-and-set, condicionado a "no VENCIDA" (`FirmaFinalLiquidacion`).
+  - La firma final va en una transacción de Mongo junto con el evento `liquidacion.solicitada` y la marca `seguimientoLiquidacionPendiente`. La transacción se reintenta ante un conflicto transitorio.
+  - Si el job gana, la firma no pide la liquidación y la respuesta trae el código `FACTURA_VENCIDA`. Las aprobaciones parciales y el endoso tampoco reviven una factura VENCIDA.
+- **Seguimiento.** El seguimiento de la liquidación (MySQL) se escribe después de la transacción de Mongo.
+  - Si la instancia cae entre las dos escrituras, el reconciliador de operaciones registra el seguimiento y reencola la solicitud (`[LIQUIDACION-SEGUIMIENTO-REEMITIDO]`) para cualquier factura con `seguimientoLiquidacionPendiente`.
+  - El liquidador procesa esa solicitud una sola vez por negociacion\|cufe\|fecha.
+- **Reanudable.** Antes de revertir, la factura queda VENCIDA con `vencimientoReversionPendiente`. Si la corrida cae en medio, la siguiente retoma la reversión (`[VENCIMIENTO-REANUDADO]`) y no devuelve dos veces: la reversión exacta es idempotente.
+- **Consulta.** Busca por fecha de vencimiento hasta hoy + 10 días y por estado candidato.
+  - Índices: `db/manual/mongo_28d_a5_vencimiento_indices.js`, idempotente y con diagnóstico previo. Se aplica antes de desplegar.
+- **Regla general (decisión de John).** Ninguna factura vuelve sola a SIN_NEGOCIAR. El endoso rechazado por vigencia la deja VENCIDA (A3).

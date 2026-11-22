@@ -84,12 +84,12 @@ class ConfirmingFirmaPdfRealSpec extends Specification {
     FacturaOutputPort facturaPort = Stub() { findByCufe("CUFE-" + FAC) >> Optional.of(factura) }
 
     AprobacionEndosoDescuentoServiceImpl service = new AprobacionEndosoDescuentoServiceImpl(
-            negociacionPort, Mock(FacturaPatchOutputPort), Stub(EndosoPatchOutputPort) { reclamarFirmaEmpresa(*_) >> true },
+            negociacionPort, Stub(FacturaPatchOutputPort) { marcarFirmaFinalConSolicitud(*_) >> true; actualizarEstadosSiNoVencida(*_) >> true }, Stub(EndosoPatchOutputPort) { reclamarFirmaEmpresa(*_) >> true },
             Mock(OutboxService),
             Mock(ReversionExactaService), Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort), facturaPort,
             userPort, Mock(PendingOtpOutputPort), firma, Mock(NotificacionService), endosoPort,
             documento, clock,
-            "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService))
+            "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService), TransaccionMongoDirecta.INSTANCIA)
 
     PendingOtp pending(String rut, String rol, String otp, String otpId, String ip, String operador) {
         def req = new AprobacionRequest(NEG, operador, rut, rol, [new AprobacionFacturaRequest(FAC, true, null)], "ok " + rol)

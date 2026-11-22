@@ -24,6 +24,7 @@ import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
 import com.negociadororq.application.port.output.NegociacionOutputPort;
 import com.negociadororq.application.port.output.PendingOtpOutputPort;
 import com.negociadororq.application.port.output.ResultadoSolicitudOtp;
+import com.negociadororq.application.port.output.TransaccionMongoOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
 import com.negociadororq.domain.enums.EstadoEndoso;
 import com.negociadororq.domain.enums.EstadoFirma;
@@ -75,6 +76,11 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     private final AuditoriaNegociacionService auditoria;
     /** Fase 28d (A4): seguimiento de la solicitud de liquidación hasta su resultado. */
     private final SeguimientoLiquidacionService seguimientoLiquidacion;
+    /** Fase 28d (A5): la firma final y la solicitud de liquidación van en una transacción Mongo. */
+    private final TransaccionMongoOutputPort transaccionMongo;
+
+    /** Fase 28d (A5): la factura venció (el job ganó) antes de completar la firma; no se pide la liquidación. */
+    public static final String FACTURA_VENCIDA = "FACTURA_VENCIDA";
 
     /** Fase 28c: efectos que van al outbox viejo, marcados en la solicitud ({@link PendingOtp#getEfectosEmitidos()}). */
     static final String EFECTO_LIQUIDACION = "LIQUIDACION:";
@@ -274,7 +280,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
 
             actualizarEstadosFacturaEndosoNegociacion(
                     negociacion, negociacion.getId(), factura,
-                    negociacion.getTipoOperacion(), request.getRutOperador(), pending);
+                    negociacion.getTipoOperacion(), request.getRutOperador(), pending, errores);
         }
 
         if (yaAplicadas > 0 && yaAplicadas == request.getFacturas().size()) {
@@ -312,7 +318,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                                                            FacturaNegociada factura,
                                                            Operacion tipoOperacion,
                                                            String rutOperador,
-                                                           PendingOtp pending) {
+                                                           PendingOtp pending,
+                                                           List<String> errores) {
 
         Set<RolActor> actoresRequeridos = obtenerActoresRequeridos(tipoOperacion.getTipo());
 
@@ -331,7 +338,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 notificacionService.notificarLiquidacionFallida(negociacion, factura.getNumeroFactura(), motivoError);
                 marcarEmitido(pending, efectoFallida);
             }
-            facturaPatchPort.actualizarEstadosPorCufe(
+            // Fase 28d (A5): si el job ya la venció, queda VENCIDA (la reversión es la misma, una sola vez).
+            facturaPatchPort.actualizarEstadosSiNoVencida(
                     ResolutorFactura.referencia(factura), EstadoFirma.RECHAZADA, EstadoNegociacion.RECHAZADA);
             factura.setEstadoFirma(EstadoFirma.RECHAZADA);
             factura.setEstadoNegociacion(EstadoNegociacion.RECHAZADA);
@@ -374,18 +382,34 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         idNegociacion, rutOperador, factura.getNumeroFactura(), operacion, clock.now(),
                         Boolean.TRUE.equals(pending.getValidadoEnOrigen()), pending.getRequestId(),
                         ref.cufe(), ref.rutProveedor(), ref.rutPagador());
+                String idEvento = idEventoLiquidacion(idNegociacion, ref.cufe());
+                final EstadoFirma firmaFinal = estadoFactura;
 
-                // Fase 28d (C): id determinista por negociación y CUFE; una segunda escritura no hace nada.
-                if (!outboxService.guardarEventoConId(idEventoLiquidacion(idNegociacion, ref.cufe()), idNegociacion,
-                        topicLiquidacionSolicitada, event)) {
-                    log.info(String.format("[LIQUIDACION-YA-SOLICITADA] negociación %s CUFE %s: el evento ya estaba en el "
-                            + "outbox.", idNegociacion, ref.cufe()));
+                // Fase 28d (A5): UNA transacción Mongo con la firma final (compare-and-set: "no VENCIDA") y el evento
+                // (id determinista por negociación y CUFE, C). Si el job de vencimiento ganó, no se escribe nada.
+                boolean firmada = new FirmaFinalLiquidacion(transaccionMongo, facturaPatchPort, outboxService)
+                        .firmarYSolicitar(ref, firmaFinal, idEvento, idNegociacion, topicLiquidacionSolicitada, event);
+                if (!firmada) {
+                    log.warning(String.format("[FIRMA-FACTURA-VENCIDA] negociación %s CUFE %s: la factura venció antes de "
+                            + "la firma final; no se solicita la liquidación.", idNegociacion, ref.cufe()));
+                    errores.add(FACTURA_VENCIDA + ": la factura " + factura.getNumeroFactura()
+                            + " venció antes de completar la firma; no se solicita la liquidación");
+                    factura.setEstadoFirma(EstadoFirma.RECHAZADA);
+                    factura.setEstadoNegociacion(EstadoNegociacion.RECHAZADA);
+                    marcarEmitido(pending, efectoLiquidacion);
+                    actualizarEstadoEndosoGrupal(negociacion, idNegociacion, factura.getNumeroFactura());
+                    return;
                 }
-                // Fase 28d (A4): antes de marcar el efecto, para que un reintento de la firma complete el registro.
-                seguimientoLiquidacion.registrarSolicitud(idNegociacion, ref.cufe(), factura.getNumeroFactura(),
-                        idEventoLiquidacion(idNegociacion, ref.cufe()));
+                // Fase 28d (A4): seguimiento en MySQL; si la instancia cae antes, el reconciliador lo completa (la
+                // factura queda marcada con seguimientoLiquidacionPendiente en la misma transacción Mongo).
+                seguimientoLiquidacion.registrarSolicitud(idNegociacion, ref.cufe(), factura.getNumeroFactura(), idEvento);
+                facturaPatchPort.quitarSeguimientoLiquidacionPendiente(ref);
                 marcarEmitido(pending, efectoLiquidacion);
             }
+            factura.setEstadoFirma(estadoFactura);
+            factura.setEstadoNegociacion(estadoNegociacionFactura);
+            actualizarEstadoEndosoGrupal(negociacion, idNegociacion, factura.getNumeroFactura());
+            return;
         } else if (alguienAprobo) {
             estadoFactura = EstadoFirma.EN_APROBACION;
             estadoNegociacionFactura = EstadoNegociacion.EN_APROBACION;
@@ -394,8 +418,15 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             estadoNegociacionFactura = EstadoNegociacion.PENDIENTE;
         }
 
-        facturaPatchPort.actualizarEstadosPorCufe(ResolutorFactura.referencia(factura), estadoFactura,
-                estadoNegociacionFactura);
+        // Fase 28d (A5): una aprobación parcial no revive una factura que el job ya venció.
+        if (!facturaPatchPort.actualizarEstadosSiNoVencida(ResolutorFactura.referencia(factura), estadoFactura,
+                estadoNegociacionFactura)) {
+            errores.add(FACTURA_VENCIDA + ": la factura " + factura.getNumeroFactura() + " está vencida");
+            factura.setEstadoFirma(EstadoFirma.RECHAZADA);
+            factura.setEstadoNegociacion(EstadoNegociacion.RECHAZADA);
+            actualizarEstadoEndosoGrupal(negociacion, idNegociacion, factura.getNumeroFactura());
+            return;
+        }
 
         // También se actualiza la copia embebida en la negociación: calcularEstadoNegociacion()
         // (llamado justo después, para cada factura de la solicitud) lee este mismo campo para

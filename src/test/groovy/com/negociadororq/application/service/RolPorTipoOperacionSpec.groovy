@@ -55,7 +55,14 @@ class RolPorTipoOperacionSpec extends Specification {
             cupoReversionService, Mock(CompanyOutputPort), Mock(FondeadorQuotaOutputPort), Mock(FacturaOutputPort),
             Mock(UserOutputPort), pendingOtpPort, firmaEndosoService, notificacionService, Mock(EndosoOutputPort),
             Mock(DocumentoEndosoService), clock,
-            "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService))
+            "topic-otp-request", "topic-liquidacion", Mock(AuditoriaNegociacionService), Mock(SeguimientoLiquidacionService), TransaccionMongoDirecta.INSTANCIA)
+
+    def setup() {
+        // Fase 28d (A5): la factura no está vencida (la firma final y las parciales ganan)
+        facturaPatchPort.marcarFirmaFinalConSolicitud(*_) >> true
+        facturaPatchPort.actualizarEstadosSiNoVencida(*_) >> true
+    }
+
 
     Negociacion negociacion(String tipo) {
         def fn = FacturaNegociada.builder().numeroFactura("FC-1").rutPagador(PAG).rutProveedor(PROV)

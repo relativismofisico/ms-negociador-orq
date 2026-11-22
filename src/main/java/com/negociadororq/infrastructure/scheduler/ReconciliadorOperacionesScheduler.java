@@ -1,6 +1,7 @@
 package com.negociadororq.infrastructure.scheduler;
 
 import com.negociadororq.application.service.ReconciliadorOperacionesService;
+import com.negociadororq.application.service.SeguimientoLiquidacionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -17,6 +18,8 @@ import org.springframework.stereotype.Component;
 public class ReconciliadorOperacionesScheduler {
 
     private final ReconciliadorOperacionesService reconciliador;
+    /** Fase 28d (A5): re-emisión de la solicitud de liquidación de una firma final sin seguimiento. */
+    private final SeguimientoLiquidacionService seguimientoLiquidacion;
 
     /** Cada {@code operaciones.reconciliador.intervalo} (1 min por defecto). */
     @Scheduled(fixedDelayString = "${operaciones.reconciliador.intervalo:PT1M}")
@@ -30,6 +33,15 @@ public class ReconciliadorOperacionesScheduler {
             }
         } catch (RuntimeException e) {
             log.error("[RECONCILIADOR-OPERACIONES] ciclo fallido: {}", e.getClass().getSimpleName());
+        }
+        try {
+            final int reemitidas = seguimientoLiquidacion.reemitirSinSeguimiento();
+            if (reemitidas > 0) {
+                log.info("[RECONCILIADOR-OPERACIONES] {} solicitud(es) de liquidación sin seguimiento re-emitida(s).",
+                        reemitidas);
+            }
+        } catch (RuntimeException e) {
+            log.error("[RECONCILIADOR-OPERACIONES] re-emisión fallida: {}", e.getClass().getSimpleName());
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.negociadororq.infrastructure.persistence.adapter;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -31,9 +32,20 @@ public class FacturaAdapter implements FacturaOutputPort {
     }
 
     @Override
-    public List<Factura> findFacturasPendientesVencimiento() {
-        return repository.findFacturasPendientesVencimiento().stream()
+    public List<Factura> findCandidatasVencimiento(LocalDate limite, List<String> estados) {
+        return repository.findCandidatasVencimiento(limite, estados).stream()
                 .map(this::toDomain).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Factura> findVencidasConReversionPendiente() {
+        return repository.findVencidasConReversionPendiente().stream().map(this::toDomain).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Factura> findConSeguimientoLiquidacionPendiente() {
+        return repository.findConSeguimientoLiquidacionPendiente().stream().map(this::toDomain)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -81,6 +93,9 @@ public class FacturaAdapter implements FacturaOutputPort {
         f.setActores(doc.getActores());
         f.setUsuarioCargaFactura(doc.getUsuarioCargaFactura());
         f.setEmpresaCargaFactura(doc.getEmpresaCargaFactura());
+        f.setSolicitudLiquidacionId(doc.getSolicitudLiquidacionId());
+        f.setSeguimientoLiquidacionPendiente(doc.getSeguimientoLiquidacionPendiente());
+        f.setVencimientoReversionPendiente(doc.getVencimientoReversionPendiente());
         return f;
     }
 
@@ -124,6 +139,9 @@ public class FacturaAdapter implements FacturaOutputPort {
         doc.setActores(f.getActores());
         doc.setUsuarioCargaFactura(f.getUsuarioCargaFactura());
         doc.setEmpresaCargaFactura(f.getEmpresaCargaFactura());
+        doc.setSolicitudLiquidacionId(f.getSolicitudLiquidacionId());
+        doc.setSeguimientoLiquidacionPendiente(f.getSeguimientoLiquidacionPendiente());
+        doc.setVencimientoReversionPendiente(f.getVencimientoReversionPendiente());
         return doc;
     }
 }

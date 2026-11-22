@@ -1,213 +1,255 @@
 package com.negociadororq.application.service
 
-import com.negociadororq.domain.model.TipoOperacionPendiente
 import com.negociadororq.application.port.output.ClockPort
-import com.negociadororq.application.port.output.CompanyOutputPort
 import com.negociadororq.application.port.output.FacturaOutputPort
-import com.negociadororq.application.port.output.NegociacionOutputPort
+import com.negociadororq.application.port.output.FacturaPatchOutputPort
+import com.negociadororq.application.port.output.OperacionPendienteOutputPort
 import com.negociadororq.domain.model.Factura
+import com.negociadororq.domain.model.OperacionPendiente
+import com.negociadororq.domain.model.TipoOperacionPendiente
 import spock.lang.Specification
+import spock.lang.Unroll
 
 import java.time.LocalDate
 import java.time.LocalDateTime
 
+/**
+ * Fase 28d (A5): un caso por fila de la tabla de estados aprobada por John (vence y revierte, vence sin revertir, no
+ * toca), el compare-and-set perdido, la reanudación tras una caída y la consulta por fecha.
+ */
 class FacturaVencimientoServiceSpec extends Specification {
 
+    static final LocalDateTime AHORA = LocalDateTime.of(2026, 11, 21, 2, 0)
+
     FacturaOutputPort facturaPort = Mock()
-    NegociacionOutputPort negociacionPort = Mock()
-    CompanyOutputPort companyPort = Mock()
+    FacturaPatchOutputPort facturaPatch = Mock()
+    OperacionPendienteOutputPort operaciones = Mock()
     ReversionExactaService reversionExacta = Mock()
-    ClockPort clock = Mock() {
-        now() >> LocalDateTime.now()
+    ClockPort clock = Stub() {
+        now() >> AHORA
     }
     FacturaVencimientoService service = new FacturaVencimientoService(
-            facturaPort, negociacionPort, companyPort, reversionExacta, clock)
+            facturaPort, facturaPatch, operaciones, reversionExacta, clock)
 
-    def "marca facturas con dias <= 10 como VENCIDA"() {
-        given:
-        def f1 = new Factura()
-        f1.numeroFactura = "F001"
-        f1.fechavencimientoFactura = LocalDate.now().plusDays(5)
-
-        def f2 = new Factura()
-        f2.numeroFactura = "F002"
-        f2.fechavencimientoFactura = LocalDate.now().plusDays(10)
-
-        facturaPort.findFacturasPendientesVencimiento() >> [f1, f2]
-
-        when:
-        service.actualizarFacturasVencidas()
-
-        then:
-        f1.estadoNegociacion == "VENCIDA"
-        f2.estadoNegociacion == "VENCIDA"
-        2 * facturaPort.save(_)
-    }
-
-    def "no marca facturas con dias > 10"() {
-        given:
+    static Factura factura(String estado, String firma, String negociacionId, int diasParaVencer = 5) {
         def f = new Factura()
-        f.numeroFactura = "F_VIGENTE"
-        f.fechavencimientoFactura = LocalDate.now().plusDays(20)
-
-        facturaPort.findFacturasPendientesVencimiento() >> [f]
-
-        when:
-        service.actualizarFacturasVencidas()
-
-        then:
-        f.estadoNegociacion == null
-        0 * facturaPort.save(_)
+        f.id = "id-" + estado + "-" + firma
+        f.numeroFactura = "F-" + estado
+        f.cufe = "CUFE-" + estado + "-" + firma
+        f.estadoNegociacion = estado
+        f.estadoFirma = firma
+        f.negociacionId = negociacionId
+        f.fechavencimientoFactura = AHORA.toLocalDate().plusDays(diasParaVencer)
+        f
     }
 
-    def "omite facturas sin fecha de vencimiento"() {
-        given:
-        def f = new Factura()
-        f.numeroFactura = "F_SIN_FECHA"
-        f.fechavencimientoFactura = null
-
-        facturaPort.findFacturasPendientesVencimiento() >> [f]
-
-        when:
-        service.actualizarFacturasVencidas()
-
-        then:
-        f.estadoNegociacion == null
-        0 * facturaPort.save(_)
+    def setup() {
+        facturaPort.findVencidasConReversionPendiente() >> []
     }
 
-    def "cuando no hay facturas pendientes no hace nada"() {
+    @Unroll
+    def "fila #fila (#estado + #firma): vence y revierte los cupos exactos una sola vez"() {
         given:
-        facturaPort.findFacturasPendientesVencimiento() >> []
+        def f = factura(estado, firma, "NEG-1")
+        facturaPort.findCandidatasVencimiento(AHORA.toLocalDate().plusDays(10),
+                FacturaVencimientoService.ESTADOS_CANDIDATOS) >> [f]
+        operaciones.buscar(TipoOperacionPendiente.LIQUIDACION_PENDIENTE, "NEG-1|" + f.cufe) >> Optional.empty()
 
         when:
-        service.actualizarFacturasVencidas()
+        def r = service.actualizarFacturasVencidas()
 
         then:
-        0 * facturaPort.save(_)
+        1 * facturaPatch.marcarVencidaSiCoincide(f.id, estado, firma, true) >> true
+        1 * reversionExacta.revertir(TipoOperacionPendiente.VENCIMIENTO, "NEG-1", f.cufe, _) >>
+                ReversionExactaService.Resultado.REVERTIDA
+        1 * facturaPatch.quitarReversionPendiente(f.id)
+        r.vencidas() == 1
+        r.revertidas() == 1
+
+        where:
+        fila | estado         | firma
+        1    | "NEGOCIADA"    | "SIN_CESION"
+        1    | "NEGOCIADA"    | "SIN_DESCUENTO"
+        2    | "ENDOSADA"     | "EN_REVISION"
+        3    | "NEGOCIADA"    | "EN_APROBACION"
+        4    | "SIN_NEGOCIAR" | "EN_REVISION"
+        4    | "SIN_NEGOCIAR" | "EN_APROBACION"
     }
 
-    def "continua procesando si una factura lanza excepcion"() {
+    @Unroll
+    def "fila 5 (#estado, negociación #negociacionId): vence sin cupos que devolver"() {
         given:
-        def fError = new Factura()
-        fError.numeroFactura = "F_ERROR"
-        fError.fechavencimientoFactura = LocalDate.now().plusDays(5)
-
-        def fOk = new Factura()
-        fOk.numeroFactura = "F_OK"
-        fOk.fechavencimientoFactura = LocalDate.now().plusDays(3)
-
-        facturaPort.findFacturasPendientesVencimiento() >> [fError, fOk]
-        facturaPort.save(fError) >> { throw new RuntimeException("Error BD") }
+        def f = factura(estado, firma, negociacionId)
+        facturaPort.findCandidatasVencimiento(_, _) >> [f]
+        operaciones.buscar(_, _) >> Optional.empty()
 
         when:
-        service.actualizarFacturasVencidas()
+        def r = service.actualizarFacturasVencidas()
 
         then:
-        fOk.estadoNegociacion == "VENCIDA"
-        1 * facturaPort.save(fOk)
+        1 * facturaPatch.marcarVencidaSiCoincide(f.id, estado, firma, false) >> true
+        0 * reversionExacta._
+        r.vencidas() == 1
+        r.revertidas() == 0
+
+        where:
+        estado         | firma         | negociacionId
+        "CARGADA"      | "SIN_FIRMA"   | null
+        "SIN_NEGOCIAR" | "SIN_CESION"  | null
+        // vigencia rechazada antes de A3 (la creación ya REVERTIDA) o legado: sin firma en curso
+        "SIN_NEGOCIAR" | "SIN_CESION"  | "NEG-VIEJA"
+        "SIN_NEGOCIAR" | "EN_REVISION" | null
     }
 
-    def "procesa lista con mezcla de vigentes y vencidas"() {
+    @Unroll
+    def "fila #fila (#estado + #firma): no se toca, ni revierte ni cambia el estado"() {
         given:
-        def vencida = new Factura()
-        vencida.numeroFactura = "F_VENCIDA"
-        vencida.fechavencimientoFactura = LocalDate.now().plusDays(2)
-
-        def vigente = new Factura()
-        vigente.numeroFactura = "F_VIGENTE"
-        vigente.fechavencimientoFactura = LocalDate.now().plusDays(30)
-
-        def sinFecha = new Factura()
-        sinFecha.numeroFactura = "F_SIN"
-        sinFecha.fechavencimientoFactura = null
-
-        facturaPort.findFacturasPendientesVencimiento() >> [vencida, vigente, sinFecha]
+        def f = factura(estado, firma, "NEG-1")
+        facturaPort.findCandidatasVencimiento(_, _) >> [f]
+        operaciones.buscar(_, _) >> Optional.empty()
 
         when:
-        service.actualizarFacturasVencidas()
+        def r = service.actualizarFacturasVencidas()
 
         then:
-        vencida.estadoNegociacion == "VENCIDA"
-        vigente.estadoNegociacion == null
-        sinFecha.estadoNegociacion == null
-        1 * facturaPort.save(vencida)
-        0 * facturaPort.save(vigente)
-        0 * facturaPort.save(sinFecha)
+        0 * facturaPatch.marcarVencidaSiCoincide(*_)
+        0 * reversionExacta._
+        r.vencidas() == 0
+        r.protegidas() == 1
+
+        where:
+        fila | estado         | firma
+        6    | "NEGOCIADA"    | "CESION"
+        6    | "NEGOCIADA"    | "DESCUENTO"
+        6    | "NEGOCIADA"    | "APROBACION"
+        9    | "NEGOCIADA"    | "RECHAZADA"
+        // estados terminales: la consulta ya no los trae; si llegaran, tampoco se tocan
+        7    | "LIQUIDADA"    | "CESION"
+        8    | "RECHAZADA"    | "RECHAZADA"
+        10   | "VENCIDA"      | "SIN_CESION"
+        11   | "BLOQUEADA"    | null
+        11   | "VENDIDA"      | null
+        11   | "INEXISTENTE"  | null
     }
 
-    // ─── reversion de cupos para negociaciones abandonadas ───────────────────
-
-    def "factura SIN_NEGOCIAR que vence no reversa cupos (nunca se consumieron)"() {
+    def "fila 6 por registros: con seguimiento de liquidación (aunque la firma no sea la final) no se toca"() {
         given:
-        def f = new Factura()
-        f.numeroFactura = "F_SIN_NEG"
-        f.estadoNegociacion = "SIN_NEGOCIAR"
-        f.fechavencimientoFactura = LocalDate.now().plusDays(5)
-        f.negociacionId = "neg-1"
-
-        facturaPort.findFacturasPendientesVencimiento() >> [f]
+        def f = factura("NEGOCIADA", "EN_APROBACION", "NEG-1")
+        facturaPort.findCandidatasVencimiento(_, _) >> [f]
+        operaciones.buscar(TipoOperacionPendiente.LIQUIDACION_PENDIENTE, "NEG-1|" + f.cufe) >>
+                Optional.of(new OperacionPendiente(7L, TipoOperacionPendiente.LIQUIDACION_PENDIENTE, "NEG-1|" + f.cufe,
+                        SeguimientoLiquidacionService.SOLICITADA, "{}", null, 0, AHORA, AHORA, null))
 
         when:
-        service.actualizarFacturasVencidas()
+        def r = service.actualizarFacturasVencidas()
 
         then:
-        f.estadoNegociacion == "VENCIDA"
-        0 * negociacionPort.findById(_)
-        0 * reversionExacta.revertir(*_)
+        0 * facturaPatch.marcarVencidaSiCoincide(*_)
+        0 * reversionExacta._
+        r.protegidas() == 1
     }
 
-    def "factura NEGOCIADA que vence: reversión exacta de lo descontado (A2) antes de marcarla VENCIDA"() {
+    def "compare-and-set perdido (la firma final ganó entre la lectura y la escritura): no revierte"() {
         given:
-        def f = new Factura()
-        f.numeroFactura = "F_NEG"
-        f.estadoNegociacion = "NEGOCIADA"
-        f.fechavencimientoFactura = LocalDate.now().plusDays(5)
-        f.negociacionId = "neg-1"
-        f.cufe = "CUFE-F_NEG"
-        f.rutProveedor = "RUT-PROV"
-        f.rutPagador = "RUT-PAG"
-        f.valorNetoFactura = new BigDecimal("7000.00")
-
-        facturaPort.findFacturasPendientesVencimiento() >> [f]
-        negociacionPort.findById("neg-1") >> Optional.of(
-                com.negociadororq.domain.model.Negociacion.builder()
-                        .id("neg-1")
-                        .rutEmpresa("RUT-PROV")
-                        .tipoOperacion(new com.negociadororq.domain.model.Operacion("FACTORING", "DESC"))
-                        .rutFondeadores(["FOND-001"])
-                        .build()
-        )
-        companyPort.findByNit("RUT-PROV") >> Optional.of(
-                com.negociadororq.domain.model.Company.builder().ideCompany(2L).build())
-        companyPort.findByNit("FOND-001") >> Optional.of(
-                com.negociadororq.domain.model.Company.builder().ideCompany(1L).build())
+        def f = factura("NEGOCIADA", "EN_APROBACION", "NEG-1")
+        facturaPort.findCandidatasVencimiento(_, _) >> [f]
+        operaciones.buscar(_, _) >> Optional.empty()
 
         when:
-        service.actualizarFacturasVencidas()
+        def r = service.actualizarFacturasVencidas()
 
         then:
-        f.estadoNegociacion == "VENCIDA"
-        1 * reversionExacta.revertir(TipoOperacionPendiente.VENCIMIENTO, _, _, _)
-        1 * facturaPort.save(f)
+        1 * facturaPatch.marcarVencidaSiCoincide(f.id, "NEGOCIADA", "EN_APROBACION", true) >> false
+        0 * reversionExacta._
+        0 * facturaPatch.quitarReversionPendiente(_)
+        r.perdidas() == 1
+        r.vencidas() == 0
     }
 
-    def "factura EN_REVISION sin negociacionId no reversa nada (no hay como resolverla)"() {
+    def "más de 10 días para vencer: no se toca"() {
         given:
-        def f = new Factura()
-        f.numeroFactura = "F_SIN_NEGID"
-        f.estadoNegociacion = "EN_REVISION"
-        f.fechavencimientoFactura = LocalDate.now().plusDays(5)
-        f.negociacionId = null
-
-        facturaPort.findFacturasPendientesVencimiento() >> [f]
+        def f = factura("NEGOCIADA", "SIN_CESION", "NEG-1", 11)
+        facturaPort.findCandidatasVencimiento(_, _) >> [f]
 
         when:
         service.actualizarFacturasVencidas()
 
         then:
-        f.estadoNegociacion == "VENCIDA"
-        0 * negociacionPort.findById(_)
-        0 * reversionExacta.revertir(*_)
+        0 * facturaPatch._
+        0 * reversionExacta._
+    }
+
+    def "caída a mitad de la corrida: la reversión falla, la marca queda y la corrida siguiente la retoma una vez"() {
+        given:
+        def f = factura("NEGOCIADA", "SIN_CESION", "NEG-1")
+        def vencida = factura("NEGOCIADA", "SIN_CESION", "NEG-1")
+        vencida.estadoNegociacion = "VENCIDA"
+        vencida.vencimientoReversionPendiente = true
+        operaciones.buscar(_, _) >> Optional.empty()
+
+        when: "primera corrida: VENCIDA y la reversión se cae (MySQL no responde)"
+        def r1 = service.actualizarFacturasVencidas()
+
+        then:
+        1 * facturaPort.findCandidatasVencimiento(_, _) >> [f]
+        1 * facturaPatch.marcarVencidaSiCoincide(f.id, "NEGOCIADA", "SIN_CESION", true) >> true
+        1 * reversionExacta.revertir(TipoOperacionPendiente.VENCIMIENTO, "NEG-1", f.cufe, _) >>
+                { throw new IllegalStateException("MySQL caído") }
+        0 * facturaPatch.quitarReversionPendiente(_)
+        r1.vencidas() == 1
+        r1.fallidas() == 1
+
+        when: "segunda corrida: la retoma desde la marca y ya no es candidata (está VENCIDA)"
+        def r2 = service.actualizarFacturasVencidas()
+
+        then:
+        1 * facturaPort.findVencidasConReversionPendiente() >> [vencida]
+        1 * facturaPort.findCandidatasVencimiento(_, _) >> []
+        1 * reversionExacta.revertir(TipoOperacionPendiente.VENCIMIENTO, "NEG-1", vencida.cufe, _) >>
+                ReversionExactaService.Resultado.REVERTIDA
+        1 * facturaPatch.quitarReversionPendiente(vencida.id)
+        r2.revertidas() == 1
+        r2.vencidas() == 0
+    }
+
+    def "reanudar una reversión que ya se había confirmado no devuelve otra vez (YA_REVERTIDA) y quita la marca"() {
+        given:
+        def vencida = factura("VENCIDA", "SIN_CESION", "NEG-1")
+        vencida.vencimientoReversionPendiente = true
+        facturaPort.findCandidatasVencimiento(_, _) >> []
+
+        when:
+        service.actualizarFacturasVencidas()
+
+        then:
+        1 * facturaPort.findVencidasConReversionPendiente() >> [vencida]
+        1 * reversionExacta.revertir(TipoOperacionPendiente.VENCIMIENTO, "NEG-1", vencida.cufe, _) >>
+                ReversionExactaService.Resultado.YA_REVERTIDA
+        1 * facturaPatch.quitarReversionPendiente(vencida.id)
+    }
+
+    def "un error en una factura no frena las demás"() {
+        given:
+        def mala = factura("NEGOCIADA", "SIN_CESION", "NEG-1")
+        def buena = factura("CARGADA", "SIN_FIRMA", null)
+        facturaPort.findCandidatasVencimiento(_, _) >> [mala, buena]
+        operaciones.buscar(_, _) >> { throw new IllegalStateException("MySQL caído") }
+
+        when:
+        def r = service.actualizarFacturasVencidas()
+
+        then:
+        1 * facturaPatch.marcarVencidaSiCoincide(buena.id, "CARGADA", "SIN_FIRMA", false) >> true
+        r.fallidas() == 1
+        r.vencidas() == 1
+    }
+
+    def "la consulta pide hoy + 10 días y solo los estados candidatos"() {
+        when:
+        service.actualizarFacturasVencidas()
+
+        then:
+        1 * facturaPort.findCandidatasVencimiento(LocalDate.of(2026, 12, 1),
+                ["CARGADA", "SIN_NEGOCIAR", "NEGOCIADA", "ENDOSADA"]) >> []
     }
 }
