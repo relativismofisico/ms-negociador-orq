@@ -46,6 +46,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
     /** Fase 28d (A2): la transacción Mongo ejecuta la acción; el marcador CREADA entra. */
     com.negociadororq.application.port.output.TransaccionMongoOutputPort transaccionMongo = Stub() {
         ejecutar(_) >> { args -> args[0].get() }
+        ejecutarConReintento(_) >> { args -> args[0].get() }
     }
     com.negociadororq.application.port.output.MarcaNegociacionOutputPort marca = Mock() {
         crear(*_) >> true

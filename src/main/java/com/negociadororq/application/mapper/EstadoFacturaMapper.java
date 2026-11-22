@@ -27,9 +27,10 @@ public class EstadoFacturaMapper {
      */
     public EstadoFactura aEstadoFactura(EstadoNegociacion estadoNegociacion) {
         return switch (estadoNegociacion) {
-            case APROBADA, ENDOSADA, LIQUIDADA, EN_APROBACION -> EstadoFactura.NEGOCIADA;
+            // Fase 28d (A5b, decisión de John): una factura con una negociación viva nunca se ve SIN_NEGOCIAR (antes
+            // PENDIENTE y PARCIAL se traducían a SIN_NEGOCIAR y la factura podía negociarse otra vez).
+            case APROBADA, ENDOSADA, LIQUIDADA, EN_APROBACION, PENDIENTE, PARCIAL -> EstadoFactura.NEGOCIADA;
             case RECHAZADA -> EstadoFactura.RECHAZADA;
-            case PENDIENTE, PARCIAL -> EstadoFactura.SIN_NEGOCIAR;
         };
     }
 }

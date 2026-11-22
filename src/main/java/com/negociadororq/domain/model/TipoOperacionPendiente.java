@@ -15,5 +15,8 @@ public enum TipoOperacionPendiente {
     /** Fase 28d (A4): solicitud de liquidación en seguimiento hasta su resultado (reenvíos y cancelación). */
     LIQUIDACION_PENDIENTE,
     /** Fase 28d (A4): reversión por una liquidación sin resultado cancelada en el liquidador (con la plantilla A). */
-    LIQUIDACION_CANCELADA
+    LIQUIDACION_CANCELADA,
+    /** Fase 28d (A5b): reversión de una creación cuya factura ya tenía otra negociación viva; sin plantilla A (el
+     * cliente recibe el error FACTURA_CON_NEGOCIACION_VIVA en la misma respuesta). */
+    NEGOCIACION_VIVA
 }

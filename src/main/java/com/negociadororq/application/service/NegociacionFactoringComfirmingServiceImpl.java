@@ -202,7 +202,14 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         negociacion.setErrores(allErrores);
         negociacion.setFechaCreacion(clock.now());
         negociacion.setFechaUltimaActualizacion(clock.now());
-        negociacion = guardarEnMongo(request, negociacion, facturasAceptadas);
+        try {
+            negociacion = guardarEnMongo(request, negociacion, facturasAceptadas);
+        } catch (ConflictoException e) {
+            if (ProcesarFacturaNegociacionServiceImpl.FACTURA_CON_NEGOCIACION_VIVA.equals(e.getCodigo())) {
+                rechazarPorNegociacionViva(idNegociacion, facturasAceptadas);
+            }
+            throw e;
+        }
 
         // Fase 28d (A2): el paso Mongo terminó; las operaciones de cada factura quedan COMPLETADA. Si este CAS no llega
         // (caída), el reconciliador ve el marcador CREADA y completa.
@@ -397,7 +404,9 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private Negociacion guardarEnMongo(NegociacionRequestDto request, Negociacion negociacion,
             List<FacturaNegociada> facturasAceptadas) {
         String id = negociacion.getId();
-        return transaccionMongo.ejecutar(() -> {
+        // Fase 28d (A5b): con reintento ante un conflicto transitorio (otra creación escribiendo la misma factura): al
+        // reintentar, el compare-and-set de marcarComoNegociada decide y la perdedora recibe FACTURA_CON_NEGOCIACION_VIVA.
+        return transaccionMongo.ejecutarConReintento(() -> {
             if (!marca.crear(id, MarcaNegociacionOutputPort.Tipo.CREADA)) {
                 log.warning(String.format("[NEGOCIACION-CANCELADA] %s: la creación llegó después de la cancelación del "
                         + "reconciliador; no se crea", id));
@@ -463,6 +472,31 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                         "creación abortada por un error técnico (" + causa.getClass().getSimpleName() + ")");
             } catch (RuntimeException e) {
                 log.log(java.util.logging.Level.SEVERE, String.format("[NEGOCIACION-ABORTADA] %s factura %s: la "
+                        + "reversión inmediata falló; la termina el reconciliador", idNegociacion, fn.getNumeroFactura()), e);
+            }
+        }
+    }
+
+    /**
+     * Fase 28d (A5b): la transacción Mongo se deshizo porque una factura ya tenía otra negociación viva. Se marca la
+     * creación CANCELADA (el reconciliador no la completa) y se devuelve exacto lo descontado de cada factura, SIN la
+     * plantilla A: el cliente recibe el error FACTURA_CON_NEGOCIACION_VIVA en la misma respuesta. Si la reversión falla
+     * aquí, la termina el reconciliador (CUPOS_DESCONTADOS con el marcador CANCELADA).
+     */
+    private void rechazarPorNegociacionViva(String idNegociacion, List<FacturaNegociada> procesadas) {
+        log.warning(String.format("[NEGOCIACION-FACTURA-VIVA] %s: una factura ya tenía otra negociación viva; se cancela "
+                + "la creación y se devuelven los cupos", idNegociacion));
+        boolean cancelada = marca.crear(idNegociacion, MarcaNegociacionOutputPort.Tipo.CANCELADA)
+                || marca.buscar(idNegociacion).filter(t -> t == MarcaNegociacionOutputPort.Tipo.CANCELADA).isPresent();
+        if (!cancelada) {
+            return;
+        }
+        for (FacturaNegociada fn : procesadas) {
+            try {
+                reversionExacta.revertir(TipoOperacionPendiente.NEGOCIACION_VIVA, idNegociacion, fn.getCufe(),
+                        "la factura ya tenía otra negociación viva");
+            } catch (RuntimeException e) {
+                log.log(java.util.logging.Level.SEVERE, String.format("[NEGOCIACION-FACTURA-VIVA] %s factura %s: la "
                         + "reversión inmediata falló; la termina el reconciliador", idNegociacion, fn.getNumeroFactura()), e);
             }
         }

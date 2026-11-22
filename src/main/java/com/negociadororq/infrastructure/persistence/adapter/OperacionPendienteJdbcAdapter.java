@@ -64,6 +64,16 @@ public class OperacionPendienteJdbcAdapter implements OperacionPendienteOutputPo
     }
 
     @Override
+    public boolean existeCreacionViva(final String cufe) {
+        final String patron = "%" + OperacionPendiente.SEPARADOR + cufe.replace("\\", "\\\\").replace("%", "\\%")
+                .replace("_", "\\_");
+        final Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM operacion_pendiente WHERE tipo = ? AND estado IN"
+                + " ('CUPOS_DESCONTADOS', 'COMPLETADA') AND clave_natural LIKE ?", Integer.class,
+                TipoOperacionPendiente.CREAR_NEGOCIACION.name(), patron);
+        return n != null && n > 0;
+    }
+
+    @Override
     public Optional<OperacionPendiente> buscar(final TipoOperacionPendiente tipo, final String claveNatural) {
         return jdbc.query("SELECT " + COLUMNAS + " FROM operacion_pendiente WHERE tipo = ? AND clave_natural = ?",
                 FILA, tipo.name(), claveNatural).stream().findFirst();

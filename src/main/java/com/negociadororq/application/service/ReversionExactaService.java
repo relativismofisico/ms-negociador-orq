@@ -37,7 +37,8 @@ public class ReversionExactaService {
      * y la liquidación cancelada.
      */
     static final Set<TipoOperacionPendiente> CON_CORREO_PROPIO =
-            EnumSet.of(TipoOperacionPendiente.RECHAZO, TipoOperacionPendiente.LIQUIDACION_FALLIDA);
+            EnumSet.of(TipoOperacionPendiente.RECHAZO, TipoOperacionPendiente.LIQUIDACION_FALLIDA,
+                    TipoOperacionPendiente.NEGOCIACION_VIVA);
 
     /** Estado de CREAR_NEGOCIACION: cupos descontados, la negociación todavía no está en Mongo (A2, commit 2). */
     public static final String CUPOS_DESCONTADOS = "CUPOS_DESCONTADOS";

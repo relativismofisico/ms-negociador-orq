@@ -1861,3 +1861,19 @@ cuando la causa está resuelta; ver "Runbook: eventos fallidos del outbox".
 - **Consulta.** Busca por fecha de vencimiento hasta hoy + 10 días y por estado candidato.
   - Índices: `db/manual/mongo_28d_a5_vencimiento_indices.js`, idempotente y con diagnóstico previo. Se aplica antes de desplegar.
 - **Regla general (decisión de John).** Ninguna factura vuelve sola a SIN_NEGOCIAR. El endoso rechazado por vigencia la deja VENCIDA (A3).
+
+## Opción A, A5b: una factura con negociación viva nunca está SIN_NEGOCIAR (Fase 28d)
+
+Invariante aprobada por John: una factura con una negociación viva nunca está SIN_NEGOCIAR, y si lo está, no tiene negociación viva.
+
+- **Mapeo.** `EstadoFacturaMapper` traduce PENDIENTE y PARCIAL a NEGOCIADA; antes daban SIN_NEGOCIAR y la factura podía negociarse otra vez, descontando cupos dos veces.
+  - El único camino que deja una factura en SIN_NEGOCIAR es la habilitación (CARGADA → SIN_NEGOCIAR), que hace un servicio externo; ninguno lo hace con una negociación viva.
+  - El endoso rechazado por vigencia la deja VENCIDA (A3).
+- **Guarda atómica (la definitiva).** `marcarComoNegociada` es un compare-and-set (`_id` y `estadoNegociacion = SIN_NEGOCIAR`) dentro de la transacción Mongo de la creación, que se reintenta ante un conflicto transitorio.
+  - Si no coincide, se aborta toda la creación: la transacción Mongo se deshace, el marcador queda CANCELADA y la reversión exacta devuelve los cupos (camino `NEGOCIACION_VIVA`).
+  - No se envía la plantilla A. La respuesta es 409 con el código `FACTURA_CON_NEGOCIACION_VIVA`.
+- **Verificación previa por registro**, antes de descontar cupos: si ya hay una creación viva (CUPOS_DESCONTADOS o COMPLETADA) para ese CUFE, la factura se rechaza con el mismo código.
+  - Una factura NEGOCIADA o ENDOSADA también se rechaza con ese código; los demás estados siguen como "no negociable".
+- **Cupo del operador.** Se descuenta y se devuelve en una sola sentencia SQL: el descuento solo si alcanza; la devolución suma, y en `revertirCupoUsuario` se limita a cero.
+  - Antes se leía y se escribía por separado, y dos operaciones concurrentes del mismo operador perdían actualizaciones.
+- **Diagnóstico.** `db/manual/mongo_28d_a5b_diagnostico_factura_negociacion_viva.js`, solo lectura: lista las facturas SIN_NEGOCIAR con negociación, para cruzarlas con `operacion_pendiente`. Se ejecuta cuando existan QA o producción.

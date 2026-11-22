@@ -94,6 +94,11 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
                 .build()
     }
 
+    def setup() {
+        // Fase 28d (A5b): la factura estaba SIN_NEGOCIAR (el compare-and-set de la creación gana)
+        facturaPatchPort.marcarComoNegociada(*_) >> true
+    }
+
     def setupMocksFactoring(String numero, String rutProv, BigDecimal valor = new BigDecimal("5000.00")) {
         def factura = buildFactura(numero, rutProv, "PAG-001")
         factura.valorFactura = valor
@@ -144,7 +149,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         resultado.rutPagador == "PAG-001"
         1 * cupoConsumidorService.descontarCupo(1L, _)
         1 * empresaQuotaPort.saveAndFlush(_)
-        1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_CESION, _)
+        1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_CESION, _) >> true
     }
 
     // ─── conflictos de concurrencia (optimistic locking, @Version) ────────────
@@ -218,7 +223,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         def resultado = service.procesarFactura(request, reqFact, "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
-        1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_DESCUENTO, _)
+        1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_DESCUENTO, _) >> true
     }
 
     // ─── validacion falla ─────────────────────────────────────────────────────
@@ -592,7 +597,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
             actores.any { it.rolEmpresaFactura == "PROVEEDOR" } &&
             actores.any { it.rolEmpresaFactura == "FONDEADOR" && it.rutEmpresa == "FOND-001" } &&
             !actores.any { it.rutEmpresa == "FOND-VIEJO" }
-        })
+        }) >> true
     }
 
     // ─── normalizarNit ────────────────────────────────────────────────────────
@@ -736,7 +741,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         2 * indirectFunderOfferSupplierQuotaPort.descontarCupo(77L, 10L, new BigDecimal("5000.00")) >>> [0, 1]
         1 * indirectFunderOfferSupplierQuotaPort.crear(77L, 10L, new BigDecimal("2.5"), new BigDecimal("10000.00"))
         0 * indirectFunderOfferSupplierQuotaPort.save(_)
-        1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_CESION, _)
+        1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_CESION, _) >> true
     }
 
     def "procesarFactura FACTORING indirecto exitoso (segunda negociacion) descuenta sobre la fila existente sin recrearla"() {

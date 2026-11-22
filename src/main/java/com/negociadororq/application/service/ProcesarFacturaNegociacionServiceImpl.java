@@ -53,6 +53,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNegociacionService {
 
+    /** Fase 28d (A5b): la factura ya tiene una negociación viva. */
+    public static final String FACTURA_CON_NEGOCIACION_VIVA = "FACTURA_CON_NEGOCIACION_VIVA";
+    private static final java.util.Set<String> ESTADOS_CON_NEGOCIACION_VIVA = java.util.Set.of("NEGOCIADA", "ENDOSADA");
+
     private final FacturaOutputPort facturaPort;
     private final CupoConsumidorService cupoConsumidorService;
     private final UserOutputPort userPort;
@@ -93,9 +97,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         // VALIDAR ESTADO
         // ==========================================
 
-        if (!"SIN_NEGOCIAR".equalsIgnoreCase(factura.getEstadoNegociacion())) {
-            throw new ReglaDeNegocioException("Factura no negociable estado=" + factura.getEstadoNegociacion());
-        }
+        exigirNegociable(factura);
 
         // ==========================================
         // VALIDAR PERMISOS
@@ -220,13 +222,41 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         return reqFact;
     }
 
+    /**
+     * La factura solo se negocia desde SIN_NEGOCIAR y sin otra negociación viva (Fase 28d, A5b).
+     */
+    private void exigirNegociable(Factura factura) {
+        // Fase 28d (A5b): NEGOCIADA o ENDOSADA es una negociación viva (invariante: una factura con negociación viva nunca
+        // está SIN_NEGOCIAR); el cliente recibe el código propio. Los demás estados (VENCIDA, RECHAZADA, LIQUIDADA...)
+        // siguen como "no negociable".
+        if (ESTADOS_CON_NEGOCIACION_VIVA.contains(factura.getEstadoNegociacion())) {
+            throw new ReglaDeNegocioException(FACTURA_CON_NEGOCIACION_VIVA + ": la factura ya tiene una negociación en "
+                    + "curso. Factura no negociable estado=" + factura.getEstadoNegociacion(), FACTURA_CON_NEGOCIACION_VIVA);
+        }
+        if (!"SIN_NEGOCIAR".equalsIgnoreCase(factura.getEstadoNegociacion())) {
+            throw new ReglaDeNegocioException("Factura no negociable estado=" + factura.getEstadoNegociacion());
+        }
+        // Fase 28d (A5b): verificación rápida por registro, antes de descontar cupos (la guarda definitiva es el
+        // compare-and-set de marcarComoNegociada en la transacción Mongo).
+        if (factura.getCufe() != null && operacionPendientePort.existeCreacionViva(factura.getCufe())) {
+            throw new ReglaDeNegocioException(FACTURA_CON_NEGOCIACION_VIVA + ": la factura ya tiene una negociación en curso",
+                    FACTURA_CON_NEGOCIACION_VIVA);
+        }
+    }
+
     @Override
     public void marcarComoNegociada(NegociacionRequestDto request, FacturaNegociada procesada) {
         Factura factura = new ResolutorFactura(facturaPort).resuelta(procesada);
         List<FondeadorAsignacion> fondeadores = Optional.ofNullable(procesada.getFondeadores())
                 .orElse(Collections.emptyList());
-        facturaPatchPort.marcarComoNegociada(factura.getId(),
-                calcularEstadoFirma(request.getTipoOperacion().getTipo()), construirActores(factura, fondeadores));
+        if (!facturaPatchPort.marcarComoNegociada(factura.getId(),
+                calcularEstadoFirma(request.getTipoOperacion().getTipo()), construirActores(factura, fondeadores))) {
+            // Fase 28d (A5b): otra negociación tomó la factura entre la lectura y esta transacción: se aborta toda la
+            // creación (la transacción Mongo se deshace y quien llama devuelve los cupos exactos, sin plantilla A).
+            throw new ConflictoException(FACTURA_CON_NEGOCIACION_VIVA + ": la factura " + factura.getNumeroFactura()
+                    + " ya tiene una negociación en curso; no se creó la negociación. Puede volver a intentarlo.",
+                    FACTURA_CON_NEGOCIACION_VIVA);
+        }
     }
 
     private List<FondeadorAsignacion> obtenerFondeadores(
