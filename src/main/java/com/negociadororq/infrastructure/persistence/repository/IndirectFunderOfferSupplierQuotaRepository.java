@@ -30,13 +30,17 @@ public interface IndirectFunderOfferSupplierQuotaRepository
      * dos negociaciones concurrentes del mismo par ya no pueden pisarse el
      * resultado.
      *
-     * @return número de filas afectadas — 0 si la fila de consumo todavía no existe.
+     * <p>Fase 28d (A5b, auditoría de escrituras de cupo): el control de cupo suficiente va en la MISMA sentencia
+     * ({@code current_quota >= valor}); antes estaba solo en una lectura previa y dos descuentos a la vez dejaban el cupo
+     * negativo.</p>
+     *
+     * @return número de filas afectadas — 0 si la fila de consumo no existe o no tiene cupo suficiente.
      */
     @Modifying
     @Transactional
     @Query("UPDATE IndirectFunderOfferSupplierQuotaEntity e "
             + "SET e.currentQuota = e.currentQuota - :valor "
-            + "WHERE e.offerId = :offerId AND e.supplierId = :supplierId")
+            + "WHERE e.offerId = :offerId AND e.supplierId = :supplierId AND e.currentQuota >= :valor")
     int descontarCupo(@Param("offerId") Long offerId,
                       @Param("supplierId") Long supplierId,
                       @Param("valor") BigDecimal valor);

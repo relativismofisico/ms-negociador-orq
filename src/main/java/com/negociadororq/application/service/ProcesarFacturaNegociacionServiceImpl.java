@@ -55,6 +55,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
     /** Fase 28d (A5b): la factura ya tiene una negociación viva. */
     public static final String FACTURA_CON_NEGOCIACION_VIVA = "FACTURA_CON_NEGOCIACION_VIVA";
+    private static final String SIN_CUPO_INDIRECTO = "Fondeador sin cupo factoring (indirecto vía pagador)";
     private static final java.util.Set<String> ESTADOS_CON_NEGOCIACION_VIVA = java.util.Set.of("NEGOCIADA", "ENDOSADA");
 
     private final FacturaOutputPort facturaPort;
@@ -420,7 +421,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         if (cupoDisponible.compareTo(valorFactura) < 0) {
             throw new ReglaDeNegocioException(
-                    "Fondeador sin cupo factoring (indirecto vía pagador)");
+                    SIN_CUPO_INDIRECTO);
         }
     }
 
@@ -542,6 +543,10 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         if (filas > 0) {
             return oferta.getId();
         }
+        // Fase 28d (A5b): 0 filas con la fila ya creada es cupo insuficiente (la sentencia lo exige); sin fila, se crea.
+        if (indirectFunderOfferSupplierQuotaPort.find(oferta.getId(), supplierId).isPresent()) {
+            throw new ReglaDeNegocioException(SIN_CUPO_INDIRECTO);
+        }
 
         try {
             indirectFunderOfferSupplierQuotaPort.crear(
@@ -554,6 +559,9 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         }
 
         filas = indirectFunderOfferSupplierQuotaPort.descontarCupo(oferta.getId(), supplierId, valorFactura);
+        if (filas == 0 && indirectFunderOfferSupplierQuotaPort.find(oferta.getId(), supplierId).isPresent()) {
+            throw new ReglaDeNegocioException(SIN_CUPO_INDIRECTO);
+        }
         if (filas == 0) {
             throw new ConflictoException(
                     "No se pudo registrar el consumo de cupo del proveedor contra la oferta de fondeo "

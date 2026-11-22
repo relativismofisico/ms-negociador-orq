@@ -794,6 +794,38 @@ class ConservacionCuposIT {
         assertThat(cupos().get("operador")).isEqualByComparingTo("0.00");
     }
 
+    @Test
+    void a5b_el_descuento_del_cupo_indirecto_exige_cupo_suficiente_en_la_sentencia() throws Exception {
+        // Auditoría de escrituras de cupo (John): antes el control estaba solo en una lectura previa y dos descuentos de
+        // 80.00 sobre 100.00 dejaban -60.00 (rama analisis/28d-cupo-indirecto-sin-control). Ahora va en la sentencia.
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET current_quota = 100.00 WHERE offer_id = ?", OFERTA);
+        CountDownLatch listos = new CountDownLatch(2);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+        int[] filas = new int[2];
+        List<Thread> hilos = new ArrayList<>();
+        for (int k = 0; k < 2; k++) {
+            final int j = k;
+            hilos.add(hilo(() -> {
+                // los dos ya pasaron la lectura previa (100.00 >= 80.00) y descuentan
+                filas[j] = indirectoPort.descontarCupo(OFERTA, EMPRESA_PROV_IND, new BigDecimal("80.00"));
+            }, listos, largada, fallos));
+        }
+        listos.await();
+        largada.countDown();
+        for (Thread t : hilos) {
+            t.join();
+        }
+        assertThat(fallos).isEmpty();
+        assertThat(filas[0] + filas[1]).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT current_quota FROM indirect_funder_offer_supplier_quota WHERE offer_id = ?",
+                BigDecimal.class, OFERTA)).isEqualByComparingTo("20.00");
+        // la devolución es exacta (suma lo descontado, una fila)
+        assertThat(indirectoPort.devolverCupo(OFERTA, EMPRESA_PROV_IND, new BigDecimal("80.00"))).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT current_quota FROM indirect_funder_offer_supplier_quota WHERE offer_id = ?",
+                BigDecimal.class, OFERTA)).isEqualByComparingTo("100.00");
+    }
+
     // ─── Fase 28d (A5b): dos creaciones del mismo CUFE a la vez, con Mongo y MySQL reales ─────────────────────────
 
     /** El servicio real de creación sobre Mongo real (factura, negociación, marcador, transacción) y MySQL real. */
