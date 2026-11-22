@@ -1,6 +1,8 @@
 package com.negociadororq.application.service;
 
 import java.math.BigDecimal;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -9,9 +11,11 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.negociadororq.application.dto.DetalleCupoIndirectoDto;
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.ValidacionFacturaResponseDto;
 import com.negociadororq.application.exception.ConflictoException;
+import com.negociadororq.application.exception.CupoIndirectoInsuficienteException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
 import com.negociadororq.application.port.output.ClockPort;
@@ -55,7 +59,6 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
     /** Fase 28d (A5b): la factura ya tiene una negociación viva. */
     public static final String FACTURA_CON_NEGOCIACION_VIVA = "FACTURA_CON_NEGOCIACION_VIVA";
-    private static final String SIN_CUPO_INDIRECTO = "Fondeador sin cupo factoring (indirecto vía pagador)";
     private static final java.util.Set<String> ESTADOS_CON_NEGOCIACION_VIVA = java.util.Set.of("NEGOCIADA", "ENDOSADA");
 
     private final FacturaOutputPort facturaPort;
@@ -79,6 +82,13 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FacturaNegociada procesarFactura(NegociacionRequestDto request, FacturaNegociada reqFact,
             String negociacionId) {
+        return procesarFactura(request, reqFact, negociacionId, ContextoCupoIndirecto.vacio());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public FacturaNegociada procesarFactura(NegociacionRequestDto request, FacturaNegociada reqFact,
+            String negociacionId, ContextoCupoIndirecto cupoIndirecto) {
 
         // Fase 28d (C): la solicitud ya trae el CUFE y los RUT de la base (resueltos en crearNegociacion).
         Factura factura = new ResolutorFactura(facturaPort).resuelta(reqFact);
@@ -162,7 +172,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         List<FondeadorAsignacion> fondeadores = obtenerFondeadores(request, reqFact);
 
-        validarFondeadores(request, factura, fondeadores, valorFactura);
+        validarFondeadores(request, factura, fondeadores, valorFactura, cupoIndirecto);
 
         // ==========================================
         // DESCONTAR CUPOS
@@ -189,7 +199,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                     "CUPO_EMPRESA_CONCURRENCIA");
         }
 
-        descontarCupoFondeadores(request, factura, fondeadores, valorFactura, descuentos);
+        descontarCupoFondeadores(request, factura, fondeadores, valorFactura, descuentos, cupoIndirecto);
 
         // Fase 28d (A2): el registro va en la MISMA transacción que los descuentos (REQUIRES_NEW de esta factura): o se
         // confirman juntos o ninguno. Una clave repetida (la misma factura dos veces en la negociación) revierte todo.
@@ -280,7 +290,8 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
             NegociacionRequestDto request,
             Factura factura,
             List<FondeadorAsignacion> fondeadores,
-            BigDecimal valorFactura
+            BigDecimal valorFactura,
+            ContextoCupoIndirecto contexto
     ) {
 
         for (FondeadorAsignacion fon : fondeadores) {
@@ -330,7 +341,8 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
                 } else {
 
-                    validarFondeoIndirecto(fon, funderId, payerId, supplierId, valorFactura);
+                    validarFondeoIndirecto(fon, factura, new Trio(funderId, payerId, supplierId), valorFactura,
+                            contexto);
                 }
 
             } else {
@@ -396,41 +408,135 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
      */
     private void validarFondeoIndirecto(
             FondeadorAsignacion fon,
-            Long funderId,
-            Long payerId,
-            Long supplierId,
-            BigDecimal valorFactura
+            Factura factura,
+            Trio trio,
+            BigDecimal valorFactura,
+            ContextoCupoIndirecto contexto
     ) {
 
-        if (!payerFundingVisibilityPort.estaHabilitado(payerId)) {
-            throw new ReglaDeNegocioException(
-                    "El fondeador " + fon.getRutFondeador()
-                            + " no tiene una asignación de cupo activa para este proveedor");
-        }
-
-        IndirectFunderOffer oferta = indirectFunderOfferPort
-                .findActivaAprobada(funderId, payerId)
+        IndirectFunderOffer oferta = ofertaIndirecta(trio.funderId(), trio.payerId())
                 .orElseThrow(() -> new ReglaDeNegocioException(
                         "El fondeador " + fon.getRutFondeador()
                                 + " no tiene una asignación de cupo activa para este proveedor"));
 
-        BigDecimal cupoDisponible = indirectFunderOfferSupplierQuotaPort
-                .find(oferta.getId(), supplierId)
-                .map(IndirectFunderOfferSupplierQuota::getCurrentQuota)
-                .orElse(oferta.getSupplierQuotaTemplate());
+        // Fase 28d (validación acumulada, decisión de John): lo que queda al llegar a ESTA factura. Las anteriores de la
+        // petición ya confirmaron su transacción (cada factura va en la suya, en el orden de la petición), así que su
+        // consumo ya está descontado aquí. La sentencia atómica del descuento sigue siendo la barrera final.
+        BigDecimal cupoDisponible = disponibleIndirecto(oferta, trio.supplierId());
 
         if (cupoDisponible.compareTo(valorFactura) < 0) {
-            throw new ReglaDeNegocioException(
-                    SIN_CUPO_INDIRECTO);
+            throw sinCupoIndirecto(factura, fon.getRutFondeador(), trio, cupoDisponible, valorFactura, contexto);
         }
     }
 
+    /** El pagador habilitó el cupo indirecto y hay una oferta activa y aprobada del fondeador hacia él. */
+    private Optional<IndirectFunderOffer> ofertaIndirecta(Long funderId, Long payerId) {
+        if (!payerFundingVisibilityPort.estaHabilitado(payerId)) {
+            return Optional.empty();
+        }
+        return indirectFunderOfferPort.findActivaAprobada(funderId, payerId);
+    }
+
+    /** Lo disponible del proveedor contra la oferta: su fila de consumo o, si nunca negoció, el cupo íntegro. */
+    private BigDecimal disponibleIndirecto(IndirectFunderOffer oferta, Long supplierId) {
+        return indirectFunderOfferSupplierQuotaPort
+                .find(oferta.getId(), supplierId)
+                .map(IndirectFunderOfferSupplierQuota::getCurrentQuota)
+                .orElse(oferta.getSupplierQuotaTemplate());
+    }
+
+    /** Fondeador, pagador y proveedor de un cupo indirecto. */
+    private record Trio(Long funderId, Long payerId, Long supplierId) {
+        String clave() {
+            return ContextoCupoIndirecto.clave(funderId, payerId, supplierId);
+        }
+    }
+
+    @Override
+    public ContextoCupoIndirecto prepararCupoIndirecto(NegociacionRequestDto request, List<Factura> facturasBd) {
+        ContextoCupoIndirecto.Constructor ctx = new ContextoCupoIndirecto.Constructor();
+        if (request.getTipoOperacion() == null
+                || !"FACTORING".equalsIgnoreCase(request.getTipoOperacion().getTipo())) {
+            return ctx.construir();
+        }
+        for (int i = 0; i < facturasBd.size(); i++) {
+            Factura factura = facturasBd.get(i);
+            BigDecimal valor = Optional.ofNullable(factura.getValorNetoFactura())
+                    .or(() -> Optional.ofNullable(factura.getValorFactura())).orElse(BigDecimal.ZERO);
+            for (FondeadorAsignacion fon : obtenerFondeadores(request, request.getFacturas().get(i))) {
+                trioIndirecto(fon, factura).ifPresent(t -> ofertaIndirecta(t.funderId(), t.payerId())
+                        .ifPresent(oferta -> ctx.sumar(t.clave(), valor, disponibleIndirecto(oferta, t.supplierId()))));
+            }
+        }
+        return ctx.construir();
+    }
+
+    /** El trío de la factura con ese fondeador, si va por cupo indirecto (sin asignación directa activa). */
+    private Optional<Trio> trioIndirecto(FondeadorAsignacion fon, Factura factura) {
+        Optional<Long> funderId = companyPort.findByNit(fon.getRutFondeador()).map(Company::getIdeCompany);
+        Optional<Long> supplierId = companyPort.findByNit(factura.getRutProveedor()).map(Company::getIdeCompany);
+        Optional<Long> payerId = companyPort.findByNit(factura.getRutPagador()).map(Company::getIdeCompany);
+        if (funderId.isEmpty() || supplierId.isEmpty() || payerId.isEmpty()
+                || fondeadorQuotaPort.findByFunderIdAndSupplierIdActivo(funderId.get(), supplierId.get()).isPresent()) {
+            return Optional.empty();
+        }
+        return Optional.of(new Trio(funderId.get(), payerId.get(), supplierId.get()));
+    }
+
+    /**
+     * Fase 28d (decisión de John; texto de John: el cupo lo define el FONDEADOR en su oferta a la pagadora, igual para cada
+     * proveedor): el rechazo de una factura que no cabe en el cupo indirecto, con los montos exactos, los
+     * nombres del pagador y del fondeador y, si la petición los tiene, la suma del trío y su disponible inicial.
+     */
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    private CupoIndirectoInsuficienteException sinCupoIndirecto(Factura factura, String rutFondeador, Trio trio,
+            BigDecimal disponible, BigDecimal requerido, ContextoCupoIndirecto contexto) {
+        BigDecimal faltante = requerido.subtract(disponible);
+        String fondeador = nombreEmpresa(rutFondeador);
+        String pagador = nombreEmpresa(factura.getRutPagador());
+        Optional<ContextoCupoIndirecto.Acumulado> acumulado = contexto.de(trio.clave());
+        DetalleCupoIndirectoDto detalle = DetalleCupoIndirectoDto.builder()
+                .rutFondeador(rutFondeador).fondeador(fondeador)
+                .rutPagador(factura.getRutPagador()).pagador(pagador)
+                .disponible(disponible).requerido(requerido).faltante(faltante)
+                .sumaPeticion(acumulado.map(ContextoCupoIndirecto.Acumulado::sumaPeticion).orElse(null))
+                .disponibleInicial(acumulado.map(ContextoCupoIndirecto.Acumulado::disponibleInicial).orElse(null))
+                .build();
+        StringBuilder mensaje = new StringBuilder("La factura ").append(factura.getNumeroFactura()).append(" por ")
+                .append(pesos(requerido)).append(" no se incluyó: el cupo de factoring que ").append(fondeador)
+                .append(" ofrece a los proveedores de ").append(pagador).append(" tiene ").append(pesos(disponible))
+                .append(" disponibles para ti; faltan ").append(pesos(faltante)).append(". Puedes pedirle a ")
+                .append(fondeador).append(" que recargue o amplíe tu cupo.");
+        acumulado.filter(a -> a.sumaPeticion().compareTo(requerido) > 0).ifPresent(a -> mensaje
+                .append(" Las facturas de esta petición con ese cupo suman ").append(pesos(a.sumaPeticion()))
+                .append(" y al empezar había ").append(pesos(a.disponibleInicial()))
+                .append(" disponibles; entran en el orden de la petición."));
+        return new CupoIndirectoInsuficienteException(mensaje.toString(), detalle);
+    }
+
+    private String nombreEmpresa(String nit) {
+        return companyPort.findByNit(nit).map(Company::getNameCompany).filter(n -> !n.isBlank()).orElse(nit);
+    }
+
+    /** {@code 12000.5} → {@code "$12.000,50"} (formato colombiano, exacto: el BigDecimal ya tiene 2 decimales). */
+    static String pesos(BigDecimal valor) {
+        DecimalFormatSymbols simbolos = new DecimalFormatSymbols(Locale.ROOT);
+        simbolos.setGroupingSeparator('.');
+        simbolos.setDecimalSeparator(',');
+        DecimalFormat formato = new DecimalFormat("#,##0.00", simbolos);
+        formato.setParseBigDecimal(true);
+        formato.setRoundingMode(java.math.RoundingMode.HALF_UP);
+        return "$" + formato.format(valor);
+    }
+
+    @SuppressWarnings("checkstyle:ParameterNumber")
     private void descontarCupoFondeadores(
             NegociacionRequestDto request,
             Factura factura,
             List<FondeadorAsignacion> fondeadores,
             BigDecimal valorFactura,
-            List<DescuentoCupos.Descuento> descuentos
+            List<DescuentoCupos.Descuento> descuentos,
+            ContextoCupoIndirecto contexto
     ) {
 
         for (FondeadorAsignacion fon : fondeadores) {
@@ -471,7 +577,8 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
                 } else {
 
-                    Long ofertaId = descontarCupoIndirecto(funderId, payerId, supplierId, valorFactura);
+                    Long ofertaId = descontarCupoIndirecto(fon, factura, new Trio(funderId, payerId, supplierId),
+                            valorFactura, contexto);
                     descuentos.add(new DescuentoCupos.Descuento(DescuentoCupos.Tipo.INDIRECTO, ofertaId, supplierId,
                             valorFactura));
                 }
@@ -532,7 +639,11 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
      * del UNIQUE se traduce a {@link ConflictoException} en el adapter y se
      * absorbe acá — la fila ya existe, el reintento la descuenta.</p>
      */
-    private Long descontarCupoIndirecto(Long funderId, Long payerId, Long supplierId, BigDecimal valorFactura) {
+    private Long descontarCupoIndirecto(FondeadorAsignacion fon, Factura factura, Trio trio, BigDecimal valorFactura,
+            ContextoCupoIndirecto contexto) {
+        Long funderId = trio.funderId();
+        Long payerId = trio.payerId();
+        Long supplierId = trio.supplierId();
 
         IndirectFunderOffer oferta = indirectFunderOfferPort
                 .findActivaAprobada(funderId, payerId)
@@ -544,8 +655,11 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
             return oferta.getId();
         }
         // Fase 28d (A5b): 0 filas con la fila ya creada es cupo insuficiente (la sentencia lo exige); sin fila, se crea.
-        if (indirectFunderOfferSupplierQuotaPort.find(oferta.getId(), supplierId).isPresent()) {
-            throw new ReglaDeNegocioException(SIN_CUPO_INDIRECTO);
+        // Una concurrente consumió el cupo entre la validación y el descuento: el rechazo lleva lo que queda AHORA.
+        Optional<IndirectFunderOfferSupplierQuota> fila = indirectFunderOfferSupplierQuotaPort.find(oferta.getId(), supplierId);
+        if (fila.isPresent()) {
+            throw sinCupoIndirecto(factura, fon.getRutFondeador(), trio, fila.get().getCurrentQuota(), valorFactura,
+                    contexto);
         }
 
         try {
@@ -559,8 +673,13 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         }
 
         filas = indirectFunderOfferSupplierQuotaPort.descontarCupo(oferta.getId(), supplierId, valorFactura);
-        if (filas == 0 && indirectFunderOfferSupplierQuotaPort.find(oferta.getId(), supplierId).isPresent()) {
-            throw new ReglaDeNegocioException(SIN_CUPO_INDIRECTO);
+        if (filas == 0) {
+            Optional<IndirectFunderOfferSupplierQuota> creada =
+                    indirectFunderOfferSupplierQuotaPort.find(oferta.getId(), supplierId);
+            if (creada.isPresent()) {
+                throw sinCupoIndirecto(factura, fon.getRutFondeador(), trio, creada.get().getCurrentQuota(), valorFactura,
+                        contexto);
+            }
         }
         if (filas == 0) {
             throw new ConflictoException(

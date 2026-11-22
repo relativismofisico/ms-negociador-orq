@@ -46,4 +46,8 @@ public class NegociacionResponseDto {
 
     @Schema(description = "Mensajes de error para facturas rechazadas. Vacío si todas fueron aceptadas.")
     private List<String> errores;
+
+    @Schema(description = "Fase 28d: cada factura no incluida, con su código, su motivo (el mismo de errores) y, si es "
+            + "SIN_CUPO_INDIRECTO, disponible, requerido, faltante, suma de la petición y nombres. Vacío si entraron todas.")
+    private List<RechazoFacturaDto> rechazos;
 }

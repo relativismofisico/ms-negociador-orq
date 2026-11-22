@@ -11,10 +11,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.negociadororq.application.dto.DetalleCupoIndirectoDto;
 import com.negociadororq.application.dto.NegociacionRequestDto;
 import com.negociadororq.application.dto.NegociacionResponseDto;
+import com.negociadororq.application.dto.RechazoFacturaDto;
 import com.negociadororq.application.exception.AccionNoPermitidaException;
 import com.negociadororq.application.exception.ConflictoException;
+import com.negociadororq.application.exception.CupoIndirectoInsuficienteException;
 import com.negociadororq.application.exception.NegociadorException;
 import com.negociadororq.application.exception.PeticionInvalidaException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
@@ -134,6 +137,12 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         Set<String> contrapartes = contrapartesDesdeBd(request, facturasBd);
         validarOperacionHabilitada(request, contrapartes);
         validarUnicaContraparte(request, contrapartes);
+        // Fase 28d (validación acumulada del cupo indirecto): suma y disponible inicial de cada trío, antes de la primera
+        // factura. Las facturas se procesan después en el orden de la petición (el orden decide qué entra).
+        ContextoCupoIndirecto contextoIndirecto = Optional.ofNullable(
+                procesarFacturaNegociacionService.prepararCupoIndirecto(request, facturasBd))
+                .orElse(ContextoCupoIndirecto.vacio());
+        List<RechazoFacturaDto> rechazos = new ArrayList<>();
 
         /* ======================================================
            1. Agrupar facturas por pagador SOLO en CONFIRMING
@@ -151,7 +160,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         String idNegociacion = negociacionPort.nuevoId();
 
         for (FacturaNegociada facturaReq : request.getFacturas()) {
-            procesarUna(request, facturaReq, idNegociacion, facturasAceptadas, errores, facturasRechazadas);
+            procesarUna(request, facturaReq, idNegociacion, facturasAceptadas, errores, facturasRechazadas, rechazos,
+                    contextoIndirecto);
         }
 
 
@@ -240,6 +250,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         response.setTotalNegociado(totalAceptado);
         response.setEstado(estado);
         response.setErrores(allErrores);
+        response.setRechazos(rechazos);
 
         return response;
     }
@@ -438,9 +449,11 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
      */
     @SuppressWarnings("checkstyle:ParameterNumber")
     private void procesarUna(NegociacionRequestDto request, FacturaNegociada facturaReq, String idNegociacion,
-            List<FacturaNegociada> facturasAceptadas, List<String> errores, List<String> facturasRechazadas) {
+            List<FacturaNegociada> facturasAceptadas, List<String> errores, List<String> facturasRechazadas,
+            List<RechazoFacturaDto> rechazos, ContextoCupoIndirecto contextoIndirecto) {
         try {
-            facturasAceptadas.add(procesarFacturaNegociacionService.procesarFactura(request, facturaReq, idNegociacion));
+            facturasAceptadas.add(procesarFacturaNegociacionService.procesarFactura(request, facturaReq, idNegociacion,
+                    contextoIndirecto));
         } catch (ServicioDependienteNoDisponibleException e) {
             abortar(idNegociacion, facturasAceptadas, e);
             throw e;
@@ -452,6 +465,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             String motivo = motivoRechazo(e);
             errores.add(motivo);
             facturasRechazadas.add(facturaReq.getNumeroFactura() + " -> " + motivo);
+            rechazos.add(RechazoFacturaDto.builder().numeroFactura(facturaReq.getNumeroFactura()).codigo(e.getCodigo())
+                    .mensaje(motivo).cupoIndirecto(detalleCupoIndirecto(e)).build());
         } catch (RuntimeException e) {
             log.log(java.util.logging.Level.SEVERE, String.format("Error técnico procesando la factura %s: se aborta "
                     + "la creación de la negociación %s", facturaReq.getNumeroFactura(), idNegociacion), e);
@@ -555,6 +570,14 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                         + "reversión inmediata falló; la termina el reconciliador", idNegociacion, fn.getNumeroFactura()), e);
             }
         }
+    }
+
+    /** Fase 28d: los montos del rechazo por cupo indirecto, o {@code null} si el rechazo es por otro motivo. */
+    private static DetalleCupoIndirectoDto detalleCupoIndirecto(NegociadorException e) {
+        if (e instanceof CupoIndirectoInsuficienteException sinCupo) {
+            return sinCupo.getDetalle();
+        }
+        return null;
     }
 
     private static String motivoRechazo(Exception e) {

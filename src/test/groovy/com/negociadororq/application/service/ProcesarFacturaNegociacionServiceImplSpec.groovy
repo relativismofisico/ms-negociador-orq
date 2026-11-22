@@ -715,8 +715,132 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         service.procesarFactura(request, buildReqFact("FECI022"), "neg-1").tap { service.marcarComoNegociada(request, it) }
 
         then:
-        def ex = thrown(RuntimeException)
-        ex.message.contains("Fondeador sin cupo factoring")
+        def ex = thrown(com.negociadororq.application.exception.CupoIndirectoInsuficienteException)
+        ex.codigo == "SIN_CUPO_INDIRECTO"
+        ex.detalle.disponible == new BigDecimal("1000.00")
+        ex.detalle.faltante == new BigDecimal("4000.00")
+    }
+
+    // ─── Fase 28d (decisión de John): validación acumulada y datos del rechazo SIN_CUPO_INDIRECTO ──────────
+
+    /** Cupo indirecto en memoria: la fila de consumo del proveedor 10 contra la oferta 77, con descuento condicionado. */
+    def cupoIndirectoEnMemoria(BigDecimal inicial) {
+        def estado = [actual: inicial]
+        payerFundingVisibilityPort.estaHabilitado(30L) >> true
+        indirectFunderOfferPort.findActivaAprobada(20L, 30L) >> Optional.of(IndirectFunderOffer.builder().id(77L)
+                .funderId(20L).payerId(30L).payerRate(new BigDecimal("2.5")).supplierQuotaTemplate(inicial).build())
+        indirectFunderOfferSupplierQuotaPort.find(77L, 10L) >> {
+            Optional.of(IndirectFunderOfferSupplierQuota.builder().id(1L).offerId(77L).supplierId(10L)
+                    .currentQuota(estado.actual).build())
+        }
+        indirectFunderOfferSupplierQuotaPort.descontarCupo(77L, 10L, _) >> { Long o, Long s, BigDecimal v ->
+            if (estado.actual.compareTo(v) < 0) {
+                return 0
+            }
+            estado.actual = estado.actual.subtract(v)
+            return 1
+        }
+        companyPort.findByNit("PAG-001") >> Optional.of(Company.builder().ideCompany(30L).nameCompany("Pagadora Uno").build())
+        companyPort.findByNit("FOND-001") >> Optional.of(Company.builder().ideCompany(20L).nameCompany("Fondo Dos").build())
+        return estado
+    }
+
+    def "Fase 28d: 3 facturas de 4.000 sobre 10.000 del mismo trío: entran las 2 primeras en el orden de la petición y la 3.ª se rechaza con disponible, requerido, faltante, suma e inicial"() {
+        given:
+        def estado = cupoIndirectoEnMemoria(new BigDecimal("10000.00"))
+        // la empresa y el operador tienen cupo de sobra: solo decide el cupo indirecto
+        empresaQuotaPort.findByCompanyId(10L) >> { Optional.of(EmpresaQuota.builder().currentQuota(new BigDecimal("90000.00")).build()) }
+        def facturas = ["FECI050", "FECI051", "FECI052"].collect { setupMocksIndirecto(it, new BigDecimal("4000.00")) }
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+        request.facturas = facturas.collect { buildReqFact(it.numeroFactura) }
+
+        when:
+        def contexto = service.prepararCupoIndirecto(request, facturas)
+        def primera = service.procesarFactura(request, request.facturas[0], "neg-1", contexto)
+        def segunda = service.procesarFactura(request, request.facturas[1], "neg-1", contexto)
+        service.procesarFactura(request, request.facturas[2], "neg-1", contexto)
+
+        then:
+        def ex = thrown(com.negociadororq.application.exception.ReglaDeNegocioException)
+        ex instanceof com.negociadororq.application.exception.CupoIndirectoInsuficienteException
+        primera.numeroFactura == "FECI050"
+        segunda.numeroFactura == "FECI051"
+        estado.actual == new BigDecimal("2000.00")
+        with(ex.detalle) {
+            disponible == new BigDecimal("2000.00")
+            requerido == new BigDecimal("4000.00")
+            faltante == new BigDecimal("2000.00")
+            sumaPeticion == new BigDecimal("12000.00")
+            disponibleInicial == new BigDecimal("10000.00")
+            pagador == "Pagadora Uno"
+            fondeador == "Fondo Dos"
+            rutPagador == "PAG-001"
+            rutFondeador == "FOND-001"
+        }
+        ex.message == "La factura FECI052 por \$4.000,00 no se incluyó: el cupo de factoring que Fondo Dos ofrece a los " +
+                "proveedores de Pagadora Uno tiene \$2.000,00 disponibles para ti; faltan \$2.000,00. Puedes pedirle a " +
+                "Fondo Dos que recargue o amplíe tu cupo. Las facturas de esta " +
+                "petición con ese cupo suman \$12.000,00 y al empezar había \$10.000,00 disponibles; entran en el orden " +
+                "de la petición."
+    }
+
+    def "Fase 28d: el mensaje lleva los montos exactos al centavo (5.000,55 sobre 1.000,10: faltan 4.000,45)"() {
+        given:
+        cupoIndirectoEnMemoria(new BigDecimal("1000.10"))
+        def factura = setupMocksIndirecto("FECI053", new BigDecimal("5000.55"))
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+        request.facturas = [buildReqFact("FECI053")]
+
+        when:
+        service.procesarFactura(request, request.facturas[0], "neg-1", service.prepararCupoIndirecto(request, [factura]))
+
+        then:
+        def ex = thrown(com.negociadororq.application.exception.CupoIndirectoInsuficienteException)
+        ex.detalle.faltante.toPlainString() == "4000.45"
+        ex.detalle.sumaPeticion.toPlainString() == "5000.55"
+        ex.message == "La factura FECI053 por \$5.000,55 no se incluyó: el cupo de factoring que Fondo Dos ofrece a los " +
+                "proveedores de Pagadora Uno tiene \$1.000,10 disponibles para ti; faltan \$4.000,45. Puedes pedirle a " +
+                "Fondo Dos que recargue o amplíe tu cupo."
+        0 * cupoConsumidorService.descontarCupo(_, _)
+    }
+
+    def "Fase 28d: la sentencia atómica sigue siendo la barrera final: si una concurrente consumió el cupo entre la validación y el descuento, el rechazo trae lo que queda en ese momento"() {
+        given:
+        setupMocksIndirecto("FECI054", new BigDecimal("4000.00"))
+        def lecturas = 0
+        payerFundingVisibilityPort.estaHabilitado(30L) >> true
+        indirectFunderOfferPort.findActivaAprobada(20L, 30L) >> Optional.of(IndirectFunderOffer.builder().id(77L)
+                .funderId(20L).payerId(30L).payerRate(new BigDecimal("2.5"))
+                .supplierQuotaTemplate(new BigDecimal("10000.00")).build())
+        // 1.ª lectura (validación): 5.000; después una concurrente consumió y quedan 1.500,25.
+        indirectFunderOfferSupplierQuotaPort.find(77L, 10L) >> {
+            lecturas++
+            Optional.of(IndirectFunderOfferSupplierQuota.builder().id(1L).offerId(77L).supplierId(10L)
+                    .currentQuota(lecturas == 1 ? new BigDecimal("5000.00") : new BigDecimal("1500.25")).build())
+        }
+        indirectFunderOfferSupplierQuotaPort.descontarCupo(77L, 10L, _) >> 0
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI054"), "neg-1")
+
+        then:
+        def ex = thrown(com.negociadororq.application.exception.CupoIndirectoInsuficienteException)
+        ex.detalle.disponible == new BigDecimal("1500.25")
+        ex.detalle.faltante == new BigDecimal("2499.75")
+        ex.detalle.sumaPeticion == null
+    }
+
+    def "Fase 28d: prepararCupoIndirecto solo suma las facturas que van por cupo indirecto (CONFIRMING o con asignación directa: vacío)"() {
+        given:
+        def factura = setupMocksFactoring("FECI055", "PROV-001")
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+        request.facturas = [buildReqFact("FECI055")]
+
+        expect:
+        !service.prepararCupoIndirecto(request, [factura]).de("20|30|10").isPresent()
+        !service.prepararCupoIndirecto(buildRequest("CONFIRMING", "PAG-001", "OP-001").tap { facturas = [buildReqFact("x")] },
+                [factura]).de("20|30|10").isPresent()
     }
 
     def "procesarFactura FACTORING indirecto exitoso (primera negociacion) crea la fila de consumo con el cupo integro y descuenta atomicamente"() {

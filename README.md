@@ -1881,3 +1881,28 @@ Invariante aprobada por John: una factura con una negociación viva nunca está 
 - **Cupo del operador.** Se descuenta y se devuelve en una sola sentencia SQL: el descuento solo si alcanza; la devolución suma, y en `revertirCupoUsuario` se limita a cero.
   - Antes se leía y se escribía por separado, y dos operaciones concurrentes del mismo operador perdían actualizaciones.
 - **Diagnóstico.** `db/manual/mongo_28d_a5b_diagnostico_factura_negociacion_viva.js`, solo lectura: lista las facturas SIN_NEGOCIAR con negociación, para cruzarlas con `operacion_pendiente`. Se ejecuta cuando existan QA o producción.
+
+## Cupo indirecto: rechazo con montos y validación acumulada (Fase 28d, decisión de John)
+
+FACTORING indirecto: el proveedor no tiene asignación directa con el fondeador y negocia con el cupo de una oferta del fondeador hacia su pagador.
+
+- **El orden de la petición decide qué entra.**
+  - `crearNegociacion` procesa las facturas una a una, en el orden de la petición, y cada una en su propia transacción (`REQUIRES_NEW`).
+  - Cada factura se compara contra lo que quedaba del cupo del trío (fondeador, pagador, proveedor) al llegar a ella. El consumo de las anteriores ya está descontado.
+  - Entran mientras alcanza; las que no caben quedan fuera con `SIN_CUPO_INDIRECTO` y las demás siguen (resultado parcial, 201).
+  - Ejemplo: 3 facturas de 4.000 sobre 10.000 → entran la 1.ª y la 2.ª; la 3.ª, no.
+- **Antes de la primera factura**, `prepararCupoIndirecto` suma por trío las facturas de la petición y lee el disponible inicial (solo lectura).
+- **Respuesta.**
+  - El rechazo va en `rechazos[]`: `numeroFactura`, `codigo` y `mensaje` (el mismo texto de `errores`).
+  - Con `SIN_CUPO_INDIRECTO` incluye además `cupoIndirecto`, en BigDecimal exacto:
+    - `disponible` (lo que quedaba);
+    - `requerido` (el valor de la factura);
+    - `faltante`;
+    - `sumaPeticion` (la suma del trío en la petición);
+    - `disponibleInicial`;
+    - los NIT y nombres del pagador y del fondeador.
+  - El mensaje formatea los montos en pesos colombianos (`$12.000,50`).
+- **La sentencia atómica del descuento sigue siendo la barrera final.**
+  - `UPDATE ... WHERE current_quota >= :valor`.
+  - Si una negociación concurrente consumió el cupo entre la validación y el descuento, la factura cae por `SIN_CUPO_INDIRECTO` con lo que queda en ese momento.
+  - El cupo nunca queda negativo.

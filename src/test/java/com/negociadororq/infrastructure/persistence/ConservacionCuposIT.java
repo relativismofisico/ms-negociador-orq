@@ -868,6 +868,18 @@ class ConservacionCuposIT {
             }
 
             @Override
+            public FacturaNegociada procesarFactura(NegociacionRequestDto request, FacturaNegociada reqFact,
+                    String negociacionId, com.negociadororq.application.service.ContextoCupoIndirecto contexto) {
+                return nueva.execute(st -> real.procesarFactura(request, reqFact, negociacionId, contexto));
+            }
+
+            @Override
+            public com.negociadororq.application.service.ContextoCupoIndirecto prepararCupoIndirecto(
+                    NegociacionRequestDto request, java.util.List<com.negociadororq.domain.model.Factura> facturasBd) {
+                return real.prepararCupoIndirecto(request, facturasBd);
+            }
+
+            @Override
             public void marcarComoNegociada(NegociacionRequestDto request, FacturaNegociada procesada) {
                 real.marcarComoNegociada(request, procesada);
             }
