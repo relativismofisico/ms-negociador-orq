@@ -72,6 +72,14 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final AuditoriaNegociacionService auditoria;
     /** Fase 28d (A2): transacción Mongo de la creación (marcador, negociación, facturas y correo). */
     private final TransaccionMongoOutputPort transaccionMongo;
+
+    /** Fase 28d (A5b): otra operación modificó el cupo a la vez y la factura no tiene otra negociación viva. */
+    public static final String CUPO_CONCURRENCIA_REINTENTAR = "CUPO_CONCURRENCIA_REINTENTAR";
+    /** Códigos del bloqueo optimista del cupo de la empresa y del fondeador (ProcesarFacturaNegociacionServiceImpl). */
+    static final java.util.Set<String> CODIGOS_CONCURRENCIA_CUPO =
+            java.util.Set.of("CUPO_EMPRESA_CONCURRENCIA", "CUPO_FONDEADOR_CONCURRENCIA");
+    private static final int INTENTOS_VERIFICACION_VIVA = 5;
+    private static final long ESPERA_VERIFICACION_VIVA_MS = 100;
     /** Fase 28d (A2): marcador único por negociación (CREADA o CANCELADA). */
     private final MarcaNegociacionOutputPort marca;
     /** Fase 28d (A2): operaciones CREAR_NEGOCIACION (CUPOS_DESCONTADOS → COMPLETADA). */
@@ -437,6 +445,9 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             abortar(idNegociacion, facturasAceptadas, e);
             throw e;
         } catch (NegociadorException e) {
+            if (CODIGOS_CONCURRENCIA_CUPO.contains(e.getCodigo())) {
+                abortarPorConcurrencia(idNegociacion, facturaReq, facturasAceptadas);
+            }
             log.info(String.format("Factura %s no negociada: %s", facturaReq.getNumeroFactura(), e.getMessage()));
             String motivo = motivoRechazo(e);
             errores.add(motivo);
@@ -475,6 +486,50 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                         + "reversión inmediata falló; la termina el reconciliador", idNegociacion, fn.getNumeroFactura()), e);
             }
         }
+    }
+
+    /**
+     * Fase 28d (A5b, ajuste de John): otra operación modificó a la vez el cupo de la empresa o del fondeador (bloqueo
+     * optimista). Se vuelve a mirar la factura: si ya tiene una negociación viva (la otra creación del mismo CUFE), 409 con
+     * FACTURA_CON_NEGOCIACION_VIVA; si no, 409 con CUPO_CONCURRENCIA_REINTENTAR. En los dos casos se aborta la creación y
+     * se devuelve exacto lo ya descontado de las facturas anteriores de esta solicitud, sin la plantilla A.
+     */
+    private void abortarPorConcurrencia(String idNegociacion, FacturaNegociada facturaReq,
+            List<FacturaNegociada> procesadas) {
+        boolean viva = negociacionVivaDe(facturaReq.getCufe());
+        rechazarPorNegociacionViva(idNegociacion, procesadas);
+        if (viva) {
+            throw new ConflictoException(ProcesarFacturaNegociacionServiceImpl.FACTURA_CON_NEGOCIACION_VIVA
+                    + ": la factura " + facturaReq.getNumeroFactura() + " ya tiene una negociación en curso; no se creó "
+                    + "la negociación.", ProcesarFacturaNegociacionServiceImpl.FACTURA_CON_NEGOCIACION_VIVA);
+        }
+        throw new ConflictoException(CUPO_CONCURRENCIA_REINTENTAR + ": otra operación modificó el cupo al mismo tiempo; "
+                + "no se creó la negociación. Vuelve a intentarlo.", CUPO_CONCURRENCIA_REINTENTAR);
+    }
+
+    /**
+     * Si la factura ya tiene una negociación viva: la factura NEGOCIADA o ENDOSADA, o una creación viva registrada para su
+     * CUFE. Se reintenta unas veces con una espera corta: la otra creación puede estar confirmando su transacción.
+     */
+    private boolean negociacionVivaDe(String cufe) {
+        if (cufe == null) {
+            return false;
+        }
+        for (int intento = 0; intento < INTENTOS_VERIFICACION_VIVA; intento++) {
+            boolean estadoVivo = facturaPort.findByCufe(cufe)
+                    .map(f -> "NEGOCIADA".equals(f.getEstadoNegociacion()) || "ENDOSADA".equals(f.getEstadoNegociacion()))
+                    .orElse(false);
+            if (estadoVivo || operaciones.existeCreacionViva(cufe)) {
+                return true;
+            }
+            try {
+                Thread.sleep(ESPERA_VERIFICACION_VIVA_MS);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return false;
     }
 
     /**

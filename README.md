@@ -1872,6 +1872,10 @@ Invariante aprobada por John: una factura con una negociación viva nunca está 
 - **Guarda atómica (la definitiva).** `marcarComoNegociada` es un compare-and-set (`_id` y `estadoNegociacion = SIN_NEGOCIAR`) dentro de la transacción Mongo de la creación, que se reintenta ante un conflicto transitorio.
   - Si no coincide, se aborta toda la creación: la transacción Mongo se deshace, el marcador queda CANCELADA y la reversión exacta devuelve los cupos (camino `NEGOCIACION_VIVA`).
   - No se envía la plantilla A. La respuesta es 409 con el código `FACTURA_CON_NEGOCIACION_VIVA`.
+- **Choque del bloqueo optimista del cupo** (empresa o fondeador, ajuste de John): se vuelve a mirar la factura.
+  - Si ya tiene una negociación viva, la respuesta es 409 con `FACTURA_CON_NEGOCIACION_VIVA`.
+  - Si no, 409 con `CUPO_CONCURRENCIA_REINTENTAR`.
+  - En los dos casos se aborta la creación y se devuelve exacto lo descontado de las facturas anteriores de la solicitud, sin plantilla A. Antes esa factura quedaba rechazada con "cupo modificado" y las demás seguían.
 - **Verificación previa por registro**, antes de descontar cupos: si ya hay una creación viva (CUPOS_DESCONTADOS o COMPLETADA) para ese CUFE, la factura se rechaza con el mismo código.
   - Una factura NEGOCIADA o ENDOSADA también se rechaza con ese código; los demás estados siguen como "no negociable".
 - **Cupo del operador.** Se descuenta y se devuelve en una sola sentencia SQL: el descuento solo si alcanza; la devolución suma, y en `revertirCupoUsuario` se limita a cero.

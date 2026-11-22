@@ -232,6 +232,59 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         1 * negociacionPort.save(_) >> { args -> args[0] }
     }
 
+    def "Fase 28d (A5b): choque del bloqueo optimista del cupo y la factura ya tiene negociación viva -> 409 FACTURA_CON_NEGOCIACION_VIVA"() {
+        given:
+        def fn1 = buildFn("FECI060", "PROV-001", "PAG-001")
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findAllByNumeroFactura("FECI060") >> listaDe(buildFactura("FECI060", "PROV-001", "PAG-001"))
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _) >> {
+            throw new com.negociadororq.application.exception.ConflictoException(
+                    "El cupo de la empresa fue modificado por otra negociación concurrente. Vuelve a intentar.",
+                    "CUPO_EMPRESA_CONCURRENCIA")
+        }
+        operacionesPendientes.existeCreacionViva(_) >> true
+        facturaPort.findByCufe(_) >> Optional.empty()
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1])
+
+        when:
+        service.crearNegociacion(request)
+
+        then: "nunca solo 'cupo modificado': la causa es la otra negociación; sin plantilla A ni negociación en Mongo"
+        def ex = thrown(com.negociadororq.application.exception.ConflictoException)
+        ex.codigo == "FACTURA_CON_NEGOCIACION_VIVA"
+        0 * negociacionPort.save(_)
+        0 * reversionExacta.revertir(_, _, _, _)
+    }
+
+    def "Fase 28d (A5b): choque del bloqueo optimista sin negociación viva -> 409 CUPO_CONCURRENCIA_REINTENTAR y devuelve lo anterior sin plantilla A"() {
+        given:
+        def fn1 = buildFn("FECI061", "PROV-001", "PAG-001")
+        def fn2 = buildFn("FECI062", "PROV-001", "PAG-001")
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findAllByNumeroFactura("FECI061") >> listaDe(buildFactura("FECI061", "PROV-001", "PAG-001"))
+        facturaPort.findAllByNumeroFactura("FECI062") >> listaDe(buildFactura("FECI062", "PROV-001", "PAG-001"))
+        def fn1Procesada = buildFn("FECI061", "PROV-001", "PAG-001").tap { cufe = "CUFE-" + numeroFactura }
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _) >> fn1Procesada
+        procesarFacturaNegociacionService.procesarFactura(_, fn2, _) >> {
+            throw new com.negociadororq.application.exception.ConflictoException(
+                    "El cupo del fondeador X fue modificado por otra negociación concurrente. Vuelve a intentar.",
+                    "CUPO_FONDEADOR_CONCURRENCIA")
+        }
+        operacionesPendientes.existeCreacionViva(_) >> false
+        facturaPort.findByCufe(_) >> Optional.empty()
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1, fn2])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        def ex = thrown(com.negociadororq.application.exception.ConflictoException)
+        ex.codigo == "CUPO_CONCURRENCIA_REINTENTAR"
+        1 * marca.crear(_, com.negociadororq.application.port.output.MarcaNegociacionOutputPort.Tipo.CANCELADA) >> true
+        1 * reversionExacta.revertir(com.negociadororq.domain.model.TipoOperacionPendiente.NEGOCIACION_VIVA, _, "CUFE-FECI061", _)
+        0 * negociacionPort.save(_)
+    }
+
     def "el motivo de negocio de una factura rechazada llega al cliente con su texto"() {
         given:
         def fn1 = buildFn("FECI010", "PROV-001", "PAG-001")

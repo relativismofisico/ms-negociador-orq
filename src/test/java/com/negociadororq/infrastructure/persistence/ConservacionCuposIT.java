@@ -960,11 +960,15 @@ class ConservacionCuposIT {
                 assertThat(gano(resultado[ganadora])).as("vuelta %d: una gana", i).isTrue();
                 assertThat(gano(resultado[perdedora])).as("vuelta %d: solo una gana", i).isFalse();
                 String codigo = codigoDe(resultado[perdedora]);
+                // ajuste de John: la causa es una negociación viva (el mismo CUFE), así que nunca "solo cupo modificado"
                 assertThat(codigo).as("vuelta %d: código de la perdedora: %s", i, describir(resultado[perdedora]))
-                        .isIn(ProcesarFacturaNegociacionServiceImpl.FACTURA_CON_NEGOCIACION_VIVA, CUPO_CONCURRENTE);
-                String camino = CUPO_CONCURRENTE.equals(codigo) ? "201 rechazada (bloqueo optimista del cupo)"
-                        : resultado[perdedora] instanceof RuntimeException ? "409 (CAS en Mongo)"
-                        : "201 rechazada (verificación previa o estado)";
+                        .isEqualTo(ProcesarFacturaNegociacionServiceImpl.FACTURA_CON_NEGOCIACION_VIVA);
+                String camino = (resultado[perdedora] instanceof RuntimeException ? "409 " : "201 ") + codigo
+                        + (resultado[perdedora] instanceof RuntimeException ? "" : " (verificación previa o estado)");
+                if (resultado[perdedora] instanceof com.negociadororq.application.exception.ConflictoException c
+                        && c.getMessage().contains("al mismo tiempo")) {
+                    camino = "409 " + c.getCodigo() + " (bloqueo optimista)";
+                }
                 porCamino.merge(camino, 1, Integer::sum);
 
                 String idGanadora = ((com.negociadororq.application.dto.NegociacionResponseDto) resultado[ganadora])
