@@ -8,6 +8,7 @@ import com.negociadororq.infrastructure.persistence.entity.UserQuotaEntity;
 import com.negociadororq.infrastructure.persistence.repository.UserQuotaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implementación de {@link UserQuotaOutputPort}.
@@ -30,6 +31,21 @@ public class UserQuotaAdapter implements UserQuotaOutputPort {
         entity.setCurrentQuota(quota.getCurrentQuota());
         entity.setQuota(quota.getQuota());
         return toDomain(repository.save(entity));
+    }
+
+    @Override
+    @Transactional
+    public boolean descontar(Long userId, java.math.BigDecimal monto) {
+        return repository.descontar(userId, monto) == 1;
+    }
+
+    @Override
+    @Transactional
+    public boolean devolver(Long userId, java.math.BigDecimal monto, boolean sinNegativos) {
+        if (sinNegativos) {
+            return repository.devolverSinNegativos(userId, monto) == 1;
+        }
+        return repository.devolver(userId, monto) == 1;
     }
 
     private UserQuota toDomain(UserQuotaEntity entity) {

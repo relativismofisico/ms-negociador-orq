@@ -54,9 +54,9 @@ class OperadorServiceImplSpec extends Specification {
         when:
         service.descontarCupo(1L, new BigDecimal("300.00"))
 
-        then:
-        quota.currentQuota == new BigDecimal("700.00")
-        1 * userQuotaPort.save(quota)
+        then: "Fase 28d (A5b): en una sola sentencia, sin leer y escribir"
+        1 * userQuotaPort.descontar(1L, new BigDecimal("300.00")) >> true
+        0 * userQuotaPort.save(_)
     }
 
     def "descontarCupo lanza RuntimeException si no existe cuota"() {
@@ -84,6 +84,19 @@ class OperadorServiceImplSpec extends Specification {
         ex.message.contains("insuficiente")
     }
 
+    def "Fase 28d (A5b): si otra negociación gastó el cupo entre la lectura y el descuento, la sentencia no afecta filas: insuficiente"() {
+        given:
+        userQuotaPort.findByUserId(1L) >> Optional.of(UserQuota.builder().userId(1L).currentQuota(new BigDecimal("500.00")).build())
+        userQuotaPort.descontar(1L, new BigDecimal("300.00")) >> false
+
+        when:
+        service.descontarCupo(1L, new BigDecimal("300.00"))
+
+        then:
+        def ex = thrown(RuntimeException)
+        ex.message.contains("insuficiente")
+    }
+
     def "descontarCupo con cupo exactamente igual al monto descuenta a cero"() {
         given:
         def quota = UserQuota.builder().userId(2L).currentQuota(new BigDecimal("100.00")).build()
@@ -93,8 +106,7 @@ class OperadorServiceImplSpec extends Specification {
         service.descontarCupo(2L, new BigDecimal("100.00"))
 
         then:
-        quota.currentQuota == BigDecimal.ZERO
-        1 * userQuotaPort.save(quota)
+        1 * userQuotaPort.descontar(2L, new BigDecimal("100.00")) >> true
     }
 
     // ─── revertirCupo ─────────────────────────────────────────────────────────
@@ -108,8 +120,8 @@ class OperadorServiceImplSpec extends Specification {
         service.revertirCupo(1L, new BigDecimal("150.00"))
 
         then:
-        quota.currentQuota == new BigDecimal("350.00")
-        1 * userQuotaPort.save(quota)
+        1 * userQuotaPort.devolver(1L, new BigDecimal("150.00"), false) >> true
+        0 * userQuotaPort.save(_)
     }
 
     def "revertirCupo lanza RuntimeException si no existe cuota"() {
@@ -134,8 +146,7 @@ class OperadorServiceImplSpec extends Specification {
         service.revertirCupoUsuario(1L, new BigDecimal("50.00"))
 
         then:
-        quota.currentQuota == new BigDecimal("150.00")
-        1 * userQuotaPort.save(quota)
+        1 * userQuotaPort.devolver(1L, new BigDecimal("50.00"), true) >> true
     }
 
     def "revertirCupoUsuario no hace nada si no existe cuota"() {
@@ -145,7 +156,8 @@ class OperadorServiceImplSpec extends Specification {
         when:
         service.revertirCupoUsuario(99L, new BigDecimal("50.00"))
 
-        then:
+        then: "sin cupo registrado la sentencia no afecta filas y no pasa nada más"
+        1 * userQuotaPort.devolver(99L, new BigDecimal("50.00"), true) >> false
         0 * userQuotaPort.save(_)
     }
 
@@ -158,9 +170,8 @@ class OperadorServiceImplSpec extends Specification {
         when:
         service.revertirCupoUsuario(1L, new BigDecimal("-20.00"))
 
-        then:
-        quota.currentQuota == BigDecimal.ZERO
-        1 * userQuotaPort.save(quota)
+        then: "el límite a cero lo aplica la sentencia (GREATEST); lo prueba ConservacionCuposIT con MySQL real"
+        1 * userQuotaPort.devolver(1L, new BigDecimal("-20.00"), true) >> true
     }
 
     // ─── revertirCupoEmpresa ──────────────────────────────────────────────────
