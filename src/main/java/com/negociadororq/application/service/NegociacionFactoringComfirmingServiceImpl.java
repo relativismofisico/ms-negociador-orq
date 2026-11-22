@@ -89,6 +89,8 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     private final OperacionPendienteOutputPort operaciones;
     /** Fase 28d (A2): reversión exacta de lo descontado si la creación se aborta. */
     private final ReversionExactaService reversionExacta;
+    /** Fase 28d (punto 1.2c): aviso al fondeador por falta de cupo indirecto (fuera de la transacción de la factura). */
+    private final AvisoCupoIndirectoService avisoCupoIndirecto;
 
     /** Fase 28d (A2): código del 409 de una creación que el reconciliador ya canceló. */
     static final String NEGOCIACION_CANCELADA = "NEGOCIACION_CANCELADA";
@@ -465,8 +467,12 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
             String motivo = motivoRechazo(e);
             errores.add(motivo);
             facturasRechazadas.add(facturaReq.getNumeroFactura() + " -> " + motivo);
+            DetalleCupoIndirectoDto detalle = detalleCupoIndirecto(e);
             rechazos.add(RechazoFacturaDto.builder().numeroFactura(facturaReq.getNumeroFactura()).codigo(e.getCodigo())
-                    .mensaje(motivo).cupoIndirecto(detalleCupoIndirecto(e)).build());
+                    .mensaje(motivo).cupoIndirecto(detalle).build());
+            if (detalle != null) {
+                avisoCupoIndirecto.avisar(facturaReq.getRutProveedor(), detalle);
+            }
         } catch (RuntimeException e) {
             log.log(java.util.logging.Level.SEVERE, String.format("Error técnico procesando la factura %s: se aborta "
                     + "la creación de la negociación %s", facturaReq.getNumeroFactura(), idNegociacion), e);

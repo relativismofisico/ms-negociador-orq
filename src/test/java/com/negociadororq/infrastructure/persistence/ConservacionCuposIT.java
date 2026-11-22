@@ -845,7 +845,8 @@ class ConservacionCuposIT {
                 userPort, companyPort, operacionesEmpresa, secciones, notificacionService, conTransaccion(procesarMongo), m.patch, clock,
                 auditoria, new TransaccionMongoAdapter(m.fabrica),
                 new com.negociadororq.infrastructure.persistence.adapter.MarcaNegociacionAdapter(m.plantilla),
-                operaciones, exacta);
+                operaciones, exacta,
+                mock(com.negociadororq.application.service.AvisoCupoIndirectoService.class));
     }
 
     /**
@@ -1090,7 +1091,8 @@ class ConservacionCuposIT {
                             userPort, companyPort, operacionesEmpresa, secciones, notificacionService, conTransaccion(procesarMongo),
                             patch, clock, auditoria, new TransaccionMongoAdapter(m.fabrica),
                             new com.negociadororq.infrastructure.persistence.adapter.MarcaNegociacionAdapter(m.plantilla),
-                            operaciones, exacta);
+                            operaciones, exacta,
+                mock(com.negociadororq.application.service.AvisoCupoIndirectoService.class));
 
             assertThatThrownBy(() -> servicio.crearNegociacion(solicitudDe(Modo.FACTORING_DIRECTO, cufe)))
                     .isInstanceOf(com.negociadororq.application.exception.ConflictoException.class)

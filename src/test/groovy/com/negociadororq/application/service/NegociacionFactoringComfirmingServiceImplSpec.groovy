@@ -53,11 +53,12 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
     }
     com.negociadororq.application.port.output.OperacionPendienteOutputPort operacionesPendientes = Mock()
     ReversionExactaService reversionExacta = Mock()
+    AvisoCupoIndirectoService avisoCupoIndirecto = Mock()
 
     NegociacionFactoringComfirmingServiceImpl service = new NegociacionFactoringComfirmingServiceImpl(
             facturaPort, negociacionPort, userPort, companyPort, companyOperationPort, companySectionVerificationPort,
             notificacionService, procesarFacturaNegociacionService, facturaPatchPort, clock, auditoriaNegociacion,
-            transaccionMongo, marca, operacionesPendientes, reversionExacta)
+            transaccionMongo, marca, operacionesPendientes, reversionExacta, avisoCupoIndirecto)
 
     // Controlan el comportamiento por defecto de companyPort/companyOperationPort: los tests
     // existentes (que no se centran en esta validación) no necesitan re-declarar estos stubs,
@@ -332,6 +333,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
             throw new com.negociadororq.application.exception.CupoIndirectoInsuficienteException("no cabe", detalle)
         }
         1 * negociacionPort.save(_) >> { args -> args[0] }
+        1 * avisoCupoIndirecto.avisar("PROV-001", { it.is(detalle) })
         resultado.errores == ["no cabe"]
         resultado.rechazos.size() == 1
         with(resultado.rechazos[0]) {
@@ -358,6 +360,7 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         1 * negociacionPort.save(_) >> { args -> args[0] }
         resultado.rechazos*.codigo == ["REGLA_DE_NEGOCIO_VIOLADA"]
         resultado.rechazos[0].cupoIndirecto == null
+        0 * avisoCupoIndirecto._
     }
 
     def "Fase 28d (A2): un error técnico (no de dominio) aborta toda la creación: no se guarda la negociación"() {

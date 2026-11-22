@@ -1,8 +1,6 @@
 package com.negociadororq.application.service;
 
 import java.math.BigDecimal;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,6 +28,7 @@ import com.negociadororq.application.port.output.OperacionPendienteOutputPort;
 import com.negociadororq.application.port.output.OptimisticLockConflictException;
 import com.negociadororq.application.port.output.PayerFundingVisibilityOutputPort;
 import com.negociadororq.application.port.output.UserOutputPort;
+import com.negociadororq.application.util.Pesos;
 import com.negociadororq.application.util.VigenciaDescuentoValidator;
 import com.negociadororq.domain.enums.EstadoFirma;
 import com.negociadororq.domain.model.ActorFactura;
@@ -503,30 +502,19 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 .disponibleInicial(acumulado.map(ContextoCupoIndirecto.Acumulado::disponibleInicial).orElse(null))
                 .build();
         StringBuilder mensaje = new StringBuilder("La factura ").append(factura.getNumeroFactura()).append(" por ")
-                .append(pesos(requerido)).append(" no se incluyó: el cupo de factoring que ").append(fondeador)
-                .append(" ofrece a los proveedores de ").append(pagador).append(" tiene ").append(pesos(disponible))
-                .append(" disponibles para ti; faltan ").append(pesos(faltante)).append(". Puedes pedirle a ")
+                .append(Pesos.formato(requerido)).append(" no se incluyó: el cupo de factoring que ").append(fondeador)
+                .append(" ofrece a los proveedores de ").append(pagador).append(" tiene ").append(Pesos.formato(disponible))
+                .append(" disponibles para ti; faltan ").append(Pesos.formato(faltante)).append(". Puedes pedirle a ")
                 .append(fondeador).append(" que recargue o amplíe tu cupo.");
         acumulado.filter(a -> a.sumaPeticion().compareTo(requerido) > 0).ifPresent(a -> mensaje
-                .append(" Las facturas de esta petición con ese cupo suman ").append(pesos(a.sumaPeticion()))
-                .append(" y al empezar había ").append(pesos(a.disponibleInicial()))
+                .append(" Las facturas de esta petición con ese cupo suman ").append(Pesos.formato(a.sumaPeticion()))
+                .append(" y al empezar había ").append(Pesos.formato(a.disponibleInicial()))
                 .append(" disponibles; entran en el orden de la petición."));
         return new CupoIndirectoInsuficienteException(mensaje.toString(), detalle);
     }
 
     private String nombreEmpresa(String nit) {
         return companyPort.findByNit(nit).map(Company::getNameCompany).filter(n -> !n.isBlank()).orElse(nit);
-    }
-
-    /** {@code 12000.5} → {@code "$12.000,50"} (formato colombiano, exacto: el BigDecimal ya tiene 2 decimales). */
-    static String pesos(BigDecimal valor) {
-        DecimalFormatSymbols simbolos = new DecimalFormatSymbols(Locale.ROOT);
-        simbolos.setGroupingSeparator('.');
-        simbolos.setDecimalSeparator(',');
-        DecimalFormat formato = new DecimalFormat("#,##0.00", simbolos);
-        formato.setParseBigDecimal(true);
-        formato.setRoundingMode(java.math.RoundingMode.HALF_UP);
-        return "$" + formato.format(valor);
     }
 
     @SuppressWarnings("checkstyle:ParameterNumber")
