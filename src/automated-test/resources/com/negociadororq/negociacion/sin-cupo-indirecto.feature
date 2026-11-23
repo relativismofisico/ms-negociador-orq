@@ -42,7 +42,7 @@ Feature: Fase 28d (punto 1.2, decisión de John) — SIN_CUPO_INDIRECTO con disp
     And match (r.cupoIndirecto.disponibleInicial + '') == '1500000.55'
     And match r.cupoIndirecto.fondeador == 'Karate Fondeador'
     And match r.cupoIndirecto.pagador == 'Karate Destino'
-    And match r.mensaje == 'La factura FE-KARATE-SIN-CUPO-IND por $2.000.000,20 no se incluyó: el cupo de factoring que Karate Fondeador ofrece a los proveedores de Karate Destino tiene $1.500.000,55 disponibles para ti; faltan $499.999,65. Puedes pedirle a Karate Fondeador que recargue o amplíe tu cupo.'
+    And match r.mensaje == 'La factura FE-KARATE-SIN-CUPO-IND por $2.000.000,20 no se incluyó: el cupo de factoring que Karate Fondeador ofrece a los proveedores de Karate Destino tiene $1.500.000,55 disponibles para ti; faltan $499.999,65. Puedes pedirle a Karate Fondeador que recargue tu cupo.'
     And match response.errores == [ '#(r.mensaje)' ]
 
   Scenario: el rechazo no tocó el cupo del proveedor indirecto

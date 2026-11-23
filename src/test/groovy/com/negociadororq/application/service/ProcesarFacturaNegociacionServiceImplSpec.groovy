@@ -779,7 +779,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         }
         ex.message == "La factura FECI052 por \$4.000,00 no se incluyó: el cupo de factoring que Fondo Dos ofrece a los " +
                 "proveedores de Pagadora Uno tiene \$2.000,00 disponibles para ti; faltan \$2.000,00. Puedes pedirle a " +
-                "Fondo Dos que recargue o amplíe tu cupo. Las facturas de esta " +
+                "Fondo Dos que recargue tu cupo. Las facturas de esta " +
                 "petición con ese cupo suman \$12.000,00 y al empezar había \$10.000,00 disponibles; entran en el orden " +
                 "de la petición."
     }
@@ -800,7 +800,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         ex.detalle.sumaPeticion.toPlainString() == "5000.55"
         ex.message == "La factura FECI053 por \$5.000,55 no se incluyó: el cupo de factoring que Fondo Dos ofrece a los " +
                 "proveedores de Pagadora Uno tiene \$1.000,10 disponibles para ti; faltan \$4.000,45. Puedes pedirle a " +
-                "Fondo Dos que recargue o amplíe tu cupo."
+                "Fondo Dos que recargue tu cupo."
         0 * cupoConsumidorService.descontarCupo(_, _)
     }
 
