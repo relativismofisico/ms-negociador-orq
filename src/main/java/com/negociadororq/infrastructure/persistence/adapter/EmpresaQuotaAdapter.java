@@ -40,6 +40,16 @@ public class EmpresaQuotaAdapter implements EmpresaQuotaOutputPort {
         }
     }
 
+    @Override
+    public boolean descontar(Long companyId, java.math.BigDecimal valor) {
+        return repository.descontar(companyId, valor) > 0;
+    }
+
+    @Override
+    public boolean devolverConTope(Long companyId, java.math.BigDecimal valor) {
+        return repository.devolverConTope(companyId, valor) > 0;
+    }
+
     private EmpresaQuota toDomain(EmpresaQuotaEntity entity) {
         return EmpresaQuota.builder()
                 .id(entity.getId())

@@ -58,6 +58,8 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
     /** Fase 28d (A5b): la factura ya tiene una negociación viva. */
     public static final String FACTURA_CON_NEGOCIACION_VIVA = "FACTURA_CON_NEGOCIACION_VIVA";
+    /** Fase 28d (modelo de cupos): la empresa no tiene disponible para la factura. */
+    public static final String SIN_CUPO_EMPRESA = "SIN_CUPO_EMPRESA";
     private static final java.util.Set<String> ESTADOS_CON_NEGOCIACION_VIVA = java.util.Set.of("NEGOCIADA", "ENDOSADA");
 
     private final FacturaOutputPort facturaPort;
@@ -143,7 +145,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
 
         if (cupoOperador.compareTo(valorFactura) < 0) {
             throw new ReglaDeNegocioException(
-                    "Operador sin cupo disponible");
+                    "Operador sin cupo disponible", OperadorServiceImpl.SIN_CUPO_OPERADOR);
         }
 
         // ==========================================
@@ -162,7 +164,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                                 new RecursoNoEncontradoException("EmpresaQuota no encontrada"));
 
         if (empresaQuota.getCurrentQuota().compareTo(valorFactura) < 0) {
-            throw new ReglaDeNegocioException("Empresa sin cupo");
+            throw new ReglaDeNegocioException("Empresa sin cupo", SIN_CUPO_EMPRESA);
         }
 
         // ==========================================
@@ -183,20 +185,13 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
         cupoConsumidorService.descontarCupo(userId, valorFactura);
         descuentos.add(new DescuentoCupos.Descuento(DescuentoCupos.Tipo.OPERADOR, userId, null, valorFactura));
 
-        empresaQuota.setCurrentQuota(empresaQuota.getCurrentQuota().subtract(valorFactura));
-        descuentos.add(new DescuentoCupos.Descuento(DescuentoCupos.Tipo.EMPRESA, companyId, null, valorFactura));
-
-        // saveAndFlush (no save): fuerza que el conflicto de @Version se detecte acá
-        // mismo, no al hacer commit de la transacción (donde ya no se puede traducir
-        // a una excepción de negocio legible por el cliente).
-        try {
-            empresaQuotaPort.saveAndFlush(empresaQuota);
-        } catch (OptimisticLockConflictException e) {
-            throw new ConflictoException(
-                    "El cupo de la empresa fue modificado por otra negociación concurrente. "
-                            + "Vuelve a intentar.",
-                    "CUPO_EMPRESA_CONCURRENCIA");
+        // Fase 28d (modelo de cupos de John): la empresa se descuenta en UNA sentencia condicionada, en la misma
+        // transacción que el operador; si no alcanza (una concurrente la consumió), la excepción deshace también el
+        // descuento del operador: no se descuenta ninguno.
+        if (!empresaQuotaPort.descontar(companyId, valorFactura)) {
+            throw new ReglaDeNegocioException("Empresa sin cupo", SIN_CUPO_EMPRESA);
         }
+        descuentos.add(new DescuentoCupos.Descuento(DescuentoCupos.Tipo.EMPRESA, companyId, null, valorFactura));
 
         descontarCupoFondeadores(request, factura, fondeadores, valorFactura, descuentos, cupoIndirecto);
 

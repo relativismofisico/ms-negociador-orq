@@ -46,16 +46,29 @@ public interface IndirectFunderOfferSupplierQuotaRepository
                       @Param("valor") BigDecimal valor);
 
     /**
-     * Fase 28d (A2): la inversa exacta de {@link #descontarCupo}, atómica en la base de datos.
+     * Fase 28d (A2): la inversa exacta de {@link #descontarCupo}, atómica en la base de datos; P-22: con tope en el techo
+     * ({@code original_quota}, el valor que restaura la recarga): tras una recarga con exposición viva, devolver no lo
+     * supera.
      *
      * @return número de filas afectadas — 0 si la fila de consumo no existe.
      */
     @Modifying
     @Transactional
-    @Query("UPDATE IndirectFunderOfferSupplierQuotaEntity e "
-            + "SET e.currentQuota = e.currentQuota + :valor "
-            + "WHERE e.offerId = :offerId AND e.supplierId = :supplierId")
+    @Query(value = "UPDATE indirect_funder_offer_supplier_quota SET current_quota = LEAST(original_quota, current_quota + :valor)"
+            + " WHERE offer_id = :offerId AND supplier_id = :supplierId", nativeQuery = true)
     int devolverCupo(@Param("offerId") Long offerId,
                      @Param("supplierId") Long supplierId,
                      @Param("valor") BigDecimal valor);
+
+    /**
+     * Fase 28d (P-20): recarga en UNA sentencia: el disponible vuelve al techo ({@code original_quota}). Antes se leía la
+     * fila y se guardaba entera con JPA, y lo que otro escribiera entre la lectura y el guardado se perdía.
+     *
+     * @return filas afectadas (0 si la fila no existe)
+     */
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE indirect_funder_offer_supplier_quota SET current_quota = original_quota"
+            + " WHERE offer_id = :offerId AND supplier_id = :supplierId", nativeQuery = true)
+    int recargar(@Param("offerId") Long offerId, @Param("supplierId") Long supplierId);
 }

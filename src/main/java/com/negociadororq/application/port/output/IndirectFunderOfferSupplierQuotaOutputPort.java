@@ -58,6 +58,15 @@ public interface IndirectFunderOfferSupplierQuotaOutputPort {
     int devolverCupo(Long offerId, Long supplierId, java.math.BigDecimal valor);
 
     /**
+     * Fase 28d (P-20): recarga en una sentencia: el disponible vuelve al techo ({@code original_quota}).
+     *
+     * @param offerId    oferta
+     * @param supplierId proveedor
+     * @return filas afectadas (0 si la fila no existe)
+     */
+    int recargar(Long offerId, Long supplierId);
+
+    /**
      * Persiste el consumo actualizado (tras descontar cupo).
      *
      * @param quota consumo con el cupo ya descontado

@@ -30,13 +30,15 @@ class IndirectFunderOfferSupplierQuotaRecargaServiceImplSpec extends Specificati
                 .id(1L).offerId(77L).supplierId(10L).rate(new BigDecimal("2.5"))
                 .quota(new BigDecimal("10000.00")).currentQuota(new BigDecimal("4000.00"))
                 .originalQuota(new BigDecimal("10000.00")).build()
+        cupoProveedor.currentQuota = new BigDecimal("10000.00")
         indirectFunderOfferSupplierQuotaPort.find(77L, 10L) >> Optional.of(cupoProveedor)
 
         when:
         def resultado = service.recargarCupo(77L, 10L)
 
-        then:
-        1 * indirectFunderOfferSupplierQuotaPort.save({ it.currentQuota == new BigDecimal("10000.00") }) >> cupoProveedor
+        then: "Fase 28d (P-20): una sola sentencia (current_quota = original_quota), sin guardar la fila leída"
+        1 * indirectFunderOfferSupplierQuotaPort.recargar(77L, 10L) >> 1
+        0 * indirectFunderOfferSupplierQuotaPort.save(_)
         resultado.offerId == 77L
         resultado.supplierId == 10L
         resultado.cupoDisponible == new BigDecimal("10000.00")

@@ -61,6 +61,11 @@ public class IndirectFunderOfferSupplierQuotaAdapter implements IndirectFunderOf
     }
 
     @Override
+    public int recargar(Long offerId, Long supplierId) {
+        return repository.recargar(offerId, supplierId);
+    }
+
+    @Override
     public IndirectFunderOfferSupplierQuota save(IndirectFunderOfferSupplierQuota quota) {
         return toDomain(repository.save(toEntity(quota)));
     }

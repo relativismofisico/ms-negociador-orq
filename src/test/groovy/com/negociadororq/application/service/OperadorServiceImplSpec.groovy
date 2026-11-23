@@ -81,7 +81,8 @@ class OperadorServiceImplSpec extends Specification {
 
         then:
         def ex = thrown(RuntimeException)
-        ex.message.contains("insuficiente")
+        ex.message.contains("sin cupo")
+        ex.codigo == "SIN_CUPO_OPERADOR"
     }
 
     def "Fase 28d (A5b): si otra negociación gastó el cupo entre la lectura y el descuento, la sentencia no afecta filas: insuficiente"() {
@@ -94,7 +95,8 @@ class OperadorServiceImplSpec extends Specification {
 
         then:
         def ex = thrown(RuntimeException)
-        ex.message.contains("insuficiente")
+        ex.message.contains("sin cupo")
+        ex.codigo == "SIN_CUPO_OPERADOR"
     }
 
     def "descontarCupo con cupo exactamente igual al monto descuenta a cero"() {
@@ -176,54 +178,32 @@ class OperadorServiceImplSpec extends Specification {
 
     // ─── revertirCupoEmpresa ──────────────────────────────────────────────────
 
-    def "revertirCupoEmpresa suma valor absoluto sin exceder quota maxima"() {
-        given:
-        def eq = EmpresaQuota.builder()
-                .companyId(1L)
-                .quota(new BigDecimal("1000.00"))
-                .currentQuota(new BigDecimal("500.00"))
-                .build()
-        empresaQuotaPort.findByCompanyId(1L) >> Optional.of(eq)
-
+    def "Fase 28d (P-22): revertirCupoEmpresa devuelve en UNA sentencia con tope en el techo (MIN(techo, disponible + devuelto))"() {
         when:
         service.revertirCupoEmpresa(1L, new BigDecimal("300.00"))
 
         then:
-        eq.currentQuota == new BigDecimal("800.00")
-        1 * empresaQuotaPort.saveAndFlush(eq)
-    }
-
-    def "revertirCupoEmpresa limita al maximo cuando suma supera quota"() {
-        given:
-        def eq = EmpresaQuota.builder()
-                .companyId(1L)
-                .quota(new BigDecimal("1000.00"))
-                .currentQuota(new BigDecimal("800.00"))
-                .build()
-        empresaQuotaPort.findByCompanyId(1L) >> Optional.of(eq)
-
-        when:
-        service.revertirCupoEmpresa(1L, new BigDecimal("500.00"))
-
-        then:
-        eq.currentQuota == new BigDecimal("1000.00")
-        1 * empresaQuotaPort.saveAndFlush(eq)
+        1 * empresaQuotaPort.devolverConTope(1L, new BigDecimal("300.00")) >> true
+        0 * empresaQuotaPort.saveAndFlush(_)
     }
 
     def "revertirCupoEmpresa convierte valor negativo a absoluto"() {
-        given:
-        def eq = EmpresaQuota.builder()
-                .companyId(2L)
-                .quota(new BigDecimal("500.00"))
-                .currentQuota(new BigDecimal("100.00"))
-                .build()
-        empresaQuotaPort.findByCompanyId(2L) >> Optional.of(eq)
-
         when:
         service.revertirCupoEmpresa(2L, new BigDecimal("-200.00"))
 
         then:
-        eq.currentQuota == new BigDecimal("300.00")
+        1 * empresaQuotaPort.devolverConTope(2L, new BigDecimal("200.00")) >> true
+    }
+
+    def "revertirCupoEmpresa sin cupo de empresa: RecursoNoEncontrado"() {
+        given:
+        empresaQuotaPort.devolverConTope(_, _) >> false
+
+        when:
+        service.revertirCupoEmpresa(3L, new BigDecimal("1.00"))
+
+        then:
+        thrown(com.negociadororq.application.exception.RecursoNoEncontradoException)
     }
 
     // ─── revertirCupoFondeadorConfirming ─────────────────────────────────────

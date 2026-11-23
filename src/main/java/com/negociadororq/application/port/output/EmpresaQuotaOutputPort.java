@@ -30,4 +30,22 @@ public interface EmpresaQuotaOutputPort {
      * @return el cupo persistido
      */
     EmpresaQuota saveAndFlush(EmpresaQuota quota);
+
+    /**
+     * Fase 28d: descuenta {@code valor} del disponible de la empresa solo si alcanza, en una sentencia.
+     *
+     * @param companyId empresa
+     * @param valor     monto
+     * @return true si se descontó
+     */
+    boolean descontar(Long companyId, java.math.BigDecimal valor);
+
+    /**
+     * Fase 28d (P-22): devuelve {@code valor} con tope en el techo, en una sentencia.
+     *
+     * @param companyId empresa
+     * @param valor     monto
+     * @return true si la empresa tiene cupo
+     */
+    boolean devolverConTope(Long companyId, java.math.BigDecimal valor);
 }
