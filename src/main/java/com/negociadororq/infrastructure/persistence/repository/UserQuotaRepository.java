@@ -42,7 +42,8 @@ public interface UserQuotaRepository extends JpaRepository<UserQuotaEntity, Long
      * @return filas afectadas (0 si no existe)
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(value = "UPDATE user_quota SET current_quota = LEAST(quota, current_quota + :monto) WHERE user_id = :userId",
+    @Query(value = "UPDATE user_quota SET current_quota = LEAST(quota, current_quota + :monto) WHERE user_id = :userId"
+            + " AND objetivo IS NULL",
             nativeQuery = true)
     int devolver(@Param("userId") Long userId, @Param("monto") java.math.BigDecimal monto);
 
@@ -55,7 +56,7 @@ public interface UserQuotaRepository extends JpaRepository<UserQuotaEntity, Long
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "UPDATE user_quota SET current_quota = LEAST(quota, GREATEST(current_quota + :monto, 0))"
-            + " WHERE user_id = :userId",
+            + " WHERE user_id = :userId AND objetivo IS NULL",
             nativeQuery = true)
     int devolverSinNegativos(@Param("userId") Long userId, @Param("monto") java.math.BigDecimal monto);
 }

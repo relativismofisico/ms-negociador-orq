@@ -18,16 +18,22 @@ CREATE TABLE IF NOT EXISTS user_quota (
   quota         DECIMAL(19, 2) NOT NULL,
   current_quota DECIMAL(19, 2) NOT NULL,
   user_id       BIGINT         NOT NULL,
+  -- Fase 28d (V12 de security): techo en reducción
+  objetivo      DECIMAL(19, 2) NULL,
   PRIMARY KEY (id)
 );
 
 CREATE TABLE IF NOT EXISTS parametrization (
-  id            BIGINT         NOT NULL AUTO_INCREMENT,
-  company_id    BIGINT         NOT NULL,
-  quota         DECIMAL(19, 2) NOT NULL,
-  current_quota DECIMAL(19, 2) NOT NULL,
-  version       BIGINT,
-  PRIMARY KEY (id)
+  id             BIGINT         NOT NULL AUTO_INCREMENT,
+  company_id     BIGINT         NOT NULL,
+  quota          DECIMAL(19, 2) NOT NULL,
+  current_quota  DECIMAL(19, 2) NOT NULL,
+  version        BIGINT,
+  -- Fase 28d (V13 de registro): suma de techos de operadores, techo en reducción y una fila por empresa
+  assigned_quota DECIMAL(38, 2) NOT NULL DEFAULT 0,
+  objetivo       DECIMAL(38, 2) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_parametrization_company (company_id)
 );
 
 CREATE TABLE IF NOT EXISTS funder (

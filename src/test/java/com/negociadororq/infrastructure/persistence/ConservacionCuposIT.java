@@ -1349,6 +1349,92 @@ class ConservacionCuposIT {
         assertThat(esperado.signum()).isGreaterThanOrEqualTo(0);
     }
 
+    // ─── Fase 28d (D2/D4, techo con objetivo) ─────────────────────────────────────────────────────────────────────
+
+    private Map<String, Object> filaEmpresa(long empresa) {
+        return jdbc.queryForMap("SELECT quota, current_quota, assigned_quota, objetivo FROM parametrization"
+                + " WHERE company_id = ?", empresa);
+    }
+
+    @Test
+    void objetivo_caso_de_john_techo_10000_exposicion_7000_baja_a_5000_y_devolucion_4000_queda_5000_y_2000() {
+        // Lo que deja el PUT del ADMINISTRADOR de registro (D2): techo = exposición 7.000, disponible 0, objetivo 5.000
+        jdbc.update("UPDATE parametrization SET quota = 7000.00, current_quota = 0.00, objetivo = 5000.00"
+                + " WHERE company_id = ?", EMPRESA_PROV);
+        tx.executeWithoutResult(s -> operador.revertirCupoEmpresaEnTransaccionActual(EMPRESA_PROV,
+                new BigDecimal("4000.00")));
+        Map<String, Object> f = filaEmpresa(EMPRESA_PROV);
+        assertThat((BigDecimal) f.get("quota")).isEqualByComparingTo("5000.00");
+        assertThat((BigDecimal) f.get("current_quota")).isEqualByComparingTo("2000.00");
+        assertThat(f.get("objetivo")).isNull();
+    }
+
+    @Test
+    void objetivo_80_devoluciones_concurrentes_sobre_la_empresa_en_reduccion_sin_perdida() throws Exception {
+        // techo 10.000 expuesto entero, objetivo 5.000; 80 devoluciones de 100.00 (8.000) a la vez: queda expuesto 2.000,
+        // techo MAX(5.000, 2.000) = 5.000 y disponible 3.000, sin importar el orden
+        jdbc.update("UPDATE parametrization SET quota = 10000.00, current_quota = 0.00, objetivo = 5000.00"
+                + " WHERE company_id = ?", EMPRESA_PROV);
+        CountDownLatch listos = new CountDownLatch(80);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+        List<Thread> hilos = new ArrayList<>();
+        for (int i = 0; i < 80; i++) {
+            hilos.add(hilo(() -> tx.executeWithoutResult(s -> operador.revertirCupoEmpresaEnTransaccionActual(EMPRESA_PROV,
+                    new BigDecimal("100.00"))), listos, largada, fallos));
+        }
+        listos.await();
+        largada.countDown();
+        for (Thread t : hilos) {
+            t.join();
+        }
+        assertThat(fallos).isEmpty();
+        Map<String, Object> f = filaEmpresa(EMPRESA_PROV);
+        assertThat((BigDecimal) f.get("quota")).isEqualByComparingTo("5000.00");
+        assertThat((BigDecimal) f.get("current_quota")).isEqualByComparingTo("3000.00");
+        assertThat(f.get("objetivo")).isNull();
+    }
+
+    @Test
+    void objetivo_operador_desactivado_objetivo_0_drena_con_80_devoluciones_y_baja_la_suma_de_techos_de_su_empresa()
+            throws Exception {
+        // D4: operador con techo 8.000 totalmente expuesto y objetivo 0 (desactivado); la empresa suma 8.000 de techos
+        jdbc.update("UPDATE `user` SET company_ide = ? WHERE ide_user = ?", EMPRESA_PROV, USUARIO);
+        jdbc.update("UPDATE user_quota SET quota = 8000.00, current_quota = 0.00, objetivo = 0.00 WHERE user_id = ?",
+                USUARIO);
+        jdbc.update("UPDATE parametrization SET assigned_quota = 8000.00 WHERE company_id = ?", EMPRESA_PROV);
+        CountDownLatch listos = new CountDownLatch(80);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+        List<Thread> hilos = new ArrayList<>();
+        for (int i = 0; i < 80; i++) {
+            hilos.add(hilo(() -> tx.executeWithoutResult(s -> operador.revertirCupoUsuario(USUARIO,
+                    new BigDecimal("100.00"))), listos, largada, fallos));
+        }
+        listos.await();
+        largada.countDown();
+        for (Thread t : hilos) {
+            t.join();
+        }
+        assertThat(fallos).isEmpty();
+        Map<String, Object> u = jdbc.queryForMap("SELECT quota, current_quota, objetivo FROM user_quota WHERE user_id = ?",
+                USUARIO);
+        assertThat((BigDecimal) u.get("quota")).isEqualByComparingTo("0.00");
+        assertThat((BigDecimal) u.get("current_quota")).isEqualByComparingTo("0.00");
+        assertThat(u.get("objetivo")).isNull();
+        assertThat((BigDecimal) filaEmpresa(EMPRESA_PROV).get("assigned_quota")).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void objetivo_sin_objetivo_sigue_siendo_min_techo_disponible_mas_devuelto() {
+        jdbc.update("UPDATE parametrization SET quota = 1000.00, current_quota = 900.00, objetivo = NULL"
+                + " WHERE company_id = ?", EMPRESA_PROV);
+        tx.executeWithoutResult(s -> operador.revertirCupoEmpresaEnTransaccionActual(EMPRESA_PROV,
+                new BigDecimal("300.00")));
+        assertThat((BigDecimal) filaEmpresa(EMPRESA_PROV).get("current_quota")).isEqualByComparingTo("1000.00");
+        assertThat((BigDecimal) filaEmpresa(EMPRESA_PROV).get("quota")).isEqualByComparingTo("1000.00");
+    }
+
     private static Company empresa(long id) {
         return Company.builder().ideCompany(id).build();
     }

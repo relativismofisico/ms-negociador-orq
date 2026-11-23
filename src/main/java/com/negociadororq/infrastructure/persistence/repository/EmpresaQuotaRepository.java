@@ -42,7 +42,8 @@ public interface EmpresaQuotaRepository extends JpaRepository<EmpresaQuotaEntity
      */
     @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = true)
     @org.springframework.data.jpa.repository.Query(value = "UPDATE parametrization SET current_quota = LEAST(quota,"
-            + " current_quota + :valor), version = COALESCE(version, 0) + 1 WHERE company_id = :companyId",
+            + " current_quota + :valor), version = COALESCE(version, 0) + 1 WHERE company_id = :companyId"
+            + " AND objetivo IS NULL",
             nativeQuery = true)
     int devolverConTope(@org.springframework.data.repository.query.Param("companyId") Long companyId,
             @org.springframework.data.repository.query.Param("valor") java.math.BigDecimal valor);
