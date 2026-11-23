@@ -21,8 +21,8 @@ class EstadoFacturaMapperSpec extends Specification {
         EstadoNegociacion.LIQUIDADA       || EstadoFactura.NEGOCIADA
         EstadoNegociacion.EN_APROBACION   || EstadoFactura.NEGOCIADA
         EstadoNegociacion.RECHAZADA       || EstadoFactura.RECHAZADA
-        EstadoNegociacion.PENDIENTE       || EstadoFactura.SIN_NEGOCIAR
-        EstadoNegociacion.PARCIAL         || EstadoFactura.SIN_NEGOCIAR
+        EstadoNegociacion.PENDIENTE       || EstadoFactura.NEGOCIADA
+        EstadoNegociacion.PARCIAL         || EstadoFactura.NEGOCIADA
     }
 
     def "una factura con al menos un actor requerido aprobado (EN_APROBACION) ya no debe verse como 'sin negociar'"() {
@@ -32,5 +32,10 @@ class EstadoFacturaMapperSpec extends Specification {
         expect:
         mapper.aEstadoFactura(EstadoNegociacion.EN_APROBACION) != EstadoFactura.SIN_NEGOCIAR
         mapper.aEstadoFactura(EstadoNegociacion.EN_APROBACION) == EstadoFactura.NEGOCIADA
+    }
+
+    def "Fase 28d (A5b): ningún estado de una negociación viva se ve SIN_NEGOCIAR (invariante de John)"() {
+        expect:
+        EstadoNegociacion.values().every { mapper.aEstadoFactura(it) != EstadoFactura.SIN_NEGOCIAR }
     }
 }

@@ -81,9 +81,13 @@ public class FacturaPatchRepository {
      * @param facturaId   id de la factura
      * @param estadoFirma nuevo estado de firma
      * @param actores     actores resultantes de la negociación
+     * @return Fase 28d (A5b): {@code true} si la factura estaba SIN_NEGOCIAR y quedó NEGOCIADA; {@code false} si ya
+     *         no estaba SIN_NEGOCIAR (otra negociación la tomó): la creación debe abortar
      */
-    public void marcarComoNegociada(String facturaId, EstadoFirma estadoFirma, List<ActorFactura> actores) {
-        Query query = Query.query(Criteria.where("_id").is(facturaId));
+    public boolean marcarComoNegociada(String facturaId, EstadoFirma estadoFirma, List<ActorFactura> actores) {
+        // Fase 28d (A5b): compare-and-set; dos creaciones del mismo CUFE no pueden marcarla las dos.
+        Query query = Query.query(Criteria.where("_id").is(facturaId)
+                .and(CAMPO_ESTADO).is(EstadoFactura.SIN_NEGOCIAR.name()));
 
         Update update = new Update()
                 .set("estadoNegociacion", EstadoFactura.NEGOCIADA.name())
@@ -91,7 +95,7 @@ public class FacturaPatchRepository {
                 .set("actores", actores)
                 .set("fechaNegociacionFactura", LocalDateTime.now());
 
-        mongoTemplate.updateFirst(query, update, FacturaDocument.class);
+        return mongoTemplate.findAndModify(query, update, FacturaDocument.class) != null;
     }
 
     /**

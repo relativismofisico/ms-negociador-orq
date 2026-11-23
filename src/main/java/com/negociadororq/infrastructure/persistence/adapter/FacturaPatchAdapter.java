@@ -30,8 +30,8 @@ public class FacturaPatchAdapter implements FacturaPatchOutputPort {
     }
 
     @Override
-    public void marcarComoNegociada(String facturaId, EstadoFirma estadoFirma, List<ActorFactura> actores) {
-        repository.marcarComoNegociada(facturaId, estadoFirma, actores);
+    public boolean marcarComoNegociada(String facturaId, EstadoFirma estadoFirma, List<ActorFactura> actores) {
+        return repository.marcarComoNegociada(facturaId, estadoFirma, actores);
     }
 
     @Override

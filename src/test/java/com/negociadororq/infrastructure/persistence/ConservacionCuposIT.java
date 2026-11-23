@@ -205,6 +205,10 @@ class ConservacionCuposIT {
     private final ClockPort clock = LocalDateTime::now;
 
     private ReversionExactaService exacta;
+    private ValidacionFacturaService validacion;
+    private PayerFundingVisibilityOutputPort visibilidad;
+    private IndirectFunderOfferOutputPort ofertas;
+    private com.negociadororq.application.service.AuditoriaNegociacionService auditoria;
     private ProcesarFacturaNegociacionServiceImpl procesar;
     private int secuencia;
 
@@ -236,12 +240,12 @@ class ConservacionCuposIT {
         when(companyPort.findByNit("PAG")).thenReturn(Optional.of(empresa(EMPRESA_PAG)));
         when(companyPort.findByNit("FOND")).thenReturn(Optional.of(empresa(FONDEADOR)));
 
-        ValidacionFacturaService validacion = mock(ValidacionFacturaService.class);
+        validacion = mock(ValidacionFacturaService.class);
         when(validacion.validarFacturaVencida(any(), any()))
                 .thenReturn(ValidacionFacturaResponseDto.builder().valida(true).build());
-        PayerFundingVisibilityOutputPort visibilidad = mock(PayerFundingVisibilityOutputPort.class);
+        visibilidad = mock(PayerFundingVisibilityOutputPort.class);
         when(visibilidad.estaHabilitado(anyLong())).thenReturn(true);
-        IndirectFunderOfferOutputPort ofertas = mock(IndirectFunderOfferOutputPort.class);
+        ofertas = mock(IndirectFunderOfferOutputPort.class);
         when(ofertas.findActivaAprobada(FONDEADOR, EMPRESA_PAG)).thenReturn(Optional.of(IndirectFunderOffer.builder()
                 .id(OFERTA).funderId(FONDEADOR).payerId(EMPRESA_PAG).payerRate(new BigDecimal("0.0150"))
                 .supplierQuotaTemplate(new BigDecimal("9000000.00")).estado("APROBADO").activo(true).build()));
@@ -262,8 +266,7 @@ class ConservacionCuposIT {
         com.negociadororq.application.service.CorreosReversionService correosReversion =
                 new com.negociadororq.application.service.CorreosReversionService(correos, companyPort, negociacionPort,
                         clock);
-        com.negociadororq.application.service.AuditoriaNegociacionService auditoria =
-                mock(com.negociadororq.application.service.AuditoriaNegociacionService.class);
+        auditoria = mock(com.negociadororq.application.service.AuditoriaNegociacionService.class);
         exacta = new ReversionExactaService(operaciones, operador, indirectoPort, tx, auditoria, correosReversion);
         procesar = new ProcesarFacturaNegociacionServiceImpl(facturaPort, operador, userPort, companyPort,
                 empresaQuotaPort, fondeadorQuotaPort, facturaPatchPort, validacion, visibilidad, ofertas, indirectoPort,
@@ -759,6 +762,352 @@ class ConservacionCuposIT {
                     OperacionPendiente.clave(e.negociacionId, e.cufe))).isPresent();
             assertThat(m.doc(e.cufe).getSeguimientoLiquidacionPendiente()).isNull();
             assertThat(m.seguimiento.reemitirSinSeguimiento()).isZero();
+        }
+    }
+
+    @Test
+    void a5b_cupo_del_operador_atomico_en_mysql_real() throws Exception {
+        jdbc.update("UPDATE user_quota SET current_quota = 1000.00");
+        // 40 descuentos de 10.01 y 40 devoluciones de 10.01 a la vez: ninguna actualización se pierde
+        CountDownLatch listos = new CountDownLatch(80);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+        List<Thread> hilos = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            hilos.add(hilo(() -> tx.executeWithoutResult(s -> operador.descontarCupo(USUARIO, new BigDecimal("10.01"))),
+                    listos, largada, fallos));
+            hilos.add(hilo(() -> tx.executeWithoutResult(s -> operador.revertirCupoUsuario(USUARIO,
+                    new BigDecimal("10.01"))), listos, largada, fallos));
+        }
+        listos.await();
+        largada.countDown();
+        for (Thread t : hilos) {
+            t.join();
+        }
+        assertThat(fallos).isEmpty();
+        assertThat(cupos().get("operador")).isEqualByComparingTo("1000.00");
+        // sin cupo suficiente no descuenta; la devolución limitada a cero no deja negativos
+        jdbc.update("UPDATE user_quota SET current_quota = 5.00");
+        assertThatThrownBy(() -> tx.executeWithoutResult(s -> operador.descontarCupo(USUARIO, new BigDecimal("5.01"))))
+                .hasMessageContaining("insuficiente");
+        tx.executeWithoutResult(s -> operador.revertirCupoUsuario(USUARIO, new BigDecimal("-9.00")));
+        assertThat(cupos().get("operador")).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void a5b_el_descuento_del_cupo_indirecto_exige_cupo_suficiente_en_la_sentencia() throws Exception {
+        // Auditoría de escrituras de cupo (John): antes el control estaba solo en una lectura previa y dos descuentos de
+        // 80.00 sobre 100.00 dejaban -60.00 (rama analisis/28d-cupo-indirecto-sin-control). Ahora va en la sentencia.
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET current_quota = 100.00 WHERE offer_id = ?", OFERTA);
+        CountDownLatch listos = new CountDownLatch(2);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+        int[] filas = new int[2];
+        List<Thread> hilos = new ArrayList<>();
+        for (int k = 0; k < 2; k++) {
+            final int j = k;
+            hilos.add(hilo(() -> {
+                // los dos ya pasaron la lectura previa (100.00 >= 80.00) y descuentan
+                filas[j] = indirectoPort.descontarCupo(OFERTA, EMPRESA_PROV_IND, new BigDecimal("80.00"));
+            }, listos, largada, fallos));
+        }
+        listos.await();
+        largada.countDown();
+        for (Thread t : hilos) {
+            t.join();
+        }
+        assertThat(fallos).isEmpty();
+        assertThat(filas[0] + filas[1]).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT current_quota FROM indirect_funder_offer_supplier_quota WHERE offer_id = ?",
+                BigDecimal.class, OFERTA)).isEqualByComparingTo("20.00");
+        // la devolución es exacta (suma lo descontado, una fila)
+        assertThat(indirectoPort.devolverCupo(OFERTA, EMPRESA_PROV_IND, new BigDecimal("80.00"))).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT current_quota FROM indirect_funder_offer_supplier_quota WHERE offer_id = ?",
+                BigDecimal.class, OFERTA)).isEqualByComparingTo("100.00");
+    }
+
+    // ─── Fase 28d (A5b): dos creaciones del mismo CUFE a la vez, con Mongo y MySQL reales ─────────────────────────
+
+    /** El servicio real de creación sobre Mongo real (factura, negociación, marcador, transacción) y MySQL real. */
+    private com.negociadororq.application.service.NegociacionFactoringComfirmingServiceImpl creacion(Mongo m) {
+        com.negociadororq.application.port.output.CompanyOperationOutputPort operacionesEmpresa =
+                mock(com.negociadororq.application.port.output.CompanyOperationOutputPort.class);
+        when(operacionesEmpresa.isEnabled(any(), any())).thenReturn(true);
+        com.negociadororq.application.port.output.CompanySectionVerificationOutputPort secciones =
+                mock(com.negociadororq.application.port.output.CompanySectionVerificationOutputPort.class);
+        when(secciones.tesoreriaYCuentasVerificadas(any())).thenReturn(true);
+        ProcesarFacturaNegociacionServiceImpl procesarMongo = new ProcesarFacturaNegociacionServiceImpl(m.facturas,
+                operador, userPort, companyPort, empresaQuotaPort, fondeadorQuotaPort, m.patch, validacion, visibilidad,
+                ofertas, indirectoPort, clock, operaciones, auditoria);
+        return new com.negociadororq.application.service.NegociacionFactoringComfirmingServiceImpl(m.facturas,
+                new com.negociadororq.infrastructure.persistence.adapter.NegociacionAdapter(m.repos.getRepository(
+                        com.negociadororq.infrastructure.persistence.repository.NegociacionRepository.class)),
+                userPort, companyPort, operacionesEmpresa, secciones, notificacionService, conTransaccion(procesarMongo), m.patch, clock,
+                auditoria, new TransaccionMongoAdapter(m.fabrica),
+                new com.negociadororq.infrastructure.persistence.adapter.MarcaNegociacionAdapter(m.plantilla),
+                operaciones, exacta,
+                mock(com.negociadororq.application.service.AvisoCupoIndirectoService.class));
+    }
+
+    /**
+     * Como el bean de producción: procesarFactura en su propia transacción MySQL (REQUIRES_NEW, que en producción pone el
+     * proxy de Spring; aquí el servicio se crea con new y hay que dársela).
+     */
+    private com.negociadororq.application.service.ProcesarFacturaNegociacionService conTransaccion(
+            ProcesarFacturaNegociacionServiceImpl real) {
+        org.springframework.transaction.PlatformTransactionManager gestor = tx.getTransactionManager();
+        if (gestor == null) {
+            throw new AssertionError("sin gestor de transacciones");
+        }
+        TransactionTemplate nueva = new TransactionTemplate(gestor);
+        nueva.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return new com.negociadororq.application.service.ProcesarFacturaNegociacionService() {
+            @Override
+            public FacturaNegociada procesarFactura(NegociacionRequestDto request, FacturaNegociada reqFact,
+                    String negociacionId) {
+                return nueva.execute(st -> real.procesarFactura(request, reqFact, negociacionId));
+            }
+
+            @Override
+            public FacturaNegociada procesarFactura(NegociacionRequestDto request, FacturaNegociada reqFact,
+                    String negociacionId, com.negociadororq.application.service.ContextoCupoIndirecto contexto) {
+                return nueva.execute(st -> real.procesarFactura(request, reqFact, negociacionId, contexto));
+            }
+
+            @Override
+            public com.negociadororq.application.service.ContextoCupoIndirecto prepararCupoIndirecto(
+                    NegociacionRequestDto request, java.util.List<com.negociadororq.domain.model.Factura> facturasBd) {
+                return real.prepararCupoIndirecto(request, facturasBd);
+            }
+
+            @Override
+            public void marcarComoNegociada(NegociacionRequestDto request, FacturaNegociada procesada) {
+                real.marcarComoNegociada(request, procesada);
+            }
+        };
+    }
+
+    private static NegociacionRequestDto solicitudDe(Modo modo, String cufe) {
+        String proveedor = modo == Modo.FACTORING_INDIRECTO ? "PROVIND" : "PROV";
+        String empresa = modo == Modo.CONFIRMING ? "PAG" : proveedor;
+        String tipo = modo == Modo.CONFIRMING ? "CONFIRMING" : "FACTORING";
+        FacturaNegociada solicitud = FacturaNegociada.builder().numeroFactura(numeroDe(cufe)).cufe(cufe)
+                .rutProveedor(proveedor).rutPagador("PAG")
+                .fondeadores(List.of(FondeadorAsignacion.builder().rutFondeador("FOND").build())).build();
+        return NegociacionRequestDto.builder().rutEmpresa(empresa)
+                .rolEmpresa(modo == Modo.CONFIRMING ? "PAGADOR" : "PROVEEDOR")
+                .tipoOperacion(new Operacion(tipo, modo == Modo.CONFIRMING ? "TRADICIONAL" : "CON_RESPONSABILIDAD"))
+                .rutOperador("op-1").facturas(new ArrayList<>(List.of(solicitud))).build();
+    }
+
+    /** Una factura SIN_NEGOCIAR en Mongo, lista para negociar. */
+    private static Factura libre(Mongo m, Modo modo, String cufe) {
+        Factura f = new Factura();
+        f.setNumeroFactura(numeroDe(cufe));
+        f.setCufe(cufe);
+        f.setRutProveedor(modo == Modo.FACTORING_INDIRECTO ? "PROVIND" : "PROV");
+        f.setRutPagador("PAG");
+        f.setValorFactura(BRUTO);
+        f.setValorNetoFactura(NETO);
+        f.setEstadoNegociacion("SIN_NEGOCIAR");
+        f.setEstadoFirma("SIN_FIRMA");
+        f.setFechavencimientoFactura(LocalDate.now().plusDays(60));
+        f.setActores(new ArrayList<>(List.of(
+                new com.negociadororq.domain.model.ActorFactura(f.getRutProveedor(), "PROVEEDOR"),
+                new com.negociadororq.domain.model.ActorFactura("PAG", "PAGADOR"))));
+        return m.facturas.save(f);
+    }
+
+    private static String numeroDe(String cufe) {
+        return "FV-" + Integer.toHexString(cufe.hashCode());
+    }
+
+    private static String codigoDe(Object resultado) {
+        if (resultado instanceof com.negociadororq.application.exception.NegociadorException ex) {
+            return ex.getCodigo();
+        }
+        if (resultado instanceof com.negociadororq.application.dto.NegociacionResponseDto r && r.getFacturas().isEmpty()
+                && r.getErrores() != null && r.getErrores().stream()
+                .anyMatch(x -> x.startsWith(ProcesarFacturaNegociacionServiceImpl.FACTURA_CON_NEGOCIACION_VIVA))) {
+            return ProcesarFacturaNegociacionServiceImpl.FACTURA_CON_NEGOCIACION_VIVA;
+        }
+        if (resultado instanceof com.negociadororq.application.dto.NegociacionResponseDto r && r.getFacturas().isEmpty()
+                && r.getErrores() != null && r.getErrores().stream()
+                .anyMatch(x -> x.contains("modificado por otra negociación concurrente"))) {
+            return CUPO_CONCURRENTE;
+        }
+        return null;
+    }
+
+    /** El bloqueo optimista del cupo (ya existente): la perdedora choca al descontar y no descuenta nada. */
+    private static final String CUPO_CONCURRENTE = "CUPO_MODIFICADO_CONCURRENTE";
+
+    private static String describir(Object r) {
+        if (r instanceof com.negociadororq.application.dto.NegociacionResponseDto d) {
+            return "respuesta estado=" + d.getEstado() + " facturas=" + d.getFacturas().size() + " errores=" + d.getErrores();
+        }
+        return String.valueOf(r);
+    }
+
+    private static boolean gano(Object resultado) {
+        return resultado instanceof com.negociadororq.application.dto.NegociacionResponseDto r
+                && !r.getFacturas().isEmpty();
+    }
+
+    @ParameterizedTest(name = "A5b, {0}: dos creaciones simultáneas del mismo CUFE, muchas veces: gana exactamente una, "
+            + "los cupos se conservan al centavo y la perdedora recibe FACTURA_CON_NEGOCIACION_VIVA sin plantilla A")
+    @MethodSource("modos")
+    void dos_creaciones_del_mismo_cufe_gana_exactamente_una(Modo modo) throws Exception {
+        int vueltas = 40;
+        Map<String, Integer> porCamino = new java.util.TreeMap<>();
+        jdbc.update("UPDATE user_quota SET quota = 99000000.00, current_quota = 90000000.11");
+        jdbc.update("UPDATE parametrization SET quota = 99000000.00, current_quota = 90000000.22");
+        jdbc.update("UPDATE funder SET supplier_quota = 99000000.00, supplier_current_quota = 90000000.33"
+                + " WHERE supplier_id IS NOT NULL");
+        jdbc.update("UPDATE funder SET payer_quota = 99000000.00, payer_current_quota = 90000000.44"
+                + " WHERE payer_id IS NOT NULL");
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET quota = 99000000.00, current_quota = 90000000.55");
+        try (Mongo m = new Mongo()) {
+            m.plantilla.createCollection("negociacion");
+            m.plantilla.createCollection("negociacion_marca");
+            com.negociadororq.application.service.NegociacionFactoringComfirmingServiceImpl servicio = creacion(m);
+            for (int i = 0; i < vueltas; i++) {
+                String cufe = "CUFE-A5B-" + modo + "-" + i + "-" + System.nanoTime();
+                libre(m, modo, cufe);
+                Map<String, BigDecimal> inicial = cupos();
+                Object[] resultado = new Object[2];
+                CountDownLatch listos = new CountDownLatch(2);
+                CountDownLatch largada = new CountDownLatch(1);
+                List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+                Thread[] hilos = new Thread[2];
+                // desfase aleatorio: a veces chocan en el cupo, a veces la segunda llega con la primera ya en MySQL
+                // (verificación previa) o ya en Mongo (estado), y a veces en medio de la transacción Mongo (CAS)
+                int[] espera = {ThreadLocalRandom.current().nextInt(0, 60), ThreadLocalRandom.current().nextInt(0, 60)};
+                for (int k = 0; k < 2; k++) {
+                    final int j = k;
+                    hilos[k] = hilo(() -> {
+                        dormir(espera[j]);
+                        try {
+                            resultado[j] = servicio.crearNegociacion(solicitudDe(modo, cufe));
+                        } catch (com.negociadororq.application.exception.NegociadorException ex) {
+                            resultado[j] = ex;
+                        }
+                    }, listos, largada, fallos);
+                }
+                listos.await();
+                largada.countDown();
+                hilos[0].join();
+                hilos[1].join();
+                assertThat(fallos).isEmpty();
+
+                int ganadora = gano(resultado[0]) ? 0 : 1;
+                int perdedora = 1 - ganadora;
+                assertThat(gano(resultado[ganadora])).as("vuelta %d: una gana", i).isTrue();
+                assertThat(gano(resultado[perdedora])).as("vuelta %d: solo una gana", i).isFalse();
+                String codigo = codigoDe(resultado[perdedora]);
+                // ajuste de John: la causa es una negociación viva (el mismo CUFE), así que nunca "solo cupo modificado"
+                assertThat(codigo).as("vuelta %d: código de la perdedora: %s", i, describir(resultado[perdedora]))
+                        .isEqualTo(ProcesarFacturaNegociacionServiceImpl.FACTURA_CON_NEGOCIACION_VIVA);
+                String camino = (resultado[perdedora] instanceof RuntimeException ? "409 " : "201 ") + codigo
+                        + (resultado[perdedora] instanceof RuntimeException ? "" : " (verificación previa o estado)");
+                if (resultado[perdedora] instanceof com.negociadororq.application.exception.ConflictoException c
+                        && c.getMessage().contains("al mismo tiempo")) {
+                    camino = "409 " + c.getCodigo() + " (bloqueo optimista)";
+                }
+                porCamino.merge(camino, 1, Integer::sum);
+
+                String idGanadora = ((com.negociadororq.application.dto.NegociacionResponseDto) resultado[ganadora])
+                        .getIdNegociacion();
+                FacturaDocument d = m.doc(cufe);
+                assertThat(d.getEstadoNegociacion()).isEqualTo("NEGOCIADA");
+                assertThat(d.getNegociacionId()).isEqualTo(idGanadora);
+                // una sola creación viva y los cupos descontados una sola vez, al centavo
+                assertThat(contar("SELECT COUNT(*) FROM operacion_pendiente WHERE tipo = 'CREAR_NEGOCIACION' AND"
+                        + " clave_natural LIKE ? AND estado IN ('CUPOS_DESCONTADOS', 'COMPLETADA')", "%|" + cufe))
+                        .isEqualTo(1);
+                Map<String, BigDecimal> tras = cupos();
+                assertThat(tras.get("operador")).as("vuelta %d, perdedora %s: %s; creaciones %s", i, camino,
+                        describir(resultado[perdedora]), jdbc.queryForList("SELECT clave_natural, estado FROM"
+                                + " operacion_pendiente WHERE clave_natural LIKE ?", "%|" + cufe))
+                        .isEqualByComparingTo(inicial.get("operador").subtract(NETO));
+                assertThat(tras.get(empresaClave(modo))).isEqualByComparingTo(
+                        inicial.get(empresaClave(modo)).subtract(NETO));
+                assertThat(tras.get(fondeoClave(modo))).isEqualByComparingTo(
+                        inicial.get(fondeoClave(modo)).subtract(NETO));
+                // ni la ganadora ni la perdedora envían la plantilla A
+                assertThat(contar("SELECT COUNT(*) FROM outbox_negociador WHERE payload = 'OPERACION_REVERTIDA'"
+                        + " AND clave_kafka LIKE 'negociacion:%'")).isZero();
+
+                // segundo intento secuencial: rechazado con el código y sin tocar los cupos
+                Object segundo;
+                try {
+                    segundo = servicio.crearNegociacion(solicitudDe(modo, cufe));
+                } catch (com.negociadororq.application.exception.NegociadorException ex) {
+                    segundo = ex;
+                }
+                assertThat(gano(segundo)).isFalse();
+                assertThat(codigoDe(segundo)).isEqualTo(ProcesarFacturaNegociacionServiceImpl.FACTURA_CON_NEGOCIACION_VIVA);
+                assertIguales(tras, cupos());
+            }
+        }
+        System.out.printf("[A5B-CARRERA] %s: %d vueltas, perdedora por camino %s%n", modo, vueltas, porCamino);
+    }
+
+    @Test
+    void a5b_el_cas_en_mongo_aborta_toda_la_creacion_y_devuelve_los_cupos_sin_plantilla_A() {
+        try (Mongo m = new Mongo()) {
+            m.plantilla.createCollection("negociacion");
+            m.plantilla.createCollection("negociacion_marca");
+            String cufe = "CUFE-A5B-CAS-" + System.nanoTime();
+            libre(m, Modo.FACTORING_DIRECTO, cufe);
+            Map<String, BigDecimal> inicial = cupos();
+            // otra creación tomó la factura entre la verificación previa y la transacción Mongo de esta: se emula
+            // marcándola NEGOCIADA después de la lectura (la verificación previa por registro no la ve)
+            com.negociadororq.application.port.output.FacturaPatchOutputPort patch = spy(m.patch);
+            // la otra creación escribe con su propio cliente, fuera de esta transacción (si no, entraría en ella)
+            MongoClient otroCliente = MongoClients.create(MONGO.getReplicaSetUrl());
+            MongoTemplate otra = new MongoTemplate(new SimpleMongoClientDatabaseFactory(otroCliente, "negociador_a5"));
+            org.mockito.Mockito.doAnswer(inv -> {
+                otra.updateFirst(Query.query(Criteria.where("cufe").is(cufe)),
+                        new Update().set("estadoNegociacion", "NEGOCIADA").set("negociacionId", "otra"),
+                        FacturaDocument.class);
+                return inv.callRealMethod();
+            }).when(patch).marcarComoNegociada(any(), any(), any());
+            com.negociadororq.application.port.output.CompanyOperationOutputPort operacionesEmpresa =
+                    mock(com.negociadororq.application.port.output.CompanyOperationOutputPort.class);
+            when(operacionesEmpresa.isEnabled(any(), any())).thenReturn(true);
+            com.negociadororq.application.port.output.CompanySectionVerificationOutputPort secciones =
+                    mock(com.negociadororq.application.port.output.CompanySectionVerificationOutputPort.class);
+            when(secciones.tesoreriaYCuentasVerificadas(any())).thenReturn(true);
+            ProcesarFacturaNegociacionServiceImpl procesarMongo = new ProcesarFacturaNegociacionServiceImpl(m.facturas,
+                    operador, userPort, companyPort, empresaQuotaPort, fondeadorQuotaPort, patch, validacion,
+                    visibilidad, ofertas, indirectoPort, clock, operaciones, auditoria);
+            com.negociadororq.application.service.NegociacionFactoringComfirmingServiceImpl servicio =
+                    new com.negociadororq.application.service.NegociacionFactoringComfirmingServiceImpl(m.facturas,
+                            new com.negociadororq.infrastructure.persistence.adapter.NegociacionAdapter(
+                                    m.repos.getRepository(
+                                            com.negociadororq.infrastructure.persistence.repository.NegociacionRepository
+                                                    .class)),
+                            userPort, companyPort, operacionesEmpresa, secciones, notificacionService, conTransaccion(procesarMongo),
+                            patch, clock, auditoria, new TransaccionMongoAdapter(m.fabrica),
+                            new com.negociadororq.infrastructure.persistence.adapter.MarcaNegociacionAdapter(m.plantilla),
+                            operaciones, exacta,
+                mock(com.negociadororq.application.service.AvisoCupoIndirectoService.class));
+
+            assertThatThrownBy(() -> servicio.crearNegociacion(solicitudDe(Modo.FACTORING_DIRECTO, cufe)))
+                    .isInstanceOf(com.negociadororq.application.exception.ConflictoException.class)
+                    .hasMessageContaining(ProcesarFacturaNegociacionServiceImpl.FACTURA_CON_NEGOCIACION_VIVA);
+            // la transacción Mongo se deshizo: ni negociación ni marcador CREADA; la creación quedó CANCELADA
+            assertThat(m.plantilla.getCollection("negociacion").countDocuments()).isZero();
+            assertThat(m.plantilla.getCollection("negociacion_marca").countDocuments(
+                    new org.bson.Document("tipo", "CREADA"))).isZero();
+            assertThat(m.doc(cufe).getNegociacionId()).isEqualTo("otra");
+            // cupos devueltos exactos, sin plantilla A, y la creación REVERTIDA
+            assertIguales(inicial, cupos());
+            assertThat(contar("SELECT COUNT(*) FROM operacion_pendiente WHERE tipo = 'CREAR_NEGOCIACION' AND"
+                    + " clave_natural LIKE ? AND estado = 'REVERTIDA'", "%|" + cufe)).isEqualTo(1);
+            assertThat(contar("SELECT COUNT(*) FROM outbox_negociador WHERE payload = 'OPERACION_REVERTIDA'")).isZero();
+            otroCliente.close();
         }
     }
 

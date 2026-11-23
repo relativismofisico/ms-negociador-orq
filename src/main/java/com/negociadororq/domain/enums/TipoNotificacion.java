@@ -13,5 +13,7 @@ public enum TipoNotificacion {
     /** Fase 28d (A2): plantilla A, la operación se revirtió con éxito (los cupos quedaron como antes). */
     OPERACION_REVERTIDA,
     /** Fase 28d (A2): plantilla B (2.8), la reversión falló y la operación está en revisión manual. */
-    OPERACION_EN_REVISION
+    OPERACION_EN_REVISION,
+    /** Fase 28d (punto 1.2c): aviso al fondeador, un proveedor no tiene cupo indirecto suficiente para negociar. */
+    CUPO_INDIRECTO_INSUFICIENTE
 }

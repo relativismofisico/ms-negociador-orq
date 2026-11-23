@@ -67,8 +67,9 @@ public interface FacturaPatchOutputPort {
      * @param facturaId   id de la factura
      * @param estadoFirma nuevo estado de firma
      * @param actores     actores resultantes de la negociación
+     * @return Fase 28d (A5b): {@code false} si la factura ya no estaba SIN_NEGOCIAR (compare-and-set perdido)
      */
-    void marcarComoNegociada(String facturaId, EstadoFirma estadoFirma, List<ActorFactura> actores);
+    boolean marcarComoNegociada(String facturaId, EstadoFirma estadoFirma, List<ActorFactura> actores);
 
     /**
      * Fase 28d (C): por la referencia exacta de la factura de la negociación ({@code {cufe, rutProveedor,

@@ -27,6 +27,15 @@ public interface OperacionPendienteOutputPort {
     boolean registrar(TipoOperacionPendiente tipo, String claveNatural, String estadoInicial, String datos);
 
     /**
+     * Fase 28d (A5b): si ya hay una creación viva (CUPOS_DESCONTADOS o COMPLETADA) para ese CUFE, en cualquier
+     * negociación. Verificación rápida antes de descontar cupos; la definitiva es el compare-and-set de la factura.
+     *
+     * @param cufe CUFE de la factura
+     * @return {@code true} si existe
+     */
+    boolean existeCreacionViva(String cufe);
+
+    /**
      * Transición atómica (CAS): solo si la operación sigue en {@code desde}. Libera la concesión.
      *
      * @param tipo         tipo

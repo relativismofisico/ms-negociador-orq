@@ -41,6 +41,7 @@ import com.negociadororq.application.port.output.ValidacionOtpOutputPort;
 import com.negociadororq.application.service.AprobacionEndosoDescuentoServiceImpl;
 import com.negociadororq.application.service.AprobacionInternaService;
 import com.negociadororq.application.service.AuditoriaNegociacionService;
+import com.negociadororq.application.service.AvisoCupoIndirectoService;
 import com.negociadororq.application.service.ConfirmacionOtpService;
 import com.negociadororq.application.service.ConfirmacionOtpServiceImpl;
 import com.negociadororq.application.service.CorreosReversionService;
@@ -390,12 +391,30 @@ public class ApplicationBeansConfig {
             final TransaccionMongoOutputPort transaccionMongoOutputPort,
             final MarcaNegociacionOutputPort marcaNegociacionOutputPort,
             final OperacionPendienteOutputPort operacionPendienteOutputPort,
-            final ReversionExactaService reversionExactaService) {
+            final ReversionExactaService reversionExactaService,
+            final AvisoCupoIndirectoService avisoCupoIndirectoService) {
         return new NegociacionFactoringComfirmingServiceImpl(
                 facturaPort, negociacionPort, userPort, companyPort, companyOperationPort,
                 companySectionVerificationPort, notificacionService, procesarFacturaNegociacionService,
                 facturaPatchPort, clock, auditoriaNegociacionService, transaccionMongoOutputPort,
-                marcaNegociacionOutputPort, operacionPendienteOutputPort, reversionExactaService);
+                marcaNegociacionOutputPort, operacionPendienteOutputPort, reversionExactaService,
+                avisoCupoIndirectoService);
+    }
+
+    /**
+     * Fase 28d (punto 1.2c): aviso al fondeador por falta de cupo indirecto, por el outbox JDBC (uno por trío al día).
+     *
+     * @param correoTransaccionalOutputPort outbox JDBC
+     * @param companyPort                   nombre del proveedor
+     * @param clock                         reloj
+     * @return el servicio
+     */
+    @Bean
+    public AvisoCupoIndirectoService avisoCupoIndirectoService(
+            final CorreoTransaccionalOutputPort correoTransaccionalOutputPort,
+            final CompanyOutputPort companyPort,
+            final ClockPort clock) {
+        return new AvisoCupoIndirectoService(correoTransaccionalOutputPort, companyPort, clock);
     }
 
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por

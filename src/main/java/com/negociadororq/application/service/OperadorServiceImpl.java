@@ -40,35 +40,26 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
         UserQuota cuota = userQuotaPort.findByUserId(userId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No existe operador para el usuario ID " + userId));
 
-        if (cuota.getCurrentQuota().compareTo(monto) < 0) {
+        // Fase 28d (A5b): la comprobación y el descuento van en la misma sentencia (antes, leer y escribir por separado
+        // dejaba que dos negociaciones concurrentes del mismo operador perdieran una de las dos actualizaciones).
+        if (cuota.getCurrentQuota().compareTo(monto) < 0 || !userQuotaPort.descontar(userId, monto)) {
             throw new ReglaDeNegocioException("Cupo insuficiente para el operador " + userId);
         }
-
-        cuota.setCurrentQuota(cuota.getCurrentQuota().subtract(monto));
-        userQuotaPort.save(cuota);
     }
 
     @Transactional
     @Override
     public void revertirCupo(Long userId, BigDecimal valor) {
-        UserQuota cuota = userQuotaPort.findByUserId(userId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("No existe operador para el usuario ID " + userId));
-
-        cuota.setCurrentQuota(cuota.getCurrentQuota().add(valor));
-        userQuotaPort.save(cuota);
+        if (!userQuotaPort.devolver(userId, valor, false)) {
+            throw new RecursoNoEncontradoException("No existe operador para el usuario ID " + userId);
+        }
     }
 
     @Override
     @Transactional
     public void revertirCupoUsuario(Long userId, BigDecimal valor) {
-        userQuotaPort.findByUserId(userId)
-                .ifPresent(uq -> {
-                    uq.setCurrentQuota(
-                            uq.getCurrentQuota()
-                                    .add(valor)
-                                    .max(BigDecimal.ZERO));
-                    userQuotaPort.save(uq);
-                });
+        // Fase 28d (A5b): devolución atómica (limitada a cero, como antes); sin cupo registrado no hace nada.
+        userQuotaPort.devolver(userId, valor, true);
     }
 
     @Override
