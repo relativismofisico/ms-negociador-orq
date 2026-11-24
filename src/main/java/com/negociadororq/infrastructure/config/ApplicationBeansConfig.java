@@ -70,6 +70,7 @@ import com.negociadororq.application.service.OperadorServiceImpl;
 import com.negociadororq.application.service.OutboxService;
 import com.negociadororq.application.service.ProcesarFacturaNegociacionService;
 import com.negociadororq.application.service.ProcesarFacturaNegociacionServiceImpl;
+import com.negociadororq.application.service.PropagacionCupoOfertaService;
 import com.negociadororq.application.service.ReanudadorCrearNegociacion;
 import com.negociadororq.application.service.ReanudadorOperacion;
 import com.negociadororq.application.service.ReconciliadorOperacionesService;
@@ -188,6 +189,18 @@ public class ApplicationBeansConfig {
     @Bean
     public TasaConversionService tasaConversionService() {
         return new TasaConversionServiceImpl();
+    }
+
+    /**
+     * Fase 28d (P-19): propagación del cupo por proveedor de la oferta indirecta a los proveedores que ya negociaron.
+     *
+     * @param indirectFunderOfferSupplierQuotaPort cupos indirectos por proveedor
+     * @return el servicio
+     */
+    @Bean
+    public PropagacionCupoOfertaService propagacionCupoOfertaService(
+            final IndirectFunderOfferSupplierQuotaOutputPort indirectFunderOfferSupplierQuotaPort) {
+        return new PropagacionCupoOfertaService(indirectFunderOfferSupplierQuotaPort);
     }
 
     @Bean

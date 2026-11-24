@@ -500,7 +500,7 @@ public class ProcesarFacturaNegociacionServiceImpl implements ProcesarFacturaNeg
                 .append(Pesos.formato(requerido)).append(" no se incluyó: el cupo de factoring que ").append(fondeador)
                 .append(" ofrece a los proveedores de ").append(pagador).append(" tiene ").append(Pesos.formato(disponible))
                 .append(" disponibles para ti; faltan ").append(Pesos.formato(faltante)).append(". Puedes pedirle a ")
-                .append(fondeador).append(" que recargue tu cupo.");
+                .append(fondeador).append(" que recargue o amplíe tu cupo.");
         acumulado.filter(a -> a.sumaPeticion().compareTo(requerido) > 0).ifPresent(a -> mensaje
                 .append(" Las facturas de esta petición con ese cupo suman ").append(Pesos.formato(a.sumaPeticion()))
                 .append(" y al empezar había ").append(Pesos.formato(a.disponibleInicial()))

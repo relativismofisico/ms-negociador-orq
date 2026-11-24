@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS `indirect_funder_offer_supplier_quota` (
   `current_quota` decimal(19,2) DEFAULT NULL,
   `original_quota` decimal(19,2) DEFAULT NULL,
   `creado_en` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `oferta_cupo_version` bigint NOT NULL DEFAULT 0,
+  `oferta_cupo_plantilla` decimal(19,2) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_indirect_supplier_quota` (`offer_id`,`supplier_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;

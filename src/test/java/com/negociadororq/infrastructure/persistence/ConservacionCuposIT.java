@@ -131,7 +131,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         "spring.jpa.hibernate.ddl-auto=none",
         "spring.sql.init.mode=always",
         "spring.sql.init.schema-locations=classpath:test-schema/reversion_cupos.sql,"
-                + "classpath:test-schema/indirect_funder_offer_supplier_quota.sql,"
+                + "classpath:test-schema/indirect_funder_offer.sql,classpath:test-schema/indirect_funder_offer_supplier_quota.sql,"
                 + "classpath:db/migration/V3__operacion_pendiente.sql,"
                 + "classpath:db/migration/V4__outbox_negociador.sql"
 })

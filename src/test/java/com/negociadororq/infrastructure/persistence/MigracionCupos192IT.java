@@ -157,4 +157,39 @@ class MigracionCupos192IT {
         assertThat(COLUMNAS).allSatisfy(c -> assertThat(tipo(c)).isEqualTo("decimal(38,2)"));
         assertThat(valores()).isEqualTo(antes);
     }
+
+    private void correrManual(String archivo, String historial) throws IOException {
+        Path dir = Files.createTempDirectory("v6n");
+        Files.copy(Path.of("db/manual/" + archivo), dir.resolve("V1__manual.sql"), StandardCopyOption.REPLACE_EXISTING);
+        Flyway.configure().dataSource(ds).locations("filesystem:" + dir).table(historial).baselineOnMigrate(true)
+                .baselineVersion("0").load().migrate();
+    }
+
+    @Test
+    void v6_agrega_version_y_plantilla_y_las_rellena_con_la_plantilla_vigente_de_la_oferta_repetible() throws IOException {
+        baseAnterior();
+        jdbc.execute("CREATE TABLE indirect_funder_offer (id BIGINT PRIMARY KEY, supplier_quota_template DECIMAL(19,2),"
+                + " cupo_version BIGINT NOT NULL DEFAULT 0)");
+        jdbc.update("INSERT INTO indirect_funder_offer VALUES (1, 10000.00, 3), (2, 500.00, 0)");
+        jdbc.update("INSERT INTO indirect_funder_offer_supplier_quota (offer_id, supplier_id, quota, current_quota,"
+                + " original_quota) VALUES (1, 1, 8000.00, 100.00, 8000.00), (2, 1, 500.00, 500.00, 500.00)");
+        assertThat(Files.readString(Path.of("db/manual/V6__oferta_cupo_propagacion.sql")))
+                .isEqualTo(Files.readString(Path.of("src/main/resources/db/migration/V6__oferta_cupo_propagacion.sql")));
+
+        correrManual("V6__oferta_cupo_propagacion.sql", "historial_v6_a");
+        correrManual("V6__oferta_cupo_propagacion.sql", "historial_v6_b");
+
+        assertThat(jdbc.queryForList("SELECT offer_id, oferta_cupo_plantilla, oferta_cupo_version, original_quota"
+                + " FROM indirect_funder_offer_supplier_quota ORDER BY offer_id")).satisfiesExactly(
+                f -> {
+                    assertThat((BigDecimal) f.get("oferta_cupo_plantilla")).isEqualByComparingTo("10000.00");
+                    assertThat(f.get("oferta_cupo_version")).isEqualTo(3L);
+                    assertThat((BigDecimal) f.get("original_quota")).isEqualByComparingTo("8000.00");
+                },
+                f -> {
+                    assertThat((BigDecimal) f.get("oferta_cupo_plantilla")).isEqualByComparingTo("500.00");
+                    assertThat(f.get("oferta_cupo_version")).isEqualTo(0L);
+                });
+        assertThat(tipo("oferta_cupo_plantilla")).isEqualTo("decimal(19,2)");
+    }
 }
