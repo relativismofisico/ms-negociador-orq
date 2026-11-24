@@ -178,12 +178,28 @@ public class SecurityConfig {
         return provider;
     }
 
+    /**
+     * Fase 28d (J-06): rotación sin cortes de las cuentas de servicio.
+     *
+     * @param securityProperties cuentas de servicio
+     * @param passwordEncoder    bcrypt
+     * @return el proveedor
+     */
+    @Bean
+    public CuentaServicioAuthenticationProvider cuentaServicioAuthenticationProvider(
+            SecurityProperties securityProperties, BCryptPasswordEncoder passwordEncoder) {
+        return new CuentaServicioAuthenticationProvider(securityProperties, passwordEncoder);
+    }
+
     @Bean
     public AuthenticationManager authenticationManager(
             HttpSecurity http,
             DaoAuthenticationProvider daoAuthenticationProvider,
-            AuthenticationEventPublisher authenticationEventPublisher) throws Exception {
+            AuthenticationEventPublisher authenticationEventPublisher,
+            CuentaServicioAuthenticationProvider cuentaServicioAuthenticationProvider) throws Exception {
+        // Fase 28d (J-06): las cuentas de servicio primero (hash actual o anterior); el resto sigue al proveedor de la base
         AuthenticationManager manager = http.getSharedObject(AuthenticationManagerBuilder.class)
+            .authenticationProvider(cuentaServicioAuthenticationProvider)
             .authenticationProvider(daoAuthenticationProvider)
             .build();
         // ProviderManager.build() no conecta un AuthenticationEventPublisher por

@@ -125,6 +125,9 @@ security:
     ms-liquidador-neg:
       username: ${LIQUIDADOR_SERVICE_USERNAME}
       password: ${LIQUIDADOR_SERVICE_PASSWORD_HASH}
+      # Fase 28d (J-06): hash ANTERIOR durante una rotación (vacío = sin rotación; ver rotacion-cuentas-servicio.md)
+      password-anterior: ${LIQUIDADOR_SERVICE_PASSWORD_HASH_ANTERIOR:}
+      password-anterior-variable: LIQUIDADOR_SERVICE_PASSWORD_HASH_ANTERIOR
       roles:
         - OPERARIO
   roles:
