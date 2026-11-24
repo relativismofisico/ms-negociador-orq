@@ -86,6 +86,15 @@ public class SecurityProperties implements InitializingBean {
                 throw new IllegalStateException(prefijo
                         + ".password debe ser un hash bcrypt ($2a$, $2b$ o $2y$, coste 04-31, 60 caracteres).");
             }
+            // Fase 28d (J-06): hash ANTERIOR opcional durante una rotación (vacía = sin rotación en curso)
+            if (credential.tieneAnterior() && !HASH_BCRYPT.matcher(credential.getPasswordAnterior()).matches()) {
+                String variable = credential.getPasswordAnteriorVariable();
+                if (variable == null || variable.isBlank()) {
+                    variable = prefijo + ".password-anterior";
+                }
+                throw new IllegalStateException("La variable " + variable
+                        + " debe ser un hash bcrypt ($2a$, $2b$ o $2y$, coste 04-31, 60 caracteres) o estar vacía.");
+            }
         });
     }
 
@@ -122,6 +131,15 @@ public class SecurityProperties implements InitializingBean {
         private String username;
         private String password;
         private List<String> roles = new ArrayList<>();
+        /** Fase 28d (J-06): hash bcrypt anterior, aceptado durante una rotación (vacío: no hay rotación). */
+        private String passwordAnterior;
+        /** Fase 28d (J-06): nombre de la variable del hash anterior (para el mensaje de error y la alerta). */
+        private String passwordAnteriorVariable;
+
+        /** @return si hay una rotación en curso (hash anterior definido) */
+        public boolean tieneAnterior() {
+            return passwordAnterior != null && !passwordAnterior.isBlank();
+        }
     }
 }
 
