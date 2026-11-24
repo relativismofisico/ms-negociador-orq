@@ -35,7 +35,7 @@ db.Facturas.insertOne({
   valorNetoFactura: NumberDecimal("6650000"),
   fechaEmisionFactura: ISODate("2026-08-01T00:00:00Z"),
   fechaNegociacionFactura: ISODate("2026-08-20T00:00:00Z"),
-  fechavencimientoFactura: ISODate("2026-12-01T00:00:00Z"),
+  fechavencimientoFactura: new Date(Date.now() + 180 * 864e5) /* Fase 28d (P-21): relativa; la fija de 2026-12-01 vencía */,
   estadoNegociacion: "NEGOCIADA", estadoFirma: "SIN_CESION",
   actores: [
     { rutEmpresa: PROV, rolEmpresaFactura: "PROVEEDOR" },
@@ -67,3 +67,46 @@ db.negociacion.insertOne({
 print("seed ms-negociador-orq: negociacion=" + db.negociacion.countDocuments({ _id: NEG })
   + " factura=" + db.Facturas.countDocuments({ _id: NUM })
   + " endosos(previos borrados)=" + db.endosos.countDocuments({ negociacionId: NEG }));
+
+// Fase 28d (P-21): facturas de los Karate de A5, A5b y P12 (portado de _e2e-infra/seed/ms-negociador-orq.mongo.js).
+// A5: VENCIDA y RECHAZADA no se vuelven a negociar (vencida-no-negociable.feature); A5b: NEGOCIADA con negociación viva
+// (negociacion-viva.feature). Proveedor KARATE-PAYERD (7008), pagador KARATE-PAYERB (7006). Idempotente.
+db.Facturas.deleteMany({ _id: { $in: ["FE-KARATE-A5-VENC", "FE-KARATE-A5-RECH", "FE-KARATE-A5B-VIVA"] } });
+[["FE-KARATE-A5-VENC", "VENCIDA", "SIN_CESION"], ["FE-KARATE-A5-RECH", "RECHAZADA", "RECHAZADA"],
+ ["FE-KARATE-A5B-VIVA", "NEGOCIADA", "SIN_CESION"]].forEach(function (x) {
+  db.Facturas.insertOne({
+    _id: x[0], numeroFactura: x[0], cufe: "CUFE-" + x[0],
+    rutProveedor: "KARATE-PAYERD", nombreProveedor: "Karate Pagadora D",
+    rutPagador: "KARATE-PAYERB", nombrePagador: "Karate Pagadora B",
+    moneda: "COP",
+    valorFactura: NumberDecimal("1000000.55"), valorNetoFactura: NumberDecimal("950000.37"),
+    fechaEmisionFactura: new Date(Date.now() - 30 * 864e5),
+    fechavencimientoFactura: new Date(Date.now() + 120 * 864e5),
+    estadoNegociacion: x[1], estadoFirma: x[2], negociacionId: "NEG-KARATE-A5-ANTERIOR",
+    actores: [
+      { rutEmpresa: "KARATE-PAYERD", rolEmpresaFactura: "PROVEEDOR" },
+      { rutEmpresa: "KARATE-PAYERB", rolEmpresaFactura: "PAGADOR" }
+    ],
+    usuarioCargaFactura: "KARATE-PAYERD", empresaCargaFactura: "KARATE-PAYERD"
+  });
+});
+
+// P12 (punto 1.2): 2.000.000,20 neto contra 1.500.000,55 de cupo indirecto: SIN_CUPO_INDIRECTO, faltante 499.999,65.
+db.Facturas.deleteMany({ _id: "FE-KARATE-SIN-CUPO-IND" });
+db.Facturas.insertOne({
+  _id: "FE-KARATE-SIN-CUPO-IND", numeroFactura: "FE-KARATE-SIN-CUPO-IND", cufe: "CUFE-FE-KARATE-SIN-CUPO-IND",
+  rutProveedor: "KARATE-PAYERD", nombreProveedor: "Karate Pagadora D",
+  rutPagador: "KARATE-DESTINO", nombrePagador: "Karate Destino",
+  moneda: "COP",
+  valorFactura: NumberDecimal("2100000.00"), valorNetoFactura: NumberDecimal("2000000.20"),
+  fechaEmisionFactura: new Date(Date.now() - 5 * 864e5),
+  fechavencimientoFactura: new Date(Date.now() + 120 * 864e5),
+  estadoNegociacion: "SIN_NEGOCIAR", estadoFirma: "SIN_CESION",
+  actores: [
+    { rutEmpresa: "KARATE-PAYERD", rolEmpresaFactura: "PROVEEDOR" },
+    { rutEmpresa: "KARATE-DESTINO", rolEmpresaFactura: "PAGADOR" }
+  ],
+  usuarioCargaFactura: "KARATE-PAYERD", empresaCargaFactura: "KARATE-PAYERD"
+});
+print("seed P-21: facturas A5/A5b/P12=" + db.Facturas.countDocuments({ _id: { $in: ["FE-KARATE-A5-VENC",
+  "FE-KARATE-A5-RECH", "FE-KARATE-A5B-VIVA", "FE-KARATE-SIN-CUPO-IND"] } }));
