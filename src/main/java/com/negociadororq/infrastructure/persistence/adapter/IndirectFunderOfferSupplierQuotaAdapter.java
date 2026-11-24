@@ -53,24 +53,33 @@ public class IndirectFunderOfferSupplierQuotaAdapter implements IndirectFunderOf
         }
     }
 
+    // Fase 28d (P-19): cada escritura del cupo indirecto bloquea primero la oferta (compartido) y después la fila, en la
+    // misma transacción (la del caso de uso, o una propia si no hay).
     @Override
+    @Transactional
     public int descontarCupo(Long offerId, Long supplierId, BigDecimal valor) {
+        repository.bloquearOferta(offerId);
         return repository.descontarCupo(offerId, supplierId, valor);
     }
 
     @Override
+    @Transactional
     public int devolverCupo(Long offerId, Long supplierId, BigDecimal valor) {
+        repository.bloquearOferta(offerId);
         return repository.devolverCupo(offerId, supplierId, valor);
     }
 
     @Override
+    @Transactional
     public int recargar(Long offerId, Long supplierId) {
+        repository.bloquearOferta(offerId);
         return repository.recargar(offerId, supplierId);
     }
 
     @Override
     @Transactional
     public Propagacion propagarCupoOferta(Long offerId, long version, BigDecimal nuevo) {
+        repository.bloquearOferta(offerId);
         repository.completarPlantilla(offerId);
         int ajustadas = repository.propagarCupoOferta(offerId, version, nuevo);
         // Fase 28d (P-19): el exceso de las filas recién ajustadas queda persistido en cupo_oferta_exceso (V7)

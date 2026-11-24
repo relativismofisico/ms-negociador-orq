@@ -233,6 +233,28 @@ class NegociacionFactoringComfirmingServiceImplSpec extends Specification {
         1 * negociacionPort.save(_) >> { args -> args[0] }
     }
 
+    def "Fase 28d (P-19): deadlock o lock wait timeout traducido (CUPO_BLOQUEO_REINTENTAR) -> 409 CUPO_CONCURRENCIA_REINTENTAR, no 500"() {
+        given:
+        def fn1 = buildFn("FECI070", "PROV-001", "PAG-001")
+        userPort.findByUsername("OP-001") >> Optional.of(User.builder().ideUser(1L).build())
+        facturaPort.findAllByNumeroFactura("FECI070") >> listaDe(buildFactura("FECI070", "PROV-001", "PAG-001"))
+        procesarFacturaNegociacionService.procesarFactura(_, fn1, _, _) >> {
+            throw new com.negociadororq.application.exception.ConflictoException(
+                    "Otra operación tenía bloqueado el cupo; vuelve a intentar.", "CUPO_BLOQUEO_REINTENTAR")
+        }
+        operacionesPendientes.existeCreacionViva(_) >> false
+        facturaPort.findByCufe(_) >> Optional.empty()
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001", "PROVEEDOR", [fn1])
+
+        when:
+        service.crearNegociacion(request)
+
+        then:
+        def ex = thrown(com.negociadororq.application.exception.ConflictoException)
+        ex.codigo == "CUPO_CONCURRENCIA_REINTENTAR"
+        0 * negociacionPort.save(_)
+    }
+
     def "Fase 28d (A5b): choque del bloqueo optimista del cupo y la factura ya tiene negociación viva -> 409 FACTURA_CON_NEGOCIACION_VIVA"() {
         given:
         def fn1 = buildFn("FECI060", "PROV-001", "PAG-001")

@@ -408,7 +408,9 @@ public class ApplicationBeansConfig {
             final AvisoCupoIndirectoService avisoCupoIndirectoService) {
         return new NegociacionFactoringComfirmingServiceImpl(
                 facturaPort, negociacionPort, userPort, companyPort, companyOperationPort,
-                companySectionVerificationPort, notificacionService, procesarFacturaNegociacionService,
+                companySectionVerificationPort, notificacionService,
+                // Fase 28d (P-19): deadlock y lock wait timeout -> 409 CUPO_CONCURRENCIA_REINTENTAR, no 500
+                new com.negociadororq.infrastructure.persistence.BloqueosProcesarFactura(procesarFacturaNegociacionService),
                 facturaPatchPort, clock, auditoriaNegociacionService, transaccionMongoOutputPort,
                 marcaNegociacionOutputPort, operacionPendienteOutputPort, reversionExactaService,
                 avisoCupoIndirectoService);

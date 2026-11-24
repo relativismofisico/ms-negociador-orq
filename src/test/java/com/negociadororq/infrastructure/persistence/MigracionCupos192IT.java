@@ -192,4 +192,73 @@ class MigracionCupos192IT {
                 });
         assertThat(tipo("oferta_cupo_plantilla")).isEqualTo("decimal(19,2)");
     }
+
+    /**
+     * Fase 28d (P-19 / P-24, decisión de John): la V9 iguala los techos heredados a la plantilla vigente de la oferta con
+     * piso en lo consumido, registra el exceso, es repetible y su reversa devuelve los valores respaldados.
+     */
+    @Test
+    void v9_iguala_techos_heredados_a_la_plantilla_con_piso_en_lo_consumido_y_registra_el_exceso() throws IOException {
+        baseAnterior();
+        jdbc.execute("CREATE TABLE indirect_funder_offer (id BIGINT PRIMARY KEY, supplier_quota_template DECIMAL(19,2),"
+                + " cupo_version BIGINT NOT NULL DEFAULT 0)");
+        jdbc.update("INSERT INTO indirect_funder_offer VALUES (1, 10000.00, 2)");
+        jdbc.update("INSERT INTO indirect_funder_offer_supplier_quota (offer_id, supplier_id, quota, current_quota,"
+                + " original_quota) VALUES (1, 1, 8000.00, 8000.00, 8000.00), (1, 2, 12000.00, 1000.00, 12000.00),"
+                + " (1, 3, 10000.00, 4000.00, 10000.00)");
+        correrManual("V5__cupos_decimal_19_2.sql", "historial_v9_v5");
+        correrManual("V6__oferta_cupo_propagacion.sql", "historial_v9_v6");
+        correrManual("V7__cupo_oferta_exceso.sql", "historial_v9_v7");
+        List<Map<String, Object>> antes = valores();
+        assertThat(Files.readString(Path.of("db/manual/V9__igualar_techos_heredados.sql")))
+                .isEqualTo(Files.readString(Path.of("src/main/resources/db/migration/V9__igualar_techos_heredados.sql")));
+
+        correrManual("V9__igualar_techos_heredados.sql", "historial_v9_a");
+
+        // 1: sin consumo, sube a la plantilla; 2: consumió 11.000 > 10.000, techo 11.000 y disponible 0 (exceso 1.000);
+        // 3: ya estaba en la plantilla, sin cambio
+        assertThat(jdbc.queryForList("SELECT original_quota, current_quota, quota, oferta_cupo_plantilla,"
+                + " oferta_cupo_version FROM indirect_funder_offer_supplier_quota ORDER BY supplier_id")).satisfiesExactly(
+                f -> filaV9(f, "10000.00", "10000.00"),
+                f -> filaV9(f, "11000.00", "0.00"),
+                f -> filaV9(f, "10000.00", "4000.00"));
+        assertThat(jdbc.queryForList("SELECT supplier_id, consumido, plantilla_nueva, exceso, version FROM"
+                + " cupo_oferta_exceso")).singleElement().satisfies(e -> {
+                    assertThat(e.get("supplier_id")).isEqualTo(2L);
+                    assertThat((BigDecimal) e.get("consumido")).isEqualByComparingTo("11000.00");
+                    assertThat((BigDecimal) e.get("exceso")).isEqualByComparingTo("1000.00");
+                    assertThat(e.get("version")).isEqualTo(2L);
+                });
+
+        List<Map<String, Object>> igualadas = valores();
+        correrManual("V9__igualar_techos_heredados.sql", "historial_v9_b");
+        assertThat(valores()).isEqualTo(igualadas);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM cupo_oferta_exceso", Integer.class)).isEqualTo(1);
+
+        String reversa = Files.readString(Path.of("db/manual/V9__igualar_techos_heredados_reversa.sql")).lines()
+                .filter(l -> !l.trim().startsWith("--")).reduce("", (x, y) -> x + "\n" + y);
+        // la última corrida respaldó los valores ya igualados: la reversa deja todo como antes de esa corrida
+        for (String sentencia : reversa.split(";")) {
+            if (!sentencia.trim().isEmpty()) {
+                jdbc.execute(sentencia.trim());
+            }
+        }
+        assertThat(valores()).isEqualTo(igualadas);
+        jdbc.update("DELETE FROM cupos_respaldo_v9_negociador WHERE corrida = (SELECT m FROM (SELECT MAX(corrida) m"
+                + " FROM cupos_respaldo_v9_negociador) x)");
+        for (String sentencia : reversa.split(";")) {
+            if (!sentencia.trim().isEmpty()) {
+                jdbc.execute(sentencia.trim());
+            }
+        }
+        assertThat(valores()).isEqualTo(antes);
+    }
+
+    private static void filaV9(Map<String, Object> f, String techo, String disponible) {
+        assertThat((BigDecimal) f.get("original_quota")).isEqualByComparingTo(techo);
+        assertThat((BigDecimal) f.get("quota")).isEqualByComparingTo(techo);
+        assertThat((BigDecimal) f.get("current_quota")).isEqualByComparingTo(disponible);
+        assertThat((BigDecimal) f.get("oferta_cupo_plantilla")).isEqualByComparingTo("10000.00");
+        assertThat(f.get("oferta_cupo_version")).isEqualTo(2L);
+    }
 }

@@ -73,6 +73,16 @@ public interface IndirectFunderOfferSupplierQuotaRepository
     int recargar(@Param("offerId") Long offerId, @Param("supplierId") Long supplierId);
 
     /**
+     * Fase 28d (P-19, condición de John): orden de bloqueos único en todos los caminos del cupo indirecto: primero la
+     * OFERTA (compartido) y después la fila del proveedor. Registro toma la oferta en exclusivo al cambiar la plantilla y
+     * no toca filas de proveedor: no hay ciclo posible.
+     *
+     * @return la oferta, si existe
+     */
+    @Query(value = "SELECT id FROM indirect_funder_offer WHERE id = :offerId LOCK IN SHARE MODE", nativeQuery = true)
+    java.util.List<Long> bloquearOferta(@Param("offerId") Long offerId);
+
+    /**
      * Fase 28d (P-19): crea la fila del proveedor con la plantilla y la versión de la oferta LEÍDAS EN ESTA SENTENCIA, con
      * bloqueo compartido sobre la fila de la oferta: un cambio de plantilla en curso espera a que esta fila exista, y su
      * evento la alcanza. Techo, disponible y quota parten de la plantilla.
