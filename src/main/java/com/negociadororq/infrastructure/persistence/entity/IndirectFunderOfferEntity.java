@@ -41,7 +41,7 @@ public class IndirectFunderOfferEntity {
     @Column(name = "payer_rate")
     private BigDecimal payerRate;
 
-    @Column(name = "supplier_quota_template")
+    @Column(name = "supplier_quota_template", precision = 19, scale = 2)
     private BigDecimal supplierQuotaTemplate;
 
     @Column(name = "estado")

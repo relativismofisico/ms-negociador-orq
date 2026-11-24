@@ -40,12 +40,12 @@ public class IndirectFunderOfferSupplierQuotaEntity {
     @Column(name = "rate")
     private BigDecimal rate;
 
-    @Column(name = "quota")
+    @Column(name = "quota", precision = 19, scale = 2)
     private BigDecimal quota;
 
-    @Column(name = "current_quota")
+    @Column(name = "current_quota", precision = 19, scale = 2)
     private BigDecimal currentQuota;
 
-    @Column(name = "original_quota")
+    @Column(name = "original_quota", precision = 19, scale = 2)
     private BigDecimal originalQuota;
 }

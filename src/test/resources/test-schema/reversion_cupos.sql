@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS parametrization (
   current_quota  DECIMAL(19, 2) NOT NULL,
   version        BIGINT,
   -- Fase 28d (V13 de registro): suma de techos de operadores, techo en reducción y una fila por empresa
-  assigned_quota DECIMAL(38, 2) NOT NULL DEFAULT 0,
-  objetivo       DECIMAL(38, 2) NULL,
+  assigned_quota DECIMAL(19, 2) NOT NULL DEFAULT 0,
+  objetivo       DECIMAL(19, 2) NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uk_parametrization_company (company_id)
 );

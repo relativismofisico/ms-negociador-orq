@@ -42,16 +42,16 @@ public class FondeadorQuotaEntity {
     @Column(name = "payer_id")
     private Long payerId;
 
-    @Column(name = "payer_quota")
+    @Column(name = "payer_quota", precision = 19, scale = 2)
     private BigDecimal payerQuota;
 
-    @Column(name = "supplier_quota")
+    @Column(name = "supplier_quota", precision = 19, scale = 2)
     private BigDecimal supplierQuota;
 
-    @Column(name = "payer_current_quota")
+    @Column(name = "payer_current_quota", precision = 19, scale = 2)
     private BigDecimal payerCurrentQuota;
 
-    @Column(name = "supplier_current_quota")
+    @Column(name = "supplier_current_quota", precision = 19, scale = 2)
     private BigDecimal supplierCurrentQuota;
 
     @Column(name = "payer_rate")

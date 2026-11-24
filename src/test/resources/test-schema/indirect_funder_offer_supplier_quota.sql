@@ -7,9 +7,9 @@ CREATE TABLE IF NOT EXISTS `indirect_funder_offer_supplier_quota` (
   `offer_id` bigint NOT NULL,
   `supplier_id` bigint NOT NULL,
   `rate` decimal(38,2) DEFAULT NULL,
-  `quota` decimal(38,2) DEFAULT NULL,
-  `current_quota` decimal(38,2) DEFAULT NULL,
-  `original_quota` decimal(38,2) DEFAULT NULL,
+  `quota` decimal(19,2) DEFAULT NULL,
+  `current_quota` decimal(19,2) DEFAULT NULL,
+  `original_quota` decimal(19,2) DEFAULT NULL,
   `creado_en` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_indirect_supplier_quota` (`offer_id`,`supplier_id`)
