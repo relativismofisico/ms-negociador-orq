@@ -1,4 +1,4 @@
-@regression
+@regression @full
 Feature: Mensajes de error sin detalle interno (relativismofisico/ms-security-util#55)
 
   # El 401 lleva un mensaje único; el código conserva la categoría. El motivo concreto (texto de jjwt o de Spring
