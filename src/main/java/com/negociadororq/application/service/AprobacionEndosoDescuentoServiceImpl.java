@@ -44,6 +44,7 @@ import com.negociadororq.domain.model.Operacion;
 import com.negociadororq.domain.model.PendingOtp;
 import com.negociadororq.domain.model.ReferenciaFactura;
 import com.negociadororq.domain.model.TipoOperacionPendiente;
+import com.negociadororq.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.springframework.transaction.annotation.Transactional;
@@ -108,6 +109,8 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         }
 
         AprobacionRequest domainRequest = mapToDomainRequest(request, rol);
+        // Fase 28d (P-09): un operador desactivado no firma (su JWT puede no haber vencido)
+        exigirOperadorActivo(request.getRutOperador());
 
         // Fase 28d (firma única): una firma por empresa. Si la empresa ya aprobó estas facturas, u otro operador suyo
         // tiene la firma en curso o ya firmó, no se pide otro OTP.
@@ -123,6 +126,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 .rutEmpresa(request.getRutEmpresa())
                 .rutOperador(request.getRutOperador())
                 .rolActor(rol)
+                .reemplazaA(reemplazaAInactivos(request))
                 .request(domainRequest)
                 // Si este método corre, el CompanyOwnershipGuard del controller ya
                 // pasó (es la única vía de entrada): marca de trazabilidad que se
@@ -705,5 +709,55 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
      */
     static String idEventoLiquidacion(String idNegociacion, String cufe) {
         return "liquidacion.solicitada|" + idNegociacion + "|" + cufe;
+    }
+
+    /** Mensaje para un operador desactivado (el mismo de ms-security-util). */
+    static final String MENSAJE_OPERADOR_DESACTIVADO = "Tu usuario fue desactivado. Contacta al administrador de tu empresa.";
+
+    /**
+     * Fase 28d (P-09): rechaza a un operador desactivado.
+     *
+     * @param rutOperador username del operador
+     */
+    void exigirOperadorActivo(String rutOperador) {
+        if (estaInactivo(rutOperador)) {
+            throw new com.negociadororq.application.exception.AccionNoPermitidaException(MENSAJE_OPERADOR_DESACTIVADO,
+                    "OPERADOR_DESACTIVADO");
+        }
+    }
+
+    /**
+     * Fase 28d (P-09, prompt 2.5): si otro operador de la empresa tenía la firma pedida y está desactivado, la firma la
+     * completa este operador (a su nombre) y queda la traza del reemplazo.
+     */
+    private String reemplazaAInactivos(AprobacionRequestDto request) {
+        java.util.List<String> otros = pendingOtpPort.operadoresConFirmaPendiente(request.getIdNegociacion(),
+                request.getRutEmpresa(), request.getRutOperador());
+        if (otros == null) {
+            return null;
+        }
+        java.util.List<String> inactivos = otros.stream().filter(this::estaInactivo).sorted().toList();
+        if (inactivos.isEmpty()) {
+            return null;
+        }
+        log.info(String.format("[FIRMA-REEMPLAZA-INACTIVO] negociación %s: %s firma en lugar de %s (desactivado)",
+                request.getIdNegociacion(), request.getRutOperador(), String.join(",", inactivos)));
+        return String.join(",", inactivos);
+    }
+
+    @Override
+    public long contarEsperandoFirma(String rutEmpresa) {
+        return companyPort.findByNit(rutEmpresa)
+                .map(c -> pendingOtpPort.contarEsperandoFirmaDe(rutEmpresa, userPort.usernamesInactivos(c.getIdeCompany())))
+                .orElse(0L);
+    }
+
+    /** Fase 28d (P-09): el usuario existe y está desactivado (statesusers 2). */
+    private boolean estaInactivo(String username) {
+        if (username == null) {
+            return false;
+        }
+        java.util.Optional<User> usuario = userPort.findByUsername(username);
+        return usuario != null && usuario.map(User::esInactivo).orElse(false);
     }
 }

@@ -34,6 +34,7 @@ public class ConfirmacionOtpServiceImpl implements ConfirmacionOtpService {
     private final PendingOtpOutputPort pendingOtpPort;
     private final ValidadorOtpPendiente validador;
     private final FirmaOtpService firma;
+    private final com.negociadororq.application.port.output.UserOutputPort userPort;
 
     /**
      * @param pendingOtpPort pendientes OTP
@@ -42,13 +43,33 @@ public class ConfirmacionOtpServiceImpl implements ConfirmacionOtpService {
      */
     public ConfirmacionOtpServiceImpl(final PendingOtpOutputPort pendingOtpPort, final ValidadorOtpPendiente validador,
             final FirmaOtpService firma) {
+        this(pendingOtpPort, validador, firma, null);
+    }
+
+    /**
+     * Fase 28d (P-09): con los usuarios, para rechazar a un operador desactivado.
+     *
+     * @param pendingOtpPort pendientes OTP
+     * @param validador      validación por HTTP con la clave de idempotencia
+     * @param firma          firma con la respuesta de security
+     * @param userPort       usuarios (null: sin chequeo de estado)
+     */
+    public ConfirmacionOtpServiceImpl(final PendingOtpOutputPort pendingOtpPort, final ValidadorOtpPendiente validador,
+            final FirmaOtpService firma, final com.negociadororq.application.port.output.UserOutputPort userPort) {
         this.pendingOtpPort = pendingOtpPort;
         this.validador = validador;
         this.firma = firma;
+        this.userPort = userPort;
     }
 
     @Override
     public void confirmarOtp(final ConfirmacionOtpRequestDto request) {
+        // Fase 28d (P-09): un operador desactivado no confirma su OTP (su JWT puede no haber vencido)
+        if (userPort != null && request.getRutOperador() != null && userPort.findByUsername(request.getRutOperador())
+                .map(com.negociadororq.domain.model.User::esInactivo).orElse(false)) {
+            throw new com.negociadororq.application.exception.AccionNoPermitidaException(
+                    AprobacionEndosoDescuentoServiceImpl.MENSAJE_OPERADOR_DESACTIVADO, "OPERADOR_DESACTIVADO");
+        }
         final PendingOtp pending = pendingOtpPort.findByClave(request.getIdNegociacion(), request.getRutEmpresa(),
                         request.getRutOperador())
                 .filter(p -> EstadoFirmaOtp.esperandoCodigo(p.getEstado()))

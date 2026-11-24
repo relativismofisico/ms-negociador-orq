@@ -70,4 +70,25 @@ public interface PendingOtpOutputPort {
      * @return {@code true} si avanzó; {@code false} si otro intento ya lo había avanzado
      */
     boolean registrarRespuestaOtp(String id, int vistas);
+
+    /**
+     * Fase 28d (P-09): operadores de la empresa (distintos de {@code rutOperador}) con la firma de la negociación pedida y
+     * todavía sin validar.
+     *
+     * @param idNegociacion negociación
+     * @param rutEmpresa    empresa
+     * @param rutOperador   operador que pide ahora (excluido)
+     * @return sus usernames
+     */
+    java.util.List<String> operadoresConFirmaPendiente(String idNegociacion, String rutEmpresa, String rutOperador);
+
+    /**
+     * Fase 28d (P-09): negociaciones que esperan la firma de la empresa porque la pidió alguno de estos operadores (los
+     * inactivos) y nadie de la empresa la firmó todavía.
+     *
+     * @param rutEmpresa empresa
+     * @param operadores usernames
+     * @return cuántas
+     */
+    long contarEsperandoFirmaDe(String rutEmpresa, java.util.Collection<String> operadores);
 }

@@ -24,5 +24,13 @@ public class User {
     private Long rolUserIde;
     private Long companyIde;
     private Long stateUserId;
+
+    /** Fase 28d (P-09): estado Inactivo (statesusers 2, lo fija ms-security-util al desactivar). */
+    public static final long ESTADO_INACTIVO = 2L;
+
+    /** @return si el usuario está desactivado */
+    public boolean esInactivo() {
+        return stateUserId != null && stateUserId == ESTADO_INACTIVO;
+    }
     private Long personIde;
 }

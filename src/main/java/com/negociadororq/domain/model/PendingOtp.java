@@ -52,6 +52,12 @@ public class PendingOtp {
     private String otpId;
     /** Fase 28c: instante de la validación en security. */
     private Instant fechaValidacion;
+
+    /**
+     * Fase 28d (P-09): operador(es) INACTIVO(s) de la misma empresa que tenían la firma pendiente cuando este operador la
+     * pidió (la firma queda a nombre de este operador; esta es la traza del reemplazo). Null si no reemplaza a nadie.
+     */
+    private String reemplazaA;
     /** Fase 28c: intentos de firma fallidos por causas transitorias. */
     private Integer intentosFirma;
     /** Fase 28c: último error de firma (clase y mensaje, sin datos del OTP). */

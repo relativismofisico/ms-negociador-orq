@@ -23,6 +23,11 @@ public class UserAdapter implements UserOutputPort {
         return repository.findByUsername(username).map(this::toDomain);
     }
 
+    @Override
+    public java.util.List<String> usernamesInactivos(Long companyId) {
+        return repository.usernamesPorEmpresaYEstado(companyId, com.negociadororq.domain.model.User.ESTADO_INACTIVO);
+    }
+
     private User toDomain(UserEntity entity) {
         return User.builder()
                 .ideUser(entity.getIdeUser())

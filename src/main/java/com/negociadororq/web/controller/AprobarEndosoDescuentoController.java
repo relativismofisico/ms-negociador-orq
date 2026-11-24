@@ -118,4 +118,21 @@ public class AprobarEndosoDescuentoController {
         confirmacionOtp.confirmarOtp(request);
         return ResponseEntity.accepted().body("Validando OTP...");
     }
+
+    /**
+     * Fase 28d (P-09): cuántas negociaciones esperan la firma de la empresa porque las había pedido un operador hoy
+     * desactivado (cualquier operador activo de la empresa con esa operación puede firmarlas). Para el aviso del front.
+     *
+     * @param rutEmpresa NIT de la empresa (la del llamador)
+     * @return {@code {"rutEmpresa": ..., "esperandoFirma": n}}
+     */
+    @PreAuthorize("@sec.tieneRol(authentication, 'otp')")
+    @org.springframework.web.bind.annotation.GetMapping("/empresas/{rutEmpresa}/esperando-firma")
+    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> esperandoFirma(
+            @org.springframework.web.bind.annotation.PathVariable String rutEmpresa,
+            org.springframework.security.core.Authentication authentication) {
+        companyOwnership.exigirActorEsLlamador(rutEmpresa, authentication.getName());
+        return org.springframework.http.ResponseEntity.ok(java.util.Map.of("rutEmpresa", rutEmpresa,
+                "esperandoFirma", service.contarEsperandoFirma(rutEmpresa)));
+    }
 }

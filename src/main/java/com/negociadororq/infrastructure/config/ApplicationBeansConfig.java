@@ -557,7 +557,10 @@ public class ApplicationBeansConfig {
      */
     @Bean
     public ConfirmacionOtpService confirmacionOtpService(final PendingOtpOutputPort pendingOtpOutputPort,
-            final ValidadorOtpPendiente validadorOtpPendiente, final FirmaOtpService firmaOtpService) {
-        return new ConfirmacionOtpServiceImpl(pendingOtpOutputPort, validadorOtpPendiente, firmaOtpService);
+            final ValidadorOtpPendiente validadorOtpPendiente, final FirmaOtpService firmaOtpService,
+            final UserOutputPort userOutputPort) {
+        // Fase 28d (P-09): con los usuarios, para rechazar a un operador desactivado
+        return new ConfirmacionOtpServiceImpl(pendingOtpOutputPort, validadorOtpPendiente, firmaOtpService,
+                userOutputPort);
     }
 }
