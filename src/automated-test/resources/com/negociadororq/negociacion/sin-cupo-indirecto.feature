@@ -34,12 +34,14 @@ Feature: Fase 28d (punto 1.2, decisión de John) — SIN_CUPO_INDIRECTO con disp
     * def r = response.rechazos[0]
     And match r.numeroFactura == 'FE-KARATE-SIN-CUPO-IND'
     And match r.codigo == 'SIN_CUPO_INDIRECTO'
-    # montos como texto para comparar el BigDecimal exacto (sin pasar por double)
-    And match (r.cupoIndirecto.disponible + '') == '1500000.55'
-    And match (r.cupoIndirecto.requerido + '') == '2000000.20'
-    And match (r.cupoIndirecto.faltante + '') == '499999.65'
-    And match (r.cupoIndirecto.sumaPeticion + '') == '2000000.20'
-    And match (r.cupoIndirecto.disponibleInicial + '') == '1500000.55'
+    # Montos exactos al centavo con BigDecimal.compareTo: el cuerpo de la petición pasa por un número de JavaScript, que
+    # envía 2000000.20 como 2000000.2 (mismo valor, otra escala); comparar el texto fallaba aunque el monto es el exacto.
+    * def igual = function(a, b){ return new java.math.BigDecimal(a + '').compareTo(new java.math.BigDecimal(b)) == 0 }
+    * assert igual(r.cupoIndirecto.disponible, '1500000.55')
+    * assert igual(r.cupoIndirecto.requerido, '2000000.20')
+    * assert igual(r.cupoIndirecto.faltante, '499999.65')
+    * assert igual(r.cupoIndirecto.sumaPeticion, '2000000.20')
+    * assert igual(r.cupoIndirecto.disponibleInicial, '1500000.55')
     And match r.cupoIndirecto.fondeador == 'Karate Fondeador'
     And match r.cupoIndirecto.pagador == 'Karate Destino'
     And match r.mensaje == 'La factura FE-KARATE-SIN-CUPO-IND por $2.000.000,20 no se incluyó: el cupo de factoring que Karate Fondeador ofrece a los proveedores de Karate Destino tiene $1.500.000,55 disponibles para ti; faltan $499.999,65. Puedes pedirle a Karate Fondeador que recargue tu cupo.'
