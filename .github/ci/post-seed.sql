@@ -83,3 +83,32 @@ SELECT b'1', 'ENDOSO_DOCUMENTO',
   '<!DOCTYPE html><html><body><h1>{{tituloDocumento}}</h1><p>{{nombreProveedor}} ({{rutProveedor}}) {{verboOperacion}} a favor de {{nombreFondeador}} ({{rutFondeador}}).</p><table>{{#facturas}}<tr><td>{{numeroFactura}}</td><td>{{valorFactura}}</td></tr>{{/facturas}}</table><p>Total facturas: {{cantidadFacturas}} — {{fechaOperacion}}</p><p>{{clausulaResponsabilidad}}</p><p>{{nombreFirmante}} {{tipoDocumentoFirmante}} {{numeroDocumentoFirmante}}</p></body></html>'
 FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM messages_templates WHERE template_name = 'ENDOSO_DOCUMENTO');
+
+-- ── Fase 28d (P-21): datos de los Karate de A5, A5b y P12 ─────────────────────
+-- Portado de _e2e-infra/seed/ms-negociador-orq.sql. Lo usan negociacion/vencida-no-negociable.feature (A5),
+-- negociacion/negociacion-viva.feature (A5b), negociacion/sin-cupo-indirecto.feature y cupoindirecto/centavos.feature (P12).
+-- validarEmpresaHabilitada exige la operación en la empresa que negocia (7008) y en su contraparte (7006 o 7004);
+-- validarTesoreriaVerificadaSiCalifica exige la tesorería verificada de 7008, 7006 y 7004.
+INSERT IGNORE INTO company_operation (ide_company_operation, enabled, operation_type, company_id, selected) VALUES
+  (7406, b'1', 'FACTORING',  7006, b'1'),
+  (7407, b'1', 'CONFIRMING', 7006, b'1'),
+  (7408, b'1', 'FACTORING',  7008, b'1'),
+  (7409, b'1', 'CONFIRMING', 7008, b'1');
+INSERT IGNORE INTO company_section_verification (company_id, section_key, verified_by, verified_at) VALUES
+  (7004, 'POLITICAS_PAGO_TESORERIA', 'test-admin', NOW(6)),
+  (7004, 'CUENTAS_BANCARIAS',        'test-admin', NOW(6)),
+  (7006, 'POLITICAS_PAGO_TESORERIA', 'test-admin', NOW(6)),
+  (7006, 'CUENTAS_BANCARIAS',        'test-admin', NOW(6)),
+  (7008, 'POLITICAS_PAGO_TESORERIA', 'test-admin', NOW(6)),
+  (7008, 'CUENTAS_BANCARIAS',        'test-admin', NOW(6));
+-- Operario del proveedor 7008 con cupo de operador (ProcesarFacturaNegociacionServiceImpl exige cupo >= valor).
+INSERT IGNORE INTO user (ide_user, username, password, create_time, company_ide, person_IDE, rol_user_IDE, state_user_id) VALUES
+  (7290,'op-e2e-prov','no-auth',NOW(6),7008,NULL,3,1);
+INSERT IGNORE INTO user_quota (id, user_id, quota, current_quota) VALUES
+  (7290, 7290, 100000000, 100000000);
+-- Cupo indirecto con centavos del proveedor 7008 en la oferta 7360 (7003 -> 7004): techo 1.000.000,00 = plantilla de la
+-- oferta (como lo deja la V9) y 500.000,55 disponibles.
+-- No toca (7360, 7006): recargar-supplier-quota.feature prueba el 404 contra esa combinación.
+DELETE FROM indirect_funder_offer_supplier_quota WHERE offer_id = 7360 AND supplier_id = 7008;
+INSERT INTO indirect_funder_offer_supplier_quota (offer_id, supplier_id, rate, quota, current_quota, original_quota)
+VALUES (7360, 7008, 2.50, 1000000.00, 500000.55, 1000000.00);

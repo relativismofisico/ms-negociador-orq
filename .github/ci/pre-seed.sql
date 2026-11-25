@@ -158,13 +158,16 @@ INSERT IGNORE INTO company (ide_company, name_company, nit, phone_company, email
   (7003,'Karate Fondeador','KARATE-FUNDER','3000000010','f@k.test',0),
   (7004,'Karate Destino','KARATE-DESTINO','3000000011','d@k.test',0),
   (7005,'Karate Ajena','KARATE-AJENA','3000000012','x@k.test',0),
-  (7006,'Karate Pagadora B','KARATE-PAYERB','3000000013','pb@k.test',0);
+  (7006,'Karate Pagadora B','KARATE-PAYERB','3000000013','pb@k.test',0),
+  -- Fase 28d (P-21): proveedor de los Karate de A5, A5b y P12 (portado de _e2e-infra/seed/ms-registroempresa-neg.sql)
+  (7008,'Karate Pagadora D','KARATE-PAYERD','3000000015','pd@k.test',0);
 
 INSERT IGNORE INTO user (ide_user, username, password, create_time, company_ide, person_IDE, rol_user_IDE, state_user_id) VALUES
   (7203,'KARATE-FUNDER','no-auth',NOW(6),7003,NULL,2,1),
   (7204,'KARATE-DESTINO','no-auth',NOW(6),7004,NULL,2,1),
   (7205,'KARATE-AJENA','no-auth',NOW(6),7005,NULL,2,1),
-  (7206,'KARATE-PAYERB','no-auth',NOW(6),7006,NULL,2,1);
+  (7206,'KARATE-PAYERB','no-auth',NOW(6),7006,NULL,2,1),
+  (7208,'KARATE-PAYERD','no-auth',NOW(6),7008,NULL,2,1);
 
 INSERT IGNORE INTO person (IDE, firts_name, firts_lastname, phone, email, document_number) VALUES
   (8000,'Asesor','Karate','3009000000','asesor@k.test','DOC-ASESOR-8000');
