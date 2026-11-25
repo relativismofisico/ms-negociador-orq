@@ -89,8 +89,18 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                         "No existe operador con username " + request.getRutOperador(), "OPERADOR_NO_ENCONTRADO"));
 
         validarClaseSegunTipo(request);
-        validarOperacionHabilitada(request);
-        validarUnicaContraparte(request);
+
+        // Fase 28d: las contrapartes salen de la BASE (factura por factura), no de lo que manda el cliente, y se
+        // validan antes de procesar cualquier factura (antes de reservar cupos).
+        Map<String, Factura> facturasBd = new HashMap<>();
+        for (FacturaNegociada fn : request.getFacturas()) {
+            facturasBd.put(fn.getNumeroFactura(), facturaPort.findByNumeroFactura(fn.getNumeroFactura())
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
+                            "Factura no encontrada: " + fn.getNumeroFactura(), "FACTURA_NO_ENCONTRADA")));
+        }
+        Set<String> contrapartes = contrapartesDesdeBd(request, facturasBd);
+        validarOperacionHabilitada(request, contrapartes);
+        validarUnicaContraparte(request, contrapartes);
 
         /* ======================================================
            1. Agrupar facturas por pagador SOLO en CONFIRMING
@@ -99,9 +109,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
 
         for (FacturaNegociada fn : request.getFacturas()) {
 
-            Factura factura = facturaPort.findByNumeroFactura(fn.getNumeroFactura())
-                    .orElseThrow(() -> new RecursoNoEncontradoException(
-                            "Factura no encontrada: " + fn.getNumeroFactura(), "FACTURA_NO_ENCONTRADA"));
+            Factura factura = facturasBd.get(fn.getNumeroFactura());
 
             facturasPorPagador
                     .computeIfAbsent(factura.getRutPagador(), k -> new ArrayList<>())
@@ -238,7 +246,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
      * factura a factura y cuyas excepciones se absorben como rechazo individual), esta se lanza
      * antes del loop para que el fallo sea un error HTTP real, no una factura rechazada silenciosa.
      */
-    private void validarOperacionHabilitada(NegociacionRequestDto request) {
+    private void validarOperacionHabilitada(NegociacionRequestDto request, Set<String> contrapartes) {
         String tipoOperacion = null;
         if (request.getTipoOperacion() != null) {
             tipoOperacion = request.getTipoOperacion().getTipo();
@@ -250,17 +258,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         String tipoOperacionUpper = tipoOperacion.toUpperCase(Locale.ROOT);
 
         validarEmpresaHabilitada(request.getRutEmpresa(), tipoOperacionUpper);
-
-        boolean esFactoring = "FACTORING".equals(tipoOperacionUpper);
-        Set<String> contrapartes = request.getFacturas().stream()
-                .map(fn -> {
-                    if (esFactoring) {
-                        return fn.getRutPagador();
-                    }
-                    return fn.getRutProveedor();
-                })
-                .filter(rut -> rut != null && !rut.isBlank())
-                .collect(Collectors.toSet());
 
         for (String rutContraparte : contrapartes) {
             validarEmpresaHabilitada(rutContraparte, tipoOperacionUpper);
@@ -274,7 +271,7 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
      * a nivel de negociación reflejando solo una de ellas): si el usuario quiere negociar con
      * varias, debe hacerlo en solicitudes separadas, una por contraparte.
      */
-    private void validarUnicaContraparte(NegociacionRequestDto request) {
+    private void validarUnicaContraparte(NegociacionRequestDto request, Set<String> contrapartes) {
         String tipoOperacion = null;
         if (request.getTipoOperacion() != null) {
             tipoOperacion = request.getTipoOperacion().getTipo();
@@ -284,15 +281,6 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
         }
 
         boolean esFactoring = "FACTORING".equalsIgnoreCase(tipoOperacion);
-        Set<String> contrapartes = request.getFacturas().stream()
-                .map(fn -> {
-                    if (esFactoring) {
-                        return fn.getRutPagador();
-                    }
-                    return fn.getRutProveedor();
-                })
-                .filter(rut -> rut != null && !rut.isBlank())
-                .collect(Collectors.toSet());
 
         if (contrapartes.size() > 1) {
             String tipoContraparte;
@@ -308,6 +296,39 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
                             + " por separado.",
                     "MULTIPLES_CONTRAPARTES");
         }
+    }
+
+    /**
+     * Fase 28d: las contrapartes de la solicitud (pagador en FACTORING, proveedor en CONFIRMING) tal como están en la
+     * base, factura por factura. Una factura sin esa contraparte en la base es un error de la solicitud entera.
+     */
+    private static Set<String> contrapartesDesdeBd(NegociacionRequestDto request, Map<String, Factura> facturasBd) {
+        if (request.getTipoOperacion() == null || request.getTipoOperacion().getTipo() == null) {
+            return Set.of();
+        }
+        boolean esFactoring = "FACTORING".equalsIgnoreCase(request.getTipoOperacion().getTipo());
+        Set<String> contrapartes = new java.util.LinkedHashSet<>();
+        String tipoContraparte;
+        if (esFactoring) {
+            tipoContraparte = "pagador";
+        } else {
+            tipoContraparte = "proveedor";
+        }
+        for (FacturaNegociada fn : request.getFacturas()) {
+            Factura factura = facturasBd.get(fn.getNumeroFactura());
+            String rut;
+            if (esFactoring) {
+                rut = factura.getRutPagador();
+            } else {
+                rut = factura.getRutProveedor();
+            }
+            if (rut == null || rut.isBlank()) {
+                throw new PeticionInvalidaException("La factura " + fn.getNumeroFactura() + " no tiene "
+                        + tipoContraparte + " registrado.", "FACTURA_SIN_CONTRAPARTE");
+            }
+            contrapartes.add(rut);
+        }
+        return contrapartes;
     }
 
     private void validarEmpresaHabilitada(String rutEmpresa, String tipoOperacionUpper) {
