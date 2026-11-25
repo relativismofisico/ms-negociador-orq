@@ -131,7 +131,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         "spring.jpa.hibernate.ddl-auto=none",
         "spring.sql.init.mode=always",
         "spring.sql.init.schema-locations=classpath:test-schema/reversion_cupos.sql,"
-                + "classpath:test-schema/indirect_funder_offer_supplier_quota.sql,"
+                + "classpath:test-schema/indirect_funder_offer.sql,classpath:test-schema/indirect_funder_offer_supplier_quota.sql,"
                 + "classpath:db/migration/V3__operacion_pendiente.sql,"
                 + "classpath:db/migration/V4__outbox_negociador.sql"
 })
@@ -566,7 +566,7 @@ class ConservacionCuposIT {
                 + " WHERE supplier_id IS NOT NULL");
         jdbc.update("UPDATE funder SET payer_quota = 99000000.00, payer_current_quota = 90000000.44"
                 + " WHERE payer_id IS NOT NULL");
-        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET quota = 99000000.00, current_quota = 90000000.55");
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET quota = 99000000.00, current_quota = 90000000.55, original_quota = 99000000.00");
         try (Mongo m = new Mongo()) {
             for (int i = 0; i < vueltas; i++) {
                 Map<String, BigDecimal> inicial = cupos();
@@ -789,7 +789,7 @@ class ConservacionCuposIT {
         // sin cupo suficiente no descuenta; la devolución limitada a cero no deja negativos
         jdbc.update("UPDATE user_quota SET current_quota = 5.00");
         assertThatThrownBy(() -> tx.executeWithoutResult(s -> operador.descontarCupo(USUARIO, new BigDecimal("5.01"))))
-                .hasMessageContaining("insuficiente");
+                .hasMessageContaining("sin cupo");
         tx.executeWithoutResult(s -> operador.revertirCupoUsuario(USUARIO, new BigDecimal("-9.00")));
         assertThat(cupos().get("operador")).isEqualByComparingTo("0.00");
     }
@@ -966,7 +966,7 @@ class ConservacionCuposIT {
                 + " WHERE supplier_id IS NOT NULL");
         jdbc.update("UPDATE funder SET payer_quota = 99000000.00, payer_current_quota = 90000000.44"
                 + " WHERE payer_id IS NOT NULL");
-        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET quota = 99000000.00, current_quota = 90000000.55");
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET quota = 99000000.00, current_quota = 90000000.55, original_quota = 99000000.00");
         try (Mongo m = new Mongo()) {
             m.plantilla.createCollection("negociacion");
             m.plantilla.createCollection("negociacion_marca");
@@ -1173,6 +1173,266 @@ class ConservacionCuposIT {
         for (Map.Entry<String, BigDecimal> entrada : esperado.entrySet()) {
             assertThat(real.get(entrada.getKey())).as(entrada.getKey()).isEqualByComparingTo(entrada.getValue());
         }
+    }
+
+    // ─── Fase 28d (modelo de cupos de John, bloque 3) ─────────────────────────────────────────────────────────────
+
+    private BigDecimal valor(String sql, Object... args) {
+        return jdbc.queryForObject(sql, BigDecimal.class, args);
+    }
+
+    private BigDecimal indirectoTecho() {
+        return valor("SELECT original_quota FROM indirect_funder_offer_supplier_quota WHERE offer_id = ? AND"
+                + " supplier_id = ?", OFERTA, EMPRESA_PROV_IND);
+    }
+
+    @Test
+    void p20_la_recarga_con_lectura_y_guardado_pierde_lo_escrito_en_medio_y_la_sentencia_no() {
+        // Reproducción (P-20): la recarga anterior leía la fila, ponía current = original y guardaba la fila ENTERA con
+        // JPA. Lo que otro escribiera entre la lectura y el guardado se perdía. Aquí, en medio, otra transacción sube el
+        // techo (lo que hará P-19 al ampliar la oferta) y descuenta una factura.
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET quota = 9000.00, current_quota = 5000.00,"
+                + " original_quota = 9000.00 WHERE offer_id = ? AND supplier_id = ?", OFERTA, EMPRESA_PROV_IND);
+        com.negociadororq.domain.model.IndirectFunderOfferSupplierQuota leida =
+                indirectoPort.find(OFERTA, EMPRESA_PROV_IND).orElseThrow();
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET original_quota = 9500.00 WHERE offer_id = ?"
+                + " AND supplier_id = ?", OFERTA, EMPRESA_PROV_IND);
+        assertThat(indirectoPort.descontarCupo(OFERTA, EMPRESA_PROV_IND, new BigDecimal("100.00"))).isEqualTo(1);
+        leida.setCurrentQuota(leida.getOriginalQuota());
+        indirectoPort.save(leida);
+        // el techo nuevo (9500.00) se perdió: el guardado escribió el 9000.00 que había leído
+        assertThat(indirectoTecho()).isEqualByComparingTo("9000.00");
+
+        // Con la sentencia atómica (corrección): el techo concurrente se conserva y el disponible vuelve a ESE techo
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET current_quota = 5000.00, original_quota = 9000.00"
+                + " WHERE offer_id = ? AND supplier_id = ?", OFERTA, EMPRESA_PROV_IND);
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET original_quota = 9500.00 WHERE offer_id = ?"
+                + " AND supplier_id = ?", OFERTA, EMPRESA_PROV_IND);
+        assertThat(indirectoPort.descontarCupo(OFERTA, EMPRESA_PROV_IND, new BigDecimal("100.00"))).isEqualTo(1);
+        assertThat(indirectoPort.recargar(OFERTA, EMPRESA_PROV_IND)).isEqualTo(1);
+        assertThat(indirectoTecho()).isEqualByComparingTo("9500.00");
+        assertThat(cupos().get("indirecto")).isEqualByComparingTo("9500.00");
+    }
+
+    @Test
+    void p20_recarga_concurrente_con_79_descuentos_nunca_deja_negativos_ni_supera_el_techo() throws Exception {
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET quota = 1000.00, current_quota = 1000.00,"
+                + " original_quota = 1000.00 WHERE offer_id = ? AND supplier_id = ?", OFERTA, EMPRESA_PROV_IND);
+        CountDownLatch listos = new CountDownLatch(80);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+        List<Thread> hilos = new ArrayList<>();
+        for (int i = 0; i < 79; i++) {
+            hilos.add(hilo(() -> indirectoPort.descontarCupo(OFERTA, EMPRESA_PROV_IND, new BigDecimal("30.01")),
+                    listos, largada, fallos));
+        }
+        hilos.add(hilo(() -> indirectoPort.recargar(OFERTA, EMPRESA_PROV_IND), listos, largada, fallos));
+        listos.await();
+        largada.countDown();
+        for (Thread t : hilos) {
+            t.join();
+        }
+        assertThat(fallos).isEmpty();
+        assertThat(cupos().get("indirecto")).isBetween(BigDecimal.ZERO, new BigDecimal("1000.00"));
+    }
+
+    @Test
+    void modelo_cupos_caso_de_john_10000_negocia_4000_recarga_revierte_queda_en_10000_y_no_14000() {
+        // Indirecto
+        jdbc.update("UPDATE indirect_funder_offer_supplier_quota SET quota = 10000.00, current_quota = 10000.00,"
+                + " original_quota = 10000.00 WHERE offer_id = ? AND supplier_id = ?", OFERTA, EMPRESA_PROV_IND);
+        assertThat(indirectoPort.descontarCupo(OFERTA, EMPRESA_PROV_IND, new BigDecimal("4000.00"))).isEqualTo(1);
+        assertThat(indirectoPort.recargar(OFERTA, EMPRESA_PROV_IND)).isEqualTo(1);
+        assertThat(indirectoPort.devolverCupo(OFERTA, EMPRESA_PROV_IND, new BigDecimal("4000.00"))).isEqualTo(1);
+        assertThat(cupos().get("indirecto")).isEqualByComparingTo("10000.00");
+        // Operador (la recarga de registro pone current_quota = quota)
+        jdbc.update("UPDATE user_quota SET quota = 10000.00, current_quota = 10000.00 WHERE user_id = ?", USUARIO);
+        tx.executeWithoutResult(s -> operador.descontarCupo(USUARIO, new BigDecimal("4000.00")));
+        jdbc.update("UPDATE user_quota SET current_quota = quota WHERE user_id = ?", USUARIO);
+        tx.executeWithoutResult(s -> operador.revertirCupoUsuario(USUARIO, new BigDecimal("4000.00")));
+        assertThat(cupos().get("operador")).isEqualByComparingTo("10000.00");
+        // Empresa
+        jdbc.update("UPDATE parametrization SET quota = 10000.00, current_quota = 10000.00 WHERE company_id = ?",
+                EMPRESA_PROV);
+        tx.executeWithoutResult(s -> assertThat(empresaQuotaPort.descontar(EMPRESA_PROV, new BigDecimal("4000.00")))
+                .isTrue());
+        jdbc.update("UPDATE parametrization SET current_quota = quota WHERE company_id = ?", EMPRESA_PROV);
+        tx.executeWithoutResult(s -> operador.revertirCupoEmpresaEnTransaccionActual(EMPRESA_PROV,
+                new BigDecimal("4000.00")));
+        assertThat(cupos().get("empresa-" + EMPRESA_PROV)).isEqualByComparingTo("10000.00");
+    }
+
+    @Test
+    void modelo_cupos_ejemplo_de_john_empresa_10000_operador_1000_negocia_1000_queda_0_y_9000() {
+        jdbc.update("UPDATE user_quota SET quota = 1000.00, current_quota = 1000.00 WHERE user_id = ?", USUARIO);
+        jdbc.update("UPDATE parametrization SET quota = 10000.00, current_quota = 10000.00 WHERE company_id = ?",
+                EMPRESA_PROV);
+        // lo mismo que hace procesarFactura, en la misma transacción
+        tx.executeWithoutResult(s -> {
+            operador.descontarCupo(USUARIO, new BigDecimal("1000.00"));
+            assertThat(empresaQuotaPort.descontar(EMPRESA_PROV, new BigDecimal("1000.00"))).isTrue();
+        });
+        assertThat(cupos().get("operador")).isEqualByComparingTo("0.00");
+        assertThat(cupos().get("empresa-" + EMPRESA_PROV)).isEqualByComparingTo("9000.00");
+        // por el servicio real (FACTORING directo, neto de la factura de prueba): operador y empresa bajan una vez cada uno
+        jdbc.update("UPDATE user_quota SET quota = 9000000.00, current_quota = 1000000.00 WHERE user_id = ?", USUARIO);
+        jdbc.update("UPDATE parametrization SET quota = 10000000.00, current_quota = 10000000.00 WHERE company_id = ?",
+                EMPRESA_PROV);
+        crear(Modo.FACTORING_DIRECTO);
+        assertThat(cupos().get("operador")).isEqualByComparingTo(new BigDecimal("1000000.00").subtract(NETO));
+        assertThat(cupos().get("empresa-" + EMPRESA_PROV)).isEqualByComparingTo(new BigDecimal("10000000.00")
+                .subtract(NETO));
+    }
+
+    @Test
+    void modelo_cupos_si_la_empresa_o_el_operador_no_alcanzan_no_se_descuenta_ninguno_y_el_codigo_lo_dice() {
+        jdbc.update("UPDATE user_quota SET quota = 9000000.00, current_quota = 2000000.00 WHERE user_id = ?", USUARIO);
+        jdbc.update("UPDATE parametrization SET quota = 10000000.00, current_quota = 100.00 WHERE company_id = ?",
+                EMPRESA_PROV);
+        Map<String, BigDecimal> antes = cupos();
+        assertThatThrownBy(() -> crear(Modo.FACTORING_DIRECTO))
+                .isInstanceOfSatisfying(com.negociadororq.application.exception.ReglaDeNegocioException.class,
+                        e -> assertThat(e.getCodigo()).isEqualTo("SIN_CUPO_EMPRESA"));
+        assertThat(cupos()).isEqualTo(antes);
+        jdbc.update("UPDATE user_quota SET current_quota = 100.00 WHERE user_id = ?", USUARIO);
+        jdbc.update("UPDATE parametrization SET current_quota = 10000000.00 WHERE company_id = ?", EMPRESA_PROV);
+        Map<String, BigDecimal> antes2 = cupos();
+        assertThatThrownBy(() -> crear(Modo.FACTORING_DIRECTO))
+                .isInstanceOfSatisfying(com.negociadororq.application.exception.ReglaDeNegocioException.class,
+                        e -> assertThat(e.getCodigo()).isEqualTo("SIN_CUPO_OPERADOR"));
+        assertThat(cupos()).isEqualTo(antes2);
+    }
+
+    @Test
+    void modelo_cupos_80_hilos_sobre_operador_y_empresa_sin_perdida_ni_negativos() throws Exception {
+        // 40 "negociaciones" (operador y empresa en la misma transacción, como procesarFactura) y 40 reversiones, a la vez.
+        jdbc.update("UPDATE user_quota SET quota = 9000000.00, current_quota = 1000.00 WHERE user_id = ?", USUARIO);
+        jdbc.update("UPDATE parametrization SET quota = 9000000.00, current_quota = 1000.00 WHERE company_id = ?",
+                EMPRESA_PROV);
+        java.util.concurrent.atomic.AtomicInteger descontadas = new java.util.concurrent.atomic.AtomicInteger();
+        BigDecimal v = new BigDecimal("30.01");
+        CountDownLatch listos = new CountDownLatch(80);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+        List<Thread> hilos = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            hilos.add(hilo(() -> {
+                try {
+                    tx.executeWithoutResult(s -> {
+                        operador.descontarCupo(USUARIO, v);
+                        if (!empresaQuotaPort.descontar(EMPRESA_PROV, v)) {
+                            throw new com.negociadororq.application.exception.ReglaDeNegocioException("Empresa sin cupo",
+                                    "SIN_CUPO_EMPRESA");
+                        }
+                    });
+                    descontadas.incrementAndGet();
+                } catch (com.negociadororq.application.exception.ReglaDeNegocioException sinCupo) {
+                    // sin cupo en alguno de los dos: no se descontó ninguno
+                    assertThat(sinCupo.getCodigo()).isIn("SIN_CUPO_OPERADOR", "SIN_CUPO_EMPRESA");
+                }
+            }, listos, largada, fallos));
+            hilos.add(hilo(() -> tx.executeWithoutResult(s -> {
+                operador.revertirCupoUsuario(USUARIO, v);
+                operador.revertirCupoEmpresaEnTransaccionActual(EMPRESA_PROV, v);
+            }), listos, largada, fallos));
+        }
+        listos.await();
+        largada.countDown();
+        for (Thread t : hilos) {
+            t.join();
+        }
+        assertThat(fallos).isEmpty();
+        BigDecimal esperado = new BigDecimal("1000.00").subtract(v.multiply(BigDecimal.valueOf(descontadas.get())))
+                .add(v.multiply(BigDecimal.valueOf(40)));
+        assertThat(cupos().get("operador")).isEqualByComparingTo(esperado);
+        assertThat(cupos().get("empresa-" + EMPRESA_PROV)).isEqualByComparingTo(esperado);
+        assertThat(esperado.signum()).isGreaterThanOrEqualTo(0);
+    }
+
+    // ─── Fase 28d (D2/D4, techo con objetivo) ─────────────────────────────────────────────────────────────────────
+
+    private Map<String, Object> filaEmpresa(long empresa) {
+        return jdbc.queryForMap("SELECT quota, current_quota, assigned_quota, objetivo FROM parametrization"
+                + " WHERE company_id = ?", empresa);
+    }
+
+    @Test
+    void objetivo_caso_de_john_techo_10000_exposicion_7000_baja_a_5000_y_devolucion_4000_queda_5000_y_2000() {
+        // Lo que deja el PUT del ADMINISTRADOR de registro (D2): techo = exposición 7.000, disponible 0, objetivo 5.000
+        jdbc.update("UPDATE parametrization SET quota = 7000.00, current_quota = 0.00, objetivo = 5000.00"
+                + " WHERE company_id = ?", EMPRESA_PROV);
+        tx.executeWithoutResult(s -> operador.revertirCupoEmpresaEnTransaccionActual(EMPRESA_PROV,
+                new BigDecimal("4000.00")));
+        Map<String, Object> f = filaEmpresa(EMPRESA_PROV);
+        assertThat((BigDecimal) f.get("quota")).isEqualByComparingTo("5000.00");
+        assertThat((BigDecimal) f.get("current_quota")).isEqualByComparingTo("2000.00");
+        assertThat(f.get("objetivo")).isNull();
+    }
+
+    @Test
+    void objetivo_80_devoluciones_concurrentes_sobre_la_empresa_en_reduccion_sin_perdida() throws Exception {
+        // techo 10.000 expuesto entero, objetivo 5.000; 80 devoluciones de 100.00 (8.000) a la vez: queda expuesto 2.000,
+        // techo MAX(5.000, 2.000) = 5.000 y disponible 3.000, sin importar el orden
+        jdbc.update("UPDATE parametrization SET quota = 10000.00, current_quota = 0.00, objetivo = 5000.00"
+                + " WHERE company_id = ?", EMPRESA_PROV);
+        CountDownLatch listos = new CountDownLatch(80);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+        List<Thread> hilos = new ArrayList<>();
+        for (int i = 0; i < 80; i++) {
+            hilos.add(hilo(() -> tx.executeWithoutResult(s -> operador.revertirCupoEmpresaEnTransaccionActual(EMPRESA_PROV,
+                    new BigDecimal("100.00"))), listos, largada, fallos));
+        }
+        listos.await();
+        largada.countDown();
+        for (Thread t : hilos) {
+            t.join();
+        }
+        assertThat(fallos).isEmpty();
+        Map<String, Object> f = filaEmpresa(EMPRESA_PROV);
+        assertThat((BigDecimal) f.get("quota")).isEqualByComparingTo("5000.00");
+        assertThat((BigDecimal) f.get("current_quota")).isEqualByComparingTo("3000.00");
+        assertThat(f.get("objetivo")).isNull();
+    }
+
+    @Test
+    void objetivo_operador_desactivado_objetivo_0_drena_con_80_devoluciones_y_baja_la_suma_de_techos_de_su_empresa()
+            throws Exception {
+        // D4: operador con techo 8.000 totalmente expuesto y objetivo 0 (desactivado); la empresa suma 8.000 de techos
+        jdbc.update("UPDATE `user` SET company_ide = ? WHERE ide_user = ?", EMPRESA_PROV, USUARIO);
+        jdbc.update("UPDATE user_quota SET quota = 8000.00, current_quota = 0.00, objetivo = 0.00 WHERE user_id = ?",
+                USUARIO);
+        jdbc.update("UPDATE parametrization SET assigned_quota = 8000.00 WHERE company_id = ?", EMPRESA_PROV);
+        CountDownLatch listos = new CountDownLatch(80);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Throwable> fallos = Collections.synchronizedList(new ArrayList<>());
+        List<Thread> hilos = new ArrayList<>();
+        for (int i = 0; i < 80; i++) {
+            hilos.add(hilo(() -> tx.executeWithoutResult(s -> operador.revertirCupoUsuario(USUARIO,
+                    new BigDecimal("100.00"))), listos, largada, fallos));
+        }
+        listos.await();
+        largada.countDown();
+        for (Thread t : hilos) {
+            t.join();
+        }
+        assertThat(fallos).isEmpty();
+        Map<String, Object> u = jdbc.queryForMap("SELECT quota, current_quota, objetivo FROM user_quota WHERE user_id = ?",
+                USUARIO);
+        assertThat((BigDecimal) u.get("quota")).isEqualByComparingTo("0.00");
+        assertThat((BigDecimal) u.get("current_quota")).isEqualByComparingTo("0.00");
+        assertThat(u.get("objetivo")).isNull();
+        assertThat((BigDecimal) filaEmpresa(EMPRESA_PROV).get("assigned_quota")).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void objetivo_sin_objetivo_sigue_siendo_min_techo_disponible_mas_devuelto() {
+        jdbc.update("UPDATE parametrization SET quota = 1000.00, current_quota = 900.00, objetivo = NULL"
+                + " WHERE company_id = ?", EMPRESA_PROV);
+        tx.executeWithoutResult(s -> operador.revertirCupoEmpresaEnTransaccionActual(EMPRESA_PROV,
+                new BigDecimal("300.00")));
+        assertThat((BigDecimal) filaEmpresa(EMPRESA_PROV).get("current_quota")).isEqualByComparingTo("1000.00");
+        assertThat((BigDecimal) filaEmpresa(EMPRESA_PROV).get("quota")).isEqualByComparingTo("1000.00");
     }
 
     private static Company empresa(long id) {

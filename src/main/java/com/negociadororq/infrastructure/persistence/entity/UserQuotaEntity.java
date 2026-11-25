@@ -34,10 +34,12 @@ public class UserQuotaEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "quota", nullable = false)
+    // Fase 28d: DECIMAL(19,2) como la V11 de ms-security-util y su entidad. Sin precisión, ddl-auto=update (DEV y e2e)
+    // llevaba quota y current_quota a DECIMAL(38,2) al arrancar el negociador; QA y prod usan validate.
+    @Column(name = "quota", nullable = false, precision = 19, scale = 2)
     private BigDecimal quota;
 
-    @Column(name = "current_quota", nullable = false)
+    @Column(name = "current_quota", nullable = false, precision = 19, scale = 2)
     private BigDecimal currentQuota;
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -80,7 +80,9 @@ public class NegociacionFactoringComfirmingServiceImpl implements NegociacionFac
     public static final String CUPO_CONCURRENCIA_REINTENTAR = "CUPO_CONCURRENCIA_REINTENTAR";
     /** Códigos del bloqueo optimista del cupo de la empresa y del fondeador (ProcesarFacturaNegociacionServiceImpl). */
     static final java.util.Set<String> CODIGOS_CONCURRENCIA_CUPO =
-            java.util.Set.of("CUPO_EMPRESA_CONCURRENCIA", "CUPO_FONDEADOR_CONCURRENCIA");
+            java.util.Set.of("CUPO_EMPRESA_CONCURRENCIA", "CUPO_FONDEADOR_CONCURRENCIA",
+                    // Fase 28d (P-19): deadlock o lock wait timeout traducido en infraestructura (BloqueosProcesarFactura)
+                    "CUPO_BLOQUEO_REINTENTAR");
     private static final int INTENTOS_VERIFICACION_VIVA = 5;
     private static final long ESPERA_VERIFICACION_VIVA_MS = 100;
     /** Fase 28d (A2): marcador único por negociación (CREADA o CANCELADA). */

@@ -19,6 +19,8 @@ import org.springframework.stereotype.Component;
 public class EmpresaQuotaAdapter implements EmpresaQuotaOutputPort {
 
     private final EmpresaQuotaRepository repository;
+    /** Fase 28d (D2): camino del techo con objetivo, con la fila bloqueada (misma transacción). */
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Override
     public Optional<EmpresaQuota> findByCompanyId(Long companyId) {
@@ -38,6 +40,33 @@ public class EmpresaQuotaAdapter implements EmpresaQuotaOutputPort {
             throw new OptimisticLockConflictException(
                     "Conflicto de optimistic locking al guardar EmpresaQuota id=" + quota.getId(), e);
         }
+    }
+
+    @Override
+    public boolean descontar(Long companyId, java.math.BigDecimal valor) {
+        return repository.descontar(companyId, valor) > 0;
+    }
+
+    @Override
+    public boolean devolverConTope(Long companyId, java.math.BigDecimal valor) {
+        // Camino común (sin objetivo): MIN(techo, disponible + devuelto) en una sentencia
+        if (repository.devolverConTope(companyId, valor) > 0) {
+            return true;
+        }
+        // Fase 28d (D2): cupo en reducción (objetivo): fórmula de John con la fila bloqueada, en la misma transacción
+        java.util.List<java.util.Map<String, Object>> filas = jdbc.queryForList("SELECT quota, current_quota, objetivo"
+                + " FROM parametrization WHERE company_id = ? FOR UPDATE", companyId);
+        if (filas.isEmpty()) {
+            return false;
+        }
+        java.util.Map<String, Object> f = filas.get(0);
+        com.negociadororq.application.util.CupoConObjetivo.Resultado r =
+                com.negociadororq.application.util.CupoConObjetivo.devolver((java.math.BigDecimal) f.get("quota"),
+                        (java.math.BigDecimal) f.get("current_quota"), (java.math.BigDecimal) f.get("objetivo"), valor);
+        jdbc.update("UPDATE parametrization SET quota = ?, current_quota = ?, objetivo = ?,"
+                + " version = COALESCE(version, 0) + 1 WHERE company_id = ?", r.techo(), r.disponible(), r.objetivo(),
+                companyId);
+        return true;
     }
 
     private EmpresaQuota toDomain(EmpresaQuotaEntity entity) {

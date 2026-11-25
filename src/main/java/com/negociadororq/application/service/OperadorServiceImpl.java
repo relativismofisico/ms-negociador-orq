@@ -8,7 +8,6 @@ import com.negociadororq.application.exception.ReglaDeNegocioException;
 import com.negociadororq.application.port.output.EmpresaQuotaOutputPort;
 import com.negociadororq.application.port.output.FondeadorQuotaOutputPort;
 import com.negociadororq.application.port.output.UserQuotaOutputPort;
-import com.negociadororq.domain.model.EmpresaQuota;
 import com.negociadororq.domain.model.FondeadorQuota;
 import com.negociadororq.domain.model.UserQuota;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Log
 @RequiredArgsConstructor
 public class OperadorServiceImpl implements CupoConsumidorService, CupoReversionService {
+
+    /** Fase 28d (modelo de cupos): el operador no tiene disponible para la factura. */
+    public static final String SIN_CUPO_OPERADOR = "SIN_CUPO_OPERADOR";
+
 
     private final UserQuotaOutputPort userQuotaPort;
     private final EmpresaQuotaOutputPort empresaQuotaPort;
@@ -43,7 +46,7 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
         // Fase 28d (A5b): la comprobación y el descuento van en la misma sentencia (antes, leer y escribir por separado
         // dejaba que dos negociaciones concurrentes del mismo operador perdieran una de las dos actualizaciones).
         if (cuota.getCurrentQuota().compareTo(monto) < 0 || !userQuotaPort.descontar(userId, monto)) {
-            throw new ReglaDeNegocioException("Cupo insuficiente para el operador " + userId);
+            throw new ReglaDeNegocioException("Operador sin cupo disponible", SIN_CUPO_OPERADOR);
         }
     }
 
@@ -75,19 +78,11 @@ public class OperadorServiceImpl implements CupoConsumidorService, CupoReversion
     }
 
     private void aplicarReversionEmpresa(Long companyId, BigDecimal valor) {
-        EmpresaQuota empresaQuota = empresaQuotaPort.findByCompanyId(companyId).orElseThrow();
-
-        valor = valor.abs();
-
-        BigDecimal actual = empresaQuota.getCurrentQuota();
-        BigDecimal nuevo = actual.add(valor);
-
-        if (nuevo.compareTo(empresaQuota.getQuota()) > 0) {
-            nuevo = empresaQuota.getQuota();
+        // Fase 28d (P-22): MIN(techo, disponible + devuelto) en UNA sentencia (antes: leer, sumar con tope y guardar con
+        // @Version, que fallaba ante una negociación concurrente).
+        if (!empresaQuotaPort.devolverConTope(companyId, valor.abs())) {
+            throw new RecursoNoEncontradoException("La empresa " + companyId + " no tiene cupo (parametrización)");
         }
-        empresaQuota.setCurrentQuota(nuevo);
-
-        empresaQuotaPort.saveAndFlush(empresaQuota);
     }
 
     @Override

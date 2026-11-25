@@ -63,6 +63,8 @@ topics:
   otp-request: otp.requested
   notificacion-email: notificacion.email
   liquidacion-fallida: liquidacion.fallida
+  # Fase 28d (P-19): cambio del cupo por proveedor de una oferta indirecta (outbox de ms-registroempresa-neg)
+  cupo-oferta-indirecta: cupoOfertaIndirectaCambiadaTopic
 
 negociacion:
   dias-minimos-vencimiento: 10
@@ -246,3 +248,9 @@ liquidacion:
   cancelacion:
     base-url: ${LIQUIDADOR_BASE_URL:}
     timeout: ${LIQUIDACION_CANCELACION_TIMEOUT:PT5S}
+
+# Fase 28d (P-19): consumo idempotente de commons (marca en evento_procesado, la tabla compartida que crean las V11 de
+# registro y la V9 de security) para el cambio de cupo de la oferta indirecta.
+consumo-idempotente:
+  enabled: ${CONSUMO_IDEMPOTENTE_ENABLED:true}
+  almacen: jdbc

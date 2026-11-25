@@ -1906,3 +1906,22 @@ FACTORING indirecto: el proveedor no tiene asignación directa con el fondeador 
   - `UPDATE ... WHERE current_quota >= :valor`.
   - Si una negociación concurrente consumió el cupo entre la validación y el descuento, la factura cae por `SIN_CUPO_INDIRECTO` con lo que queda en ese momento.
   - El cupo nunca queda negativo.
+
+## Modelo de cupos: operador y empresa (Fase 28d, decisiones de John del 2026-11-23)
+
+- **Negociar.** Descuenta el disponible del operador (`user_quota`) y el de la empresa (`parametrization`) una vez cada uno, en la MISMA transacción de la factura (`REQUIRES_NEW`). Los dos descuentos son sentencias condicionadas: `... - :v WHERE current_quota >= :v`.
+  - Si cualquiera no alcanza, la excepción deshace los dos: no se descuenta ninguno.
+  - El código distingue la causa: `SIN_CUPO_OPERADOR` o `SIN_CUPO_EMPRESA`.
+  - Ya no hay bloqueo optimista en el cupo de la empresa (`CUPO_EMPRESA_CONCURRENCIA` solo queda en el fondeador directo, como `CUPO_FONDEADOR_CONCURRENCIA`).
+- **Revertir** (creación abortada, rechazo, endoso por vigencia, vencimiento, liquidación fallida o cancelada). Una sentencia con tope, `MIN(techo, disponible + devuelto)`, en el operador (`LEAST(quota, GREATEST(current_quota + :v, 0))`), en la empresa y en el cupo indirecto (techo = `original_quota`).
+  - Es idempotente por el compare-and-set de `operacion_pendiente`.
+  - Tras una recarga con exposición viva, devolver ya no supera el techo: 10.000 → negocia 4.000 → recarga → revierte = 10.000, no 14.000.
+- **Recarga del cupo indirecto (P-20).** `UPDATE ... SET current_quota = original_quota` en una sentencia. Antes se leía la fila y se guardaba entera con JPA, y se perdía lo que otro escribiera en medio (un techo nuevo, por ejemplo). Recargar sigue restaurando el techo.
+- **Diseño completo** y decisiones abiertas (alta atómica del operador frente a la suma de techos, cambio del techo de la empresa): `_e2e-infra/pendientes/fase28d/diseno_modelo_cupos.md`.
+- **Techo con objetivo (D2/D4).** Si la empresa (`parametrization.objetivo`) o el operador (`user_quota.objetivo`, por ejemplo uno desactivado con objetivo 0) están en reducción, cada devolución aplica la fórmula de John con la fila bloqueada (`FOR UPDATE`) en la misma transacción (`CupoConObjetivo`):
+  - exposición nueva = MAX(techo − disponible − devuelto, 0);
+  - techo nuevo = MAX(objetivo, exposición nueva);
+  - disponible = techo nuevo − exposición nueva.
+
+  Lo que baja el techo de un operador baja también `parametrization.assigned_quota` de su empresa. Sin objetivo, el camino común sigue siendo una sola sentencia (`... AND objetivo IS NULL`).
+- **Advertencia.** Una factura liquidada NO libera cupo: solo lo hará el pago conciliado (D-16, que todavía no existe). Hasta entonces solo drenan las reversiones.

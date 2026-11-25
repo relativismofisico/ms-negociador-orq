@@ -94,9 +94,13 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
                 .build()
     }
 
+    /** Fase 28d (modelo de cupos): la sentencia condicionada del cupo de la empresa alcanza, salvo que la prueba lo cambie. */
+    Boolean empresaAlcanza = true
+
     def setup() {
         // Fase 28d (A5b): la factura estaba SIN_NEGOCIAR (el compare-and-set de la creación gana)
         facturaPatchPort.marcarComoNegociada(*_) >> true
+        empresaQuotaPort.descontar(_, _) >> { empresaAlcanza }
     }
 
     def setupMocksFactoring(String numero, String rutProv, BigDecimal valor = new BigDecimal("5000.00")) {
@@ -148,26 +152,42 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         resultado.rutProveedor == "PROV-001"
         resultado.rutPagador == "PAG-001"
         1 * cupoConsumidorService.descontarCupo(1L, _)
-        1 * empresaQuotaPort.saveAndFlush(_)
+        1 * empresaQuotaPort.descontar(10L, new BigDecimal("5000.00")) >> true
+        0 * empresaQuotaPort.saveAndFlush(_)
         1 * facturaPatchPort.marcarComoNegociada(_, EstadoFirma.SIN_CESION, _) >> true
     }
 
     // ─── conflictos de concurrencia (optimistic locking, @Version) ────────────
 
-    def "procesarFactura lanza ConflictoException si otra negociacion concurrente ya modifico el cupo de la empresa"() {
-        given: "El cupo de la empresa cambió entre el read y el saveAndFlush (perdió la carrera contra otra negociación)"
+    def "Fase 28d (modelo de cupos): si una concurrente gastó el cupo de la empresa, la sentencia condicionada no descuenta: SIN_CUPO_EMPRESA y no se descuenta nada más"() {
+        given: "la lectura previa alcanza, pero la sentencia condicionada no (otra negociación consumió el cupo)"
         setupMocksFactoring("FECI040", "PROV-001")
-        empresaQuotaPort.saveAndFlush(_) >> { throw new OptimisticLockConflictException("conflicto de prueba", null) }
+        empresaAlcanza = false
         def request = buildRequest("FACTORING", "PROV-001", "OP-001")
 
-        when: "Se procesa"
-        service.procesarFactura(request, buildReqFact("FECI040"), "neg-1").tap { service.marcarComoNegociada(request, it) }
+        when:
+        service.procesarFactura(request, buildReqFact("FECI040"), "neg-1")
 
-        then: "Se traduce a una excepción de negocio distinguible de 'sin cupo' — el frontend puede ofrecer reintentar"
-        def ex = thrown(ConflictoException)
-        ex.codigo == "CUPO_EMPRESA_CONCURRENCIA"
+        then: "el código distingue la causa; la excepción deshace también el descuento del operador (misma transacción)"
+        def ex = thrown(com.negociadororq.application.exception.ReglaDeNegocioException)
+        ex.codigo == "SIN_CUPO_EMPRESA"
         0 * fondeadorQuotaPort.saveAndFlush(_)
-        0 * facturaPatchPort.marcarComoNegociada(_, _, _)
+        0 * empresaQuotaPort.saveAndFlush(_)
+    }
+
+    def "Fase 28d (modelo de cupos): sin cupo del operador en la lectura previa: SIN_CUPO_OPERADOR, sin descontar"() {
+        given:
+        setupMocksFactoring("FECI042", "PROV-001", new BigDecimal("20000.00"))
+        def request = buildRequest("FACTORING", "PROV-001", "OP-001")
+
+        when:
+        service.procesarFactura(request, buildReqFact("FECI042"), "neg-1")
+
+        then:
+        def ex = thrown(com.negociadororq.application.exception.ReglaDeNegocioException)
+        ex.codigo == "SIN_CUPO_OPERADOR"
+        0 * cupoConsumidorService.descontarCupo(_, _)
+        0 * empresaQuotaPort.descontar(_, _)
     }
 
     def "procesarFactura lanza ConflictoException si otra negociacion concurrente ya modifico el cupo del fondeador"() {
@@ -779,7 +799,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         }
         ex.message == "La factura FECI052 por \$4.000,00 no se incluyó: el cupo de factoring que Fondo Dos ofrece a los " +
                 "proveedores de Pagadora Uno tiene \$2.000,00 disponibles para ti; faltan \$2.000,00. Puedes pedirle a " +
-                "Fondo Dos que recargue tu cupo. Las facturas de esta " +
+                "Fondo Dos que recargue o amplíe tu cupo. Las facturas de esta " +
                 "petición con ese cupo suman \$12.000,00 y al empezar había \$10.000,00 disponibles; entran en el orden " +
                 "de la petición."
     }
@@ -800,7 +820,7 @@ class ProcesarFacturaNegociacionServiceImplSpec extends Specification {
         ex.detalle.sumaPeticion.toPlainString() == "5000.55"
         ex.message == "La factura FECI053 por \$5.000,55 no se incluyó: el cupo de factoring que Fondo Dos ofrece a los " +
                 "proveedores de Pagadora Uno tiene \$1.000,10 disponibles para ti; faltan \$4.000,45. Puedes pedirle a " +
-                "Fondo Dos que recargue tu cupo."
+                "Fondo Dos que recargue o amplíe tu cupo."
         0 * cupoConsumidorService.descontarCupo(_, _)
     }
 

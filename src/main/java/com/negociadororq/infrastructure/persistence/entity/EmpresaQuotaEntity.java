@@ -34,10 +34,10 @@ public class EmpresaQuotaEntity {
     @Column(name = "company_id", nullable = false)
     private Long companyId;
 
-    @Column(name = "quota", nullable = false, updatable = false)
+    @Column(name = "quota", precision = 19, scale = 2, nullable = false, updatable = false)
     private BigDecimal quota;
 
-    @Column(name = "current_quota", nullable = false)
+    @Column(name = "current_quota", precision = 19, scale = 2, nullable = false)
     private BigDecimal currentQuota;
 
     // Optimistic locking: dos negociaciones concurrentes sobre la misma empresa

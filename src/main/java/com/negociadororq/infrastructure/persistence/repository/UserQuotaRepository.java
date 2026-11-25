@@ -35,26 +35,28 @@ public interface UserQuotaRepository extends JpaRepository<UserQuotaEntity, Long
     int descontar(@Param("userId") Long userId, @Param("monto") java.math.BigDecimal monto);
 
     /**
-     * Fase 28d (A5b): devolución atómica.
+     * Fase 28d (A5b): devolución atómica; P-22: con tope en el techo, {@code MIN(quota, current_quota + monto)}.
      *
      * @param userId id del usuario
      * @param monto  monto
      * @return filas afectadas (0 si no existe)
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(value = "UPDATE user_quota SET current_quota = current_quota + :monto WHERE user_id = :userId",
+    @Query(value = "UPDATE user_quota SET current_quota = LEAST(quota, current_quota + :monto) WHERE user_id = :userId"
+            + " AND objetivo IS NULL",
             nativeQuery = true)
     int devolver(@Param("userId") Long userId, @Param("monto") java.math.BigDecimal monto);
 
     /**
-     * Fase 28d (A5b): devolución atómica limitada a cero.
+     * Fase 28d (A5b): devolución atómica limitada a cero; P-22: y con tope en el techo.
      *
      * @param userId id del usuario
      * @param monto  monto
      * @return filas afectadas (0 si no existe)
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(value = "UPDATE user_quota SET current_quota = GREATEST(current_quota + :monto, 0) WHERE user_id = :userId",
+    @Query(value = "UPDATE user_quota SET current_quota = LEAST(quota, GREATEST(current_quota + :monto, 0))"
+            + " WHERE user_id = :userId AND objetivo IS NULL",
             nativeQuery = true)
     int devolverSinNegativos(@Param("userId") Long userId, @Param("monto") java.math.BigDecimal monto);
 }

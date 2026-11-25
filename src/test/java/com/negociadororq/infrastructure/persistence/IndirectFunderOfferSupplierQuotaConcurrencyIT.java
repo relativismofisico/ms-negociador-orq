@@ -55,7 +55,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=none",
         "spring.sql.init.mode=always",
-        "spring.sql.init.schema-locations=classpath:test-schema/indirect_funder_offer_supplier_quota.sql"
+        "spring.sql.init.schema-locations=classpath:test-schema/indirect_funder_offer.sql,classpath:test-schema/indirect_funder_offer_supplier_quota.sql"
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class IndirectFunderOfferSupplierQuotaConcurrencyIT {
@@ -80,6 +80,7 @@ class IndirectFunderOfferSupplierQuotaConcurrencyIT {
     @AfterEach
     void limpiar() {
         jdbcTemplate.update("DELETE FROM indirect_funder_offer_supplier_quota");
+        jdbcTemplate.update("DELETE FROM indirect_funder_offer");
     }
 
     @Test
@@ -87,6 +88,8 @@ class IndirectFunderOfferSupplierQuotaConcurrencyIT {
             throws InterruptedException {
         long offerId = 900L;
         long supplierId = 800L;
+        jdbcTemplate.update("INSERT INTO indirect_funder_offer (id, supplier_quota_template, cupo_version) VALUES (?, ?, 0)",
+                offerId, new BigDecimal("10000.00"));
 
         CountDownLatch listos = new CountDownLatch(2);
         CountDownLatch largada = new CountDownLatch(1);
