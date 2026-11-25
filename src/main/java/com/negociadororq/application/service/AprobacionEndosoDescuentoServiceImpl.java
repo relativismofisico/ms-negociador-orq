@@ -8,12 +8,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.negociadororq.application.dto.AprobacionFacturaRequestDto;
 import com.negociadororq.application.dto.AprobacionRequestDto;
 import com.negociadororq.application.dto.AprobacionResponseDto;
 import com.negociadororq.application.dto.ConfirmacionOtpRequestDto;
 import com.negociadororq.application.exception.ConflictoException;
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.exception.ReglaDeNegocioException;
+import com.negociadororq.application.exception.RolNoPermitidoException;
 import com.negociadororq.application.port.output.ClockPort;
 import com.negociadororq.application.port.output.CompanyOutputPort;
 import com.negociadororq.application.port.output.EndosoOutputPort;
@@ -83,12 +85,26 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
     @Override
     public void solicitarOtp(AprobacionRequestDto request) {
 
-        AprobacionRequest domainRequest = mapToDomainRequest(request);
+        // Fase 28d (2.10): el rol se resuelve en el servidor por el RUT sobre las facturas de la solicitud (el que
+        // manda el cliente no es de fiar). Si no aprueba este tipo de operación, no se crea el pendiente ni se pide
+        // el OTP.
+        Negociacion negociacion = negociacionPort.findById(request.getIdNegociacion())
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "Negociación no encontrada: " + request.getIdNegociacion(), "NEGOCIACION_NO_ENCONTRADA"));
+        List<String> numeros = Optional.ofNullable(request.getFacturas()).orElse(List.of()).stream()
+                .map(AprobacionFacturaRequestDto::getNumeroFactura).toList();
+        String rol = exigirRolPermitido(negociacion, request.getRutEmpresa(), numeros, true).name();
+        if (request.getRolActor() != null && !rol.equalsIgnoreCase(request.getRolActor())) {
+            log.warning(String.format("[ROL-CLIENTE-DISTINTO] negociación %s: el cliente envió el rol %s y el servidor "
+                    + "resolvió %s; se usa el del servidor.", request.getIdNegociacion(), request.getRolActor(), rol));
+        }
+
+        AprobacionRequest domainRequest = mapToDomainRequest(request, rol);
 
         PendingOtp pending = PendingOtp.builder()
                 .idNegociacion(request.getIdNegociacion())
                 .rutEmpresa(request.getRutEmpresa())
-                .rolActor(request.getRolActor())
+                .rolActor(rol)
                 .request(domainRequest)
                 // Si este método corre, el CompanyOwnershipGuard del controller ya
                 // pasó (es la única vía de entrada): marca de trazabilidad que se
@@ -108,13 +124,13 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                         .idNegociacion(request.getIdNegociacion())
                         .rutEmpresa(request.getRutEmpresa())
                         .rutOperador(request.getRutOperador())
-                        .rolActor(request.getRolActor())
+                        .rolActor(rol)
                         .fechaSolicitud(clock.now())
                         .build()
         );
     }
 
-    private AprobacionRequest mapToDomainRequest(AprobacionRequestDto dto) {
+    private AprobacionRequest mapToDomainRequest(AprobacionRequestDto dto, String rol) {
         List<AprobacionFacturaRequest> facturas;
         if (dto.getFacturas() == null) {
             facturas = new ArrayList<>();
@@ -128,7 +144,7 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
                 dto.getIdNegociacion(),
                 dto.getRutOperador(),
                 dto.getRutEmpresa(),
-                dto.getRolActor(),
+                rol,
                 facturas,
                 dto.getObservacion()
         );
@@ -169,6 +185,12 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
         Negociacion negociacion = negociacionPort.findById(request.getIdNegociacion())
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "Negociación no encontrada: " + request.getIdNegociacion(), "NEGOCIACION_NO_ENCONTRADA"));
+
+        // Fase 28d (2.10): misma regla que en solicitarOtp, antes de estampar firmas o registrar aprobaciones (p. ej.
+        // pendientes creados antes del cambio). El llamador deja el pendiente en ROL_NO_PERMITIDO sin tocar cupos.
+        // Las facturas que no están en la negociación siguen como antes: se reportan como error en la respuesta.
+        exigirRolPermitido(negociacion, request.getRutEmpresa(),
+                request.getFacturas().stream().map(AprobacionFacturaRequest::getNumeroFactura).toList(), false);
 
         List<String> errores = new ArrayList<>();
         int yaAplicadas = 0;
@@ -487,6 +509,66 @@ public class AprobacionEndosoDescuentoServiceImpl implements AprobacionEndosoDes
             return Set.of(RolActor.PROVEEDOR);
         }
         return Set.of();
+    }
+
+    /**
+     * Fase 28d (2.10): el rol real del actor en las facturas indicadas (o, si no se indica ninguna, en las de la
+     * negociación donde participa) debe ser de los que aprueban el tipo de operación.
+     *
+     * @param negociacion    negociación
+     * @param rutEmpresa     RUT de la empresa que aprueba
+     * @param numerosFactura facturas de la solicitud
+     * @param exigirParticipacion si ninguna factura de la solicitud está en la negociación: {@code true} lanza
+     *                            ROL_ACTOR_INDETERMINADO; {@code false} no comprueba nada (devuelve {@code null})
+     * @return el rol resuelto
+     * @throws RolNoPermitidoException si el rol no aprueba ese tipo de operación
+     * @throws ReglaDeNegocioException ROL_ACTOR_INDETERMINADO si el actor no participa en las facturas
+     */
+    RolActor exigirRolPermitido(Negociacion negociacion, String rutEmpresa, List<String> numerosFactura,
+                                boolean exigirParticipacion) {
+        String tipo = negociacion.getTipoOperacion().getTipo();
+        List<FacturaNegociada> facturas = Optional.ofNullable(negociacion.getFacturas()).orElse(List.of());
+        List<RolActor> roles = new ArrayList<>();
+        if (numerosFactura.isEmpty()) {
+            for (FacturaNegociada f : facturas) {
+                rolEn(rutEmpresa, f).ifPresent(roles::add);
+            }
+        } else {
+            for (FacturaNegociada f : facturas) {
+                if (numerosFactura.contains(f.getNumeroFactura())) {
+                    roles.add(resolverRolActor(rutEmpresa, f));
+                }
+            }
+        }
+        if (roles.isEmpty() && !exigirParticipacion && !numerosFactura.isEmpty()) {
+            return null;
+        }
+        if (roles.isEmpty()) {
+            throw new ReglaDeNegocioException("No se pudo determinar el rol del actor " + rutEmpresa
+                    + " en la negociación " + negociacion.getId(), "ROL_ACTOR_INDETERMINADO");
+        }
+        Set<RolActor> requeridos = obtenerActoresRequeridos(tipo);
+        for (RolActor rol : roles) {
+            if (!requeridos.contains(rol)) {
+                throw new RolNoPermitidoException(tipo, rol.name());
+            }
+        }
+        return roles.get(0);
+    }
+
+    private static Optional<RolActor> rolEn(String rutActor, FacturaNegociada factura) {
+        if (rutActor.equals(factura.getRutPagador())) {
+            return Optional.of(RolActor.PAGADOR);
+        }
+        if (rutActor.equals(factura.getRutProveedor())) {
+            return Optional.of(RolActor.PROVEEDOR);
+        }
+        boolean esFondeador = Optional.ofNullable(factura.getFondeadores()).orElse(Collections.emptyList()).stream()
+                .anyMatch(f -> f.getRutFondeador().equals(rutActor));
+        if (esFondeador) {
+            return Optional.of(RolActor.FONDEADOR);
+        }
+        return Optional.empty();
     }
 
     private RolActor resolverRolActor(String rutActor, FacturaNegociada factura) {

@@ -15,7 +15,9 @@ public enum EstadoFirmaOtp {
     PENDIENTE_OTP,
     OTP_VALIDADO,
     FIRMADO,
-    FALLO_FIRMA;
+    FALLO_FIRMA,
+    /** Fase 28d (2.10): el rol del actor no aprueba el tipo de operación; terminal, sin firma ni cupos tocados. */
+    ROL_NO_PERMITIDO;
 
     /**
      * @param estado estado guardado (puede ser {@code null})

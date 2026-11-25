@@ -83,6 +83,10 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
                 "neg-001", "OP-001", "EMP-001", "FONDEADOR",
                 [new AprobacionFacturaRequestDto("FECI001", true, null)], null
         )
+        negociacionPort.findById("neg-001") >> Optional.of(Negociacion.builder().id("neg-001")
+                .tipoOperacion(new Operacion("FACTORING", "DESC"))
+                .facturas([buildFacturaNeg("FECI001", "PAG-001", "PROV-001",
+                        [FondeadorAsignacion.builder().rutFondeador("EMP-001").build()])]).build())
 
         when:
         service.solicitarOtp(request)
@@ -98,6 +102,9 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
     def "solicitarOtp con facturas null mapea lista vacia"() {
         given:
         def request = new AprobacionRequestDto("neg-002", "OP-001", "EMP-001", "PAGADOR", null, null)
+        negociacionPort.findById("neg-002") >> Optional.of(Negociacion.builder().id("neg-002")
+                .tipoOperacion(new Operacion("FACTORING", "DESC"))
+                .facturas([buildFacturaNeg("FECI002", "EMP-001", "PROV-001", [])]).build())
 
         when:
         service.solicitarOtp(request)
@@ -640,6 +647,9 @@ class AprobacionEndosoDescuentoServiceImplSpec extends Specification {
     def "Fase 28c: solicitarOtp deja la solicitud en PENDIENTE_OTP"() {
         given:
         def request = new AprobacionRequestDto("neg-001", "OP-001", "EMP-001", "PAGADOR", [], null)
+        negociacionPort.findById("neg-001") >> Optional.of(Negociacion.builder().id("neg-001")
+                .tipoOperacion(new Operacion("FACTORING", "DESC"))
+                .facturas([buildFacturaNeg("FECI001", "EMP-001", "PROV-001", [])]).build())
 
         when:
         service.solicitarOtp(request)

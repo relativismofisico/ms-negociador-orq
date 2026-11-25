@@ -202,4 +202,19 @@ class ConfirmingFirmaPdfRealSpec extends Specification {
         bloques(endoso.documentoPdf)[0].contains("Actor: PROVEEDOR")
         fueraDePagina(endoso.documentoPdf) == 0
     }
+
+    def "Fase 28d (2.10): en Confirming el Pagador no llega a firmar: el PDF real no recibe su bloque"() {
+        given:
+        documentoConFirmaDelFondeador()
+        def antes = endoso.documentoPdf
+
+        when:
+        service.aprobarInterno(pending(PAG, "PAGADOR", "333333", "90", "10.0.0.9", "op-pag"))
+
+        then:
+        thrown(com.negociadororq.application.exception.RolNoPermitidoException)
+        endoso.documentoPdf == antes
+        bloques(endoso.documentoPdf).size() == 1
+        !bloques(endoso.documentoPdf).any { it.contains("Actor: PAGADOR") }
+    }
 }
