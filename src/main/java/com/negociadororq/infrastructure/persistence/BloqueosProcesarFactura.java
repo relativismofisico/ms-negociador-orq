@@ -59,8 +59,12 @@ public class BloqueosProcesarFactura implements ProcesarFacturaNegociacionServic
     }
 
     private static ConflictoException traducir(FacturaNegociada factura, PessimisticLockingFailureException e) {
+        String numero = "-";
+        if (factura != null) {
+            numero = factura.getNumeroFactura();
+        }
         log.warn("[CUPO-BLOQUEO-REINTENTAR] factura {}: {} al descontar cupos; la negociación se aborta y se pide reintentar",
-                factura == null ? "-" : factura.getNumeroFactura(), e.getClass().getSimpleName());
+                numero, e.getClass().getSimpleName());
         return new ConflictoException("Otra operación tenía bloqueado el cupo; vuelve a intentar.", CUPO_BLOQUEO_REINTENTAR);
     }
 }

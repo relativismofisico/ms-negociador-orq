@@ -15,4 +15,12 @@ public interface UserOutputPort {
      * @return el usuario, si existe
      */
     Optional<User> findByUsername(String username);
+
+    /**
+     * Fase 28d (P-09): usernames de los usuarios INACTIVOS (state_user_id 2) de una empresa.
+     *
+     * @param companyId empresa
+     * @return usernames
+     */
+    java.util.List<String> usernamesInactivos(Long companyId);
 }

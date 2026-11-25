@@ -144,6 +144,36 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
     }
 
     @Override
+    public java.util.List<String> operadoresConFirmaPendiente(String idNegociacion, String rutEmpresa,
+            String rutOperador) {
+        Query query = Query.query(Criteria.where("idNegociacion").is(idNegociacion).and("rutEmpresa").is(rutEmpresa)
+                .and("rutOperador").ne(rutOperador)
+                .and(CAMPO_ESTADO).in(EstadoFirmaOtp.PENDIENTE_OTP.name(), null));
+        return mongoTemplate.find(query, PendingOtpDocument.class).stream().map(PendingOtpDocument::getRutOperador)
+                .distinct().toList();
+    }
+
+    @Override
+    public long contarEsperandoFirmaDe(String rutEmpresa, java.util.Collection<String> operadores) {
+        if (operadores == null || operadores.isEmpty()) {
+            return 0L;
+        }
+        Query pendientes = Query.query(Criteria.where("rutEmpresa").is(rutEmpresa).and("rutOperador").in(operadores)
+                .and(CAMPO_ESTADO).in(EstadoFirmaOtp.PENDIENTE_OTP.name(), null));
+        java.util.Set<String> negociaciones = new java.util.HashSet<>(mongoTemplate.findDistinct(pendientes,
+                "idNegociacion", PendingOtpDocument.class, String.class));
+        if (negociaciones.isEmpty()) {
+            return 0L;
+        }
+        // las que la empresa ya firmó (otro operador) no esperan firma
+        Query firmadas = Query.query(Criteria.where("rutEmpresa").is(rutEmpresa).and("idNegociacion").in(negociaciones)
+                .and(CAMPO_ESTADO).in(EstadoFirmaOtp.OTP_VALIDADO.name(), EstadoFirmaOtp.FIRMADO.name()));
+        negociaciones.removeAll(mongoTemplate.findDistinct(firmadas, "idNegociacion", PendingOtpDocument.class,
+                String.class));
+        return negociaciones.size();
+    }
+
+    @Override
     public boolean registrarRespuestaOtp(String id, int vistas) {
         Criteria esperado = Criteria.where(CAMPO_RESPUESTAS).is(vistas);
         if (vistas == 0) {
@@ -192,6 +222,7 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
                 .estado(doc.getEstado())
                 .otpId(doc.getOtpId())
                 .fechaValidacion(doc.getFechaValidacion())
+                .reemplazaA(doc.getReemplazaA())
                 .intentosFirma(doc.getIntentosFirma())
                 .ultimoError(doc.getUltimoError())
                 .fechaActualizacion(doc.getFechaActualizacion())
@@ -220,6 +251,7 @@ public class PendingOtpAdapter implements PendingOtpOutputPort {
                 .estado(p.getEstado())
                 .otpId(p.getOtpId())
                 .fechaValidacion(p.getFechaValidacion())
+                .reemplazaA(p.getReemplazaA())
                 .intentosFirma(p.getIntentosFirma())
                 .ultimoError(p.getUltimoError())
                 .fechaActualizacion(p.getFechaActualizacion())
