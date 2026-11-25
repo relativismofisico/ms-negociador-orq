@@ -106,8 +106,9 @@ INSERT IGNORE INTO user (ide_user, username, password, create_time, company_ide,
   (7290,'op-e2e-prov','no-auth',NOW(6),7008,NULL,3,1);
 INSERT IGNORE INTO user_quota (id, user_id, quota, current_quota) VALUES
   (7290, 7290, 100000000, 100000000);
--- Cupo indirecto con centavos del proveedor 7008 en la oferta 7360 (7003 -> 7004): 1.500.000,55 disponibles.
+-- Cupo indirecto con centavos del proveedor 7008 en la oferta 7360 (7003 -> 7004): techo 1.000.000,00 = plantilla de la
+-- oferta (como lo deja la V9) y 500.000,55 disponibles.
 -- No toca (7360, 7006): recargar-supplier-quota.feature prueba el 404 contra esa combinación.
 DELETE FROM indirect_funder_offer_supplier_quota WHERE offer_id = 7360 AND supplier_id = 7008;
 INSERT INTO indirect_funder_offer_supplier_quota (offer_id, supplier_id, rate, quota, current_quota, original_quota)
-VALUES (7360, 7008, 2.50, 2000000.10, 1500000.55, 2000000.10);
+VALUES (7360, 7008, 2.50, 1000000.00, 500000.55, 1000000.00);

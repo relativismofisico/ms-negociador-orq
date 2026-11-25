@@ -91,7 +91,7 @@ db.Facturas.deleteMany({ _id: { $in: ["FE-KARATE-A5-VENC", "FE-KARATE-A5-RECH", 
   });
 });
 
-// P12 (punto 1.2): 2.000.000,20 neto contra 1.500.000,55 de cupo indirecto: SIN_CUPO_INDIRECTO, faltante 499.999,65.
+// P12 (punto 1.2): 2.000.000,20 neto contra 500.000,55 de cupo indirecto: SIN_CUPO_INDIRECTO, faltante 1.499.999,65.
 db.Facturas.deleteMany({ _id: "FE-KARATE-SIN-CUPO-IND" });
 db.Facturas.insertOne({
   _id: "FE-KARATE-SIN-CUPO-IND", numeroFactura: "FE-KARATE-SIN-CUPO-IND", cufe: "CUFE-FE-KARATE-SIN-CUPO-IND",
