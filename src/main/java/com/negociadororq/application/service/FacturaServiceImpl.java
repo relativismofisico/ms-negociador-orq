@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.negociadororq.application.exception.RecursoNoEncontradoException;
 import com.negociadororq.application.port.output.FacturaOutputPort;
+import com.negociadororq.application.port.output.FacturaPatchOutputPort;
 import com.negociadororq.domain.model.Factura;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class FacturaServiceImpl implements FacturaService {
 
     private final FacturaOutputPort facturaPort;
+    private final FacturaPatchOutputPort facturaPatchPort;
 
     @Override
     @Transactional
@@ -26,7 +28,8 @@ public class FacturaServiceImpl implements FacturaService {
 
         String estadoAnterior = factura.getEstadoFirma();
         factura.setEstadoFirma(nuevoEstado);
-        facturaPort.save(factura);
+        // Fase 28d: solo el estado (un save() completo borraría los campos de carga)
+        facturaPatchPort.actualizarEstadoFirmaPorIds(List.of(factura.getId()), nuevoEstado);
 
         log.info(String.format("Estado de factura %s actualizado de %s a %s", numeroFactura, estadoAnterior, nuevoEstado));
     }
@@ -47,7 +50,7 @@ public class FacturaServiceImpl implements FacturaService {
             log.fine(String.format("Factura %s -> %s -> %s", f.getNumeroFactura(), anterior, nuevoEstado));
         });
 
-        facturaPort.saveAll(facturas);
+        facturaPatchPort.actualizarEstadoFirmaPorIds(facturas.stream().map(Factura::getId).toList(), nuevoEstado);
         log.info(String.format("%d facturas actualizadas al estado %s", facturas.size(), nuevoEstado));
 
     }

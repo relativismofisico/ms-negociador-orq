@@ -1,13 +1,15 @@
 package com.negociadororq.application.service
 
 import com.negociadororq.application.port.output.FacturaOutputPort
+import com.negociadororq.application.port.output.FacturaPatchOutputPort
 import com.negociadororq.domain.model.Factura
 import spock.lang.Specification
 
 class FacturaServiceImplSpec extends Specification {
 
     FacturaOutputPort facturaPort = Mock()
-    FacturaServiceImpl service = new FacturaServiceImpl(facturaPort)
+    FacturaPatchOutputPort facturaPatchPort = Mock()
+    FacturaServiceImpl service = new FacturaServiceImpl(facturaPort, facturaPatchPort)
 
     // ─── actualizarEstadoFirma ────────────────────────────────────────────────
 
@@ -15,6 +17,7 @@ class FacturaServiceImplSpec extends Specification {
         given:
         def factura = new Factura()
         factura.numeroFactura = "FECI001"
+        factura.id = "id-1"
         factura.estadoFirma = "SIN_CESION"
         facturaPort.findByNumeroFactura("FECI001") >> Optional.of(factura)
 
@@ -22,7 +25,8 @@ class FacturaServiceImplSpec extends Specification {
         service.actualizarEstadoFirma("FECI001", "CESION")
 
         then:
-        1 * facturaPort.save({ it.estadoFirma == "CESION" })
+        1 * facturaPatchPort.actualizarEstadoFirmaPorIds(["id-1"], "CESION")
+        0 * facturaPort.save(_)
         factura.estadoFirma == "CESION"
     }
 
@@ -44,9 +48,11 @@ class FacturaServiceImplSpec extends Specification {
         given:
         def f1 = new Factura()
         f1.numeroFactura = "F001"
+        f1.id = "id-1"
         f1.estadoFirma = "SIN_CESION"
         def f2 = new Factura()
         f2.numeroFactura = "F002"
+        f2.id = "id-2"
         f2.estadoFirma = "EN_REVISION"
 
         facturaPort.findByNumeroFacturaIn(["F001", "F002"]) >> [f1, f2]
@@ -57,7 +63,8 @@ class FacturaServiceImplSpec extends Specification {
         then:
         f1.estadoFirma == "CESION"
         f2.estadoFirma == "CESION"
-        1 * facturaPort.saveAll({ it.size() == 2 })
+        1 * facturaPatchPort.actualizarEstadoFirmaPorIds(["id-1", "id-2"], "CESION")
+        0 * facturaPort.saveAll(_)
     }
 
     def "actualizarEstadoFirmaMasivo no hace nada cuando no hay facturas"() {
@@ -68,7 +75,7 @@ class FacturaServiceImplSpec extends Specification {
         service.actualizarEstadoFirmaMasivo(["F_NO_EXISTE"], "CESION")
 
         then:
-        0 * facturaPort.saveAll(_)
+        0 * facturaPatchPort.actualizarEstadoFirmaPorIds(*_)
     }
 
     def "actualizarEstadoFirmaMasivo con un solo elemento"() {
@@ -83,7 +90,7 @@ class FacturaServiceImplSpec extends Specification {
 
         then:
         f.estadoFirma == "DESCUENTO"
-        1 * facturaPort.saveAll(_)
+        1 * facturaPatchPort.actualizarEstadoFirmaPorIds(_, "DESCUENTO")
     }
 
     // ─── obtenerPorNumero ─────────────────────────────────────────────────────

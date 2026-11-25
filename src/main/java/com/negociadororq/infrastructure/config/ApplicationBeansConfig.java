@@ -176,8 +176,9 @@ public class ApplicationBeansConfig {
     }
 
     @Bean
-    public FacturaService facturaService(final FacturaOutputPort facturaPort) {
-        return new FacturaServiceImpl(facturaPort);
+    public FacturaService facturaService(final FacturaOutputPort facturaPort,
+                                         final FacturaPatchOutputPort facturaPatchPort) {
+        return new FacturaServiceImpl(facturaPort, facturaPatchPort);
     }
 
     @Bean
@@ -241,8 +242,10 @@ public class ApplicationBeansConfig {
             final NegociacionOutputPort negociacionPort,
             final CompanyOutputPort companyPort,
             final CupoReversionService cupoReversionService,
-            final ClockPort clock) {
-        return new FacturaVencimientoService(facturaPort, negociacionPort, companyPort, cupoReversionService, clock);
+            final ClockPort clock,
+            final FacturaPatchOutputPort facturaPatchPort) {
+        return new FacturaVencimientoService(facturaPort, negociacionPort, companyPort, cupoReversionService, clock,
+                facturaPatchPort);
     }
 
     // El número de parámetros espeja 1:1 el constructor real de la clase (generado por

@@ -118,5 +118,29 @@ public class FacturaPatchRepository {
 
         mongoTemplate.updateFirst(query, update, FacturaDocument.class);
     }
+
+    /**
+     * @param facturaId         id de la factura
+     * @param estadoNegociacion nuevo estado de negociación
+     */
+    public void actualizarEstadoNegociacionPorId(String facturaId, String estadoNegociacion) {
+        Query query = Query.query(Criteria.where("_id").is(facturaId));
+
+        Update update = new Update().set("estadoNegociacion", estadoNegociacion);
+
+        mongoTemplate.updateFirst(query, update, FacturaDocument.class);
+    }
+
+    /**
+     * @param facturaIds  ids de las facturas
+     * @param estadoFirma nuevo estado de firma
+     */
+    public void actualizarEstadoFirmaPorIds(List<String> facturaIds, String estadoFirma) {
+        Query query = Query.query(Criteria.where("_id").in(facturaIds));
+
+        Update update = new Update().set("estadoFirma", estadoFirma);
+
+        mongoTemplate.updateMulti(query, update, FacturaDocument.class);
+    }
 }
 

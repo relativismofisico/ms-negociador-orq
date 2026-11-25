@@ -1637,3 +1637,23 @@ PENDIENTE_OTP --(otp.validate.response valido=true)--> OTP_VALIDADO --(firma est
 Alarma recomendada (CloudWatch, filtro de métrica): cualquier ocurrencia de `[ALERTA][FIRMA-FALLIDA]`. Para revisar a mano: `db.pending_otp.find({estado: "FALLO_FIRMA"}, {otp: 0})`.
 
 **Bloque de firma del PDF:** ahora tiene 11 líneas. Después de `OTP: <código completo>` se agregan `Referencia OTP: <otpId>` y `Validado el: <fecha>`, con `-` si el evento es del formato anterior. La posición se calcula para que la última línea quede a 20 pt del borde; con 9 líneas sería la misma posición de antes.
+
+## Colección `Facturas` compartida: solo actualizaciones parciales (Fase 28d)
+
+La colección `Facturas` la escriben cuatro servicios: `ms-cargaFacturas-neg` (la crea), este servicio,
+`ms-liquidador-neg` y `ms-consultasFacturas-neg`. Cada uno mapea solo los campos que usa. Carga guarda además el
+contacto de pagador y proveedor, la fecha de validación y la marca `eventosPendientes` / `eventosPendientesDesde`,
+de la que depende su reconciliador de eventos. El documento de este servicio no tiene esos campos, así que un
+`save()` del documento completo los borraba.
+
+Regla: este servicio **no guarda la factura completa**. Cambia sus estados con `FacturaPatchOutputPort`
+(`$set` de los campos que cambian):
+
+| Dónde | Antes | Ahora |
+|---|---|---|
+| Endoso rechazado por vigencia vencida | `save` completo | `actualizarEstadoNegociacionPorId(id, "SIN_NEGOCIAR")` |
+| Proceso nocturno de vencimiento | `save` completo | `actualizarEstadoNegociacionPorId(id, "VENCIDA")` |
+| Cambio de estado de firma (uno o masivo) | `save` / `saveAll` | `actualizarEstadoFirmaPorIds(ids, estado)` |
+
+`ms-liquidador-neg` ya cambiaba la factura con un `updateFirst` condicional (NEGOCIADA → LIQUIDADA), así que no
+pisa la marca. La prueba `FacturasCamposDeCargaIntegracionSpec` (Mongo 7 real) reproduce el borrado anterior.
